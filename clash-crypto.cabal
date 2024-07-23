@@ -68,3 +68,4 @@ library
     clash-prelude,
     constraints,
   exposed-modules:
+    Clash.Crypto.Hash.SHA
