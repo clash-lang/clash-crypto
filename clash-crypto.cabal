@@ -1,0 +1,68 @@
+cabal-version:       2.4
+name:                clash-crypto
+synopsis:            Cryptographic hardware in Clash
+description:         Cryptographic hardware that is implemented in the functional hardware description language Clash
+version:             0.1
+author:              QBayLogic B.V.
+maintainer:          devops@qbaylogic.com
+Copyright:           Copyright © 2024 QBayLogic B.V.
+Category:            Hardware
+
+common common-options
+  default-extensions:
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    LambdaCase
+    NoStarIsType
+    TypeFamilies
+    UnicodeSyntax
+    ViewPatterns
+
+    -- TemplateHaskell is used to support convenience functions such as
+    -- 'listToVecTH' and 'bLit'.
+    TemplateHaskell
+    QuasiQuotes
+
+    -- Prelude isn't imported by default as Clash offers Clash.Prelude
+    NoImplicitPrelude
+  ghc-options:
+    -Wall -Wcompat
+    -- Plugins to support type-level constraint solving on naturals
+    -fplugin GHC.TypeLits.Extra.Solver
+    -fplugin GHC.TypeLits.Normalise
+    -fplugin GHC.TypeLits.KnownNat.Solver
+    -fconstraint-solver-iterations=8
+
+    -- Clash needs access to the source code in compiled modules
+    -fexpose-all-unfoldings
+
+    -- Worker wrappers introduce unstable names for functions that might have
+    -- blackboxes attached for them. You can disable this, but be sure to add
+    -- a no-specialize pragma to every function with a blackbox.
+    -fno-worker-wrapper
+
+    -- Strict annotations - while sometimes preventing space leaks - trigger
+    -- optimizations Clash can't deal with. See:
+    --
+    --    https://github.com/clash-lang/clash-compiler/issues/2361
+    --
+    -- These flags disables the optimization.
+    -fno-unbox-small-strict-fields
+    -fno-unbox-strict-fields
+  default-language: GHC2021
+  build-depends:
+    ghc-typelits-extra >= 0.4.4,
+    ghc-typelits-knownnat >= 0.7.7,
+    ghc-typelits-natnormalise >= 0.7.7,
+
+library
+  import: common-options
+  hs-source-dirs: src
+  build-depends:
+    base,
+    clash-lib,
+    clash-prelude,
+    constraints,
+  exposed-modules:
