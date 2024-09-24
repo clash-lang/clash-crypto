@@ -101,6 +101,7 @@ data SHAFacts (alg ∷ SHA) where
     , 2 * BlockSize alg ≤ Div (2 ^ SizeBits alg) (BlockSize alg)
     , MessageDigestSize alg ≤ MessageBlockWords alg * WordSize alg
     , BlockSize alg ~ 16 * WordSize alg
+    , Mod (MessageDigestSize alg) 8 ~ 0
     ) ⇒
     Proxy alg →
     SHAFacts alg
@@ -429,11 +430,24 @@ computeBlock ∷
   DSignal dom n (HashBlock alg) →
   DSignal dom n (MessageBlock alg) →
   DSignal dom (n + stages) (HashBlock alg)
-computeBlock stages hbs mbs | SHAFacts alg ← knownSHA @alg =
-  let go = distributeStages stages undefined
-         $ smapWithBounds @(ScheduleCount alg) computeCycle'
-         $ repeat @(ScheduleCount alg - 1 + 1) alg
-   in snd <$> go (DSignal.bundle (mbs, hbs))
+computeBlock stages@SNat hbs mbs
+  | SHAFacts{} ← knownSHA @alg
+  = ((zipWith (+) <$> delayI undefined hbs) <*>)
+  --                  ^ TODO: 'dsFold already keeps the input stable'
+  $ fmap snd
+  $ distributeStages stages undefined (computeCycles @alg)
+  $ DSignal.bundle (mbs, hbs)
+
+computeCycles ∷
+  ∀ (alg ∷ SHA). KnownSHA alg ⇒
+  Vec (ScheduleCount alg)
+    ( (MessageBlock alg, HashBlock alg)
+    → (MessageBlock alg, HashBlock alg)
+    )
+computeCycles
+  | SHAFacts alg ← knownSHA @alg
+  = smapWithBounds @(ScheduleCount alg) computeCycle'
+  $ repeat @(ScheduleCount alg - 1 + 1) alg
  where
   computeCycle' t alg (m, v) =
     (m, computeCycle alg t m v)
@@ -715,6 +729,8 @@ dsFold ∷
 dsFold ival trg circuit is = acc
  where
   acc = gate acc $ delayedI ival $ circuit (antiDelay (SNat @m) acc) is
+  --               ^ TODO: check whether we can do smarter using a muxed
+  --                       update instead
 
   gate ∷ DSignal dom (k + m) b → DSignal dom (k + m) b → DSignal dom (k + m) b
   gate = flip $ case compareSNat @m @0 SNat SNat of
