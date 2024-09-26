@@ -15,7 +15,6 @@ import Clash.Sized.Internal.BitVector
 import qualified Clash.Signal.Delayed.Bundle as DSignal
 
 import Data.Constraint
-import Data.Constraint.Nat
 import Data.Either
 import Data.Proxy
 import Data.Type.Bool
@@ -485,7 +484,7 @@ distributeStages d@SNat x =
         . distributeStages# (succSNat i) r (tail cs)
       USucc _
         | Dict ← atMostOnePerStage @m @d @i
-        , Sub Dict ← leTrans @(DistributedStages m d i) @1 @(r - 1 + 1)
+        , Dict ← leTrans @(DistributedStages m d i) @1 @(r - 1 + 1)
         → delayedI @(DistributedStages m d i) x
         . fmap (head cs)
         . distributeStages#
@@ -534,7 +533,7 @@ placeRegister n m = do
 
   chain
     | m <= 0    = ( , False) <$> [0..n-1]
-    | m >= n    = error "m >= n"
+    | m >= n    = (0, False) : (( , True) <$> [1..n-1])
     | otherwise =
         [ (i, i > 0 && cond)
         | i <- [0..n-1]
@@ -560,7 +559,7 @@ instance
     f ∷ Nat → Nat → Nat → Nat
     f n m i
       | n == 0 = 0
-      | n <= m = error "Require m < n"
+      | n <= m = 1
       | otherwise =
           let k = n `div` (m + 1)
               r = n `mod` (m + 1)
@@ -652,10 +651,10 @@ hashStream input
       $ (== 0) <$> releaseCount
 
     endOfMessage ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
-    endOfMessage = delayI False $ (== (Just $ Left ())) <$> input
+    endOfMessage = delayedI False $ (== (Just $ Left ())) <$> input
 
     rstF ∷ Reset dom
-    rstF = unsafeFromActiveHigh $ toSignal $ delayI @1 False endOfMessage
+    rstF = unsafeFromActiveHigh $ toSignal $ delayedI @1 False endOfMessage
 
     result ∷ DSignal dom (k + DDiv (BlockSize alg) n) (HashBlock alg)
     result = withReset rstF $
@@ -680,7 +679,7 @@ hashStream input
     ∀ (a ∷ Nat) (b ∷ Nat).
     (1 ≤ Div a b, Mod a b ~ 0) ⇒
     Dict (((Div a b - 1) + 1) * b ~ a)
-  lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+  lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
 isFallingD ∷
   ∀ dom k a.
@@ -696,7 +695,7 @@ registerD ∷
   ∀ dom a k.
   (HiddenClockResetEnable dom, NFDataX a) ⇒
   a → DSignal dom k a → DSignal dom k a
-registerD v = feedback @_ @_ @_ @0 . \x → (x, ) . delayedI v
+registerD v = antiDelay d1 . delayedI v
 
 -- | Temporally folds a signal over time. The folding function is
 -- allowed to introduce an m-cycle delay and is assumed to require the
@@ -728,9 +727,8 @@ dsFold ∷
   -- ^ output stream
 dsFold ival trg circuit is = acc
  where
-  acc = gate acc $ delayedI ival $ circuit (antiDelay (SNat @m) acc) is
-  --               ^ TODO: check whether we can do smarter using a muxed
-  --                       update instead
+  acc = registerD ival
+    $ gate acc $ circuit (antiDelay (SNat @m) acc) is
 
   gate ∷ DSignal dom (k + m) b → DSignal dom (k + m) b → DSignal dom (k + m) b
   gate = flip $ case compareSNat @m @0 SNat SNat of
@@ -797,7 +795,7 @@ padMessage ∷
   Message (ℓ + 1 + PaddingZeros alg ℓ + SizeBits alg)
 padMessage m
   | SHAFacts{} ← knownSHA @alg
-  , Sub Dict ← modBound @ℓ @(BlockSize alg)
+  , Dict ← modBound @ℓ @(BlockSize alg)
   , Dict ← p₀
   , Dict ← p₁
   , Dict ← p₂
@@ -911,7 +909,7 @@ padMessageStream
     )
 
   -- no input
-  state ~~> Nothing
+  state@(Left _) ~~> Nothing
     = (state, Nothing)
 
   -- non-terminal data input
@@ -1064,7 +1062,7 @@ padMessageStream
     | SHAFacts{} ← knownSHA @alg
     , Dict ← fact₀
     , Dict ← fact₁
-    , Sub Dict ← leTrans @1 @(2 * BlockSize alg) @(Div (2 ^ SizeBits alg) n)
+    , Dict ← leTrans @1 @(2 * BlockSize alg) @(Div (2 ^ SizeBits alg) n)
     = pack
 
   extend₀ ∷
@@ -1073,7 +1071,7 @@ padMessageStream
   extend₀
     | SHAFacts{} ← knownSHA @alg
     , Dict ← fact₀
-    , Sub Dict ← leTrans @1 @(2 * BlockSize alg) @(Div (2 ^ SizeBits alg) n)
+    , Dict ← leTrans @1 @(2 * BlockSize alg) @(Div (2 ^ SizeBits alg) n)
     , Dict ← lemma₀ @(SizeBits alg) @n
     = extend @BitVector
         @(CLog 2 (Div (2 ^ SizeBits alg) n))
@@ -1107,7 +1105,7 @@ padMessageStream
   fact₀ ∷ Dict (2 * BlockSize alg <= Div (2 ^ SizeBits alg) n)
   fact₀
     | SHAFacts{} ← knownSHA @alg
-    , Sub Dict ← modBound @(BlockSize alg) @n
+    , Dict ← modBound @(BlockSize alg) @n
     , Dict ← lemma₀ @(BlockSize alg) @n
     , Dict ← lemma₁
         @(BlockSize alg)
@@ -1131,7 +1129,7 @@ padMessageStream
   fact₁ ∷ Dict (DDiv (2 ^ SizeBits alg) n ~ Div (2 ^ SizeBits alg) n)
   fact₁
     | SHAFacts{} ← knownSHA @alg
-    , Sub Dict ← timesMod
+    , Dict ← timesMod
         @(BlockSize alg)
         @(Div (2 ^ SizeBits alg) (BlockSize alg))
         @n
@@ -1144,6 +1142,18 @@ padMessageStream
       1 ≤ a ⇒
       Dict (Mod 0 a ~ 0)
     lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+
+-- don't use any dictionaries of 'Data.Constraint.Nat', as they suffer from
+-- https://github.com/clash-lang/clash-compiler/issues/2376
+
+timesMod ∷ ∀ a b c. 1 ≤ c ⇒ Dict (Mod (a * b) c ~ Mod (Mod a c * Mod b c) c)
+timesMod = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+
+leTrans ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat). (b ≤ c, a ≤ b) ⇒ Dict (a ≤ c)
+leTrans = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+
+modBound ∷ ∀ m n. 1 ≤ n ⇒ Dict (Mod m n ≤ n)
+modBound = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
 sha ∷
   ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat).

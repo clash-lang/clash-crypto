@@ -14,11 +14,12 @@ import qualified Clash.Sized.Vector as Vec
 import qualified Crypto.Hash.SHA256 as CryptoHash
 import qualified Data.ByteString as BS
 
---import qualified Data.List as List
+import qualified Data.List as List
 --import Text.Printf
 
 import Data.Constraint
 import Data.Function
+import Data.Maybe
 import Data.Proxy
 import Hedgehog
 import Hedgehog.Gen as Gen
@@ -214,8 +215,54 @@ hashPure input | SHAFacts alg ← knownSHA @alg = do
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Hash.SHA"
-  [ testPropertyNamed "SHA-256" "b" $ myProp
+  [ --testPropertyNamed "SHA-256" "b" $ myProp
+    testPropertyNamed "SHA-256" "b" $ myProp2
   ]
+
+testInput ∷ BS.ByteString
+testInput = BS.pack [ 0, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
+
+myProp2 ∷ Property
+myProp2 = property $ do
+  let
+    inputAsBv8 ∷ [BitVector 8]
+    inputAsBv8 = pack <$> BS.unpack testInput
+
+    n = List.length inputAsBv8
+
+    inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
+    inputPlusCtrl
+      = [ Nothing, Nothing, Nothing ]
+     <> ( Just . (, Nothing) <$> inputAsBv8 )
+     <> [ Just (0, Just maxBound) ]
+     <> List.replicate 256 Nothing
+
+    inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
+    inputAsSignal = fromList inputPlusCtrl
+
+    output = sampleN 200 -- (List.length inputAsSignal - 2)
+      (sha @SHA256 inputAsSignal)
+
+    resultDigestAsVBv8 ∷ Vec (Div (MessageDigestSize SHA256) 8) (BitVector 8)
+    resultDigestAsVBv8 = unconcatBitVector# $ List.head $ catMaybes output
+
+    dut = Vec.toList $ unpack <$> resultDigestAsVBv8
+
+  let ref = BS.unpack $ CryptoHash.hash testInput
+
+
+  footnote $ unlines $
+    [ "\nouput: \n"
+    , showX output
+    ]
+
+  footnote $ unlines $
+    [ "input: \n"
+    , showX $ sampleN 69 inputAsSignal
+    ]
+
+  ref === dut
+
 
 myProp ∷ Property
 myProp = property $ do
