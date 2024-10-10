@@ -16,6 +16,7 @@ import qualified Clash.Signal.Delayed.Bundle as DSignal
 
 import Data.Constraint
 import Data.Either
+import Control.Arrow
 import Data.Proxy
 import Data.Type.Bool
 import Data.Type.Equality
@@ -431,8 +432,9 @@ computeBlock ∷
   DSignal dom (n + stages) (HashBlock alg)
 computeBlock stages@SNat hbs mbs
   | SHAFacts{} ← knownSHA @alg
-  = ((zipWith (+) <$> delayI undefined hbs) <*>)
-  --                  ^ TODO: 'dsFold already keeps the input stable'
+    -- using 'forward' is safe here, as 'dsFold' keeps the input
+    -- stable for exactly @stages@ many cycles
+  = ((zipWith (+) <$> forward stages hbs) <*>)
   $ fmap snd
   $ distributeStages stages undefined (computeCycles @alg)
   $ DSignal.bundle (mbs, hbs)
@@ -448,12 +450,13 @@ computeCycles
   = smapWithBounds @(ScheduleCount alg) computeCycle'
   $ repeat @(ScheduleCount alg - 1 + 1) alg
  where
+  -- TODO: don't copy m, forward the signal instead
   computeCycle' t alg (m, v) =
     (m, computeCycle alg t m v)
 
 -- | Evenly distributes @d@ registers between @n@ combinational
 -- computations. The registers are all initialized with the provided
--- initial value. The introduces delay is tracked using 'DSignal'.
+-- initial value. The introduced delay is tracked using 'DSignal'.
 distributeStages ∷
   ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type).
   (KnownNat n, NFDataX a) ⇒
@@ -464,8 +467,8 @@ distributeStages ∷
   (KnownDomain dom, HiddenClockResetEnable dom) ⇒
   DSignal dom k a →
   DSignal dom (k + d) a
-distributeStages d@SNat x =
-  distributeStages# (SNat @0) d
+distributeStages d@SNat x vec =
+  distributeStages# (SNat @0) d $ reverse vec
  where
   distributeStages# ∷
     ∀ (m ∷ Nat) (i ∷ Nat) (r ∷ Nat).
@@ -483,13 +486,13 @@ distributeStages d@SNat x =
         → fmap (head cs)
         . distributeStages# (succSNat i) r (tail cs)
       USucc _
-        | Dict ← atMostOnePerStage @m @d @i
-        , Dict ← leTrans @(DistributedStages m d i) @1 @(r - 1 + 1)
-        → delayedI @(DistributedStages m d i) x
+        | Dict ← atMostOnePerStage @n @d @i
+        , Dict ← leTrans @(DistributedStages n d i) @1 @(r - 1 + 1)
+        → delayedI @(DistributedStages n d i) x
         . fmap (head cs)
         . distributeStages#
             (succSNat i)
-            (SNat @(r - DistributedStages m d i))
+            (SNat @(r - DistributedStages n d i))
             (tail cs)
 
 -- | A type family for calculating the positions at which we need to
@@ -599,31 +602,41 @@ condDivEqDDivFact = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
 hashStream ∷
   ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat) (k ∷ Nat).
-  (KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
+  (KnownNat k, KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
   (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
   Div (BlockSize alg) n ≤ ScheduleCount alg ⇒
   DSignal dom k (Maybe (Either () (BitVector n))) →
-  DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashBlock alg))
+  ( DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashBlock alg))
+  , ( DSignal dom k (Vec (DDiv (BlockSize alg) n - 1) (BitVector n))
+    , DSignal dom k (Index (DDiv (BlockSize alg) n))
+    , DSignal dom k Bool
+    , DSignal dom (k + 1) (MessageBlock alg)
+    , DSignal dom (k + DDiv (BlockSize alg) n) Bool
+    , DSignal dom (k + DDiv (BlockSize alg) n) Bool
+    , DSignal dom (k + DDiv (BlockSize alg) n) (HashBlock alg)
+    )
+  )
 hashStream input
   | SHAFacts alg ← knownSHA @alg
   , Dict ← condDivEqDDivFact @(BlockSize alg) @n
   , Dict ← lemma₀ @(BlockSize alg) @n
   , Dict ← lemma₁ @(16 * WordSize alg) @n
+  , Dict ← lemma₂ @(Div (BlockSize alg) n) @(ScheduleCount alg)
   =
   let
     -- some buffer to shift in @(BlockSize alg / n) - 1@ frames
     -- for glueing them together into a @BlockSize alg - n@ sized block
     collector ∷ DSignal dom k (Vec (DDiv (BlockSize alg) n - 1) (BitVector n))
-    collector = registerD (repeat 0)
-      $ (\x → maybe x (either (const x) (fst . shiftInAt0 x . (:> Nil))))
+    collector = antiDelay d1 $ delayedI @1 (repeat 0)
+      $ (\x → maybe x (either (const x) (fst . shiftInAtN x . (:> Nil))))
           <$> collector
           <*> input
 
     -- counter that counts down on receiving some input until enough frames
     -- have been collected creating a block
     releaseCount ∷ DSignal dom k (Index (DDiv (BlockSize alg) n))
-    releaseCount = registerD maxBound
-      $ (\x → maybe x (fromRight maxBound . (x <$)))
+    releaseCount = antiDelay d1 $ delayedI @1 maxBound
+      $ (\x → maybe x (fromRight maxBound . (satPred SatWrap x <$)))
           <$> releaseCount
           <*> input
 
@@ -634,39 +647,62 @@ hashStream input
 
     -- full message block copied over from the collector after the
     -- arrival of the @BlockSize alg / n@-th frame
-    msgBlock ∷ DSignal dom k (MessageBlock alg)
-    msgBlock = registerD (repeat 0)
-      $ mux keepStable msgBlock
+    msgBlock ∷ DSignal dom (k + 1) (MessageBlock alg)
+    msgBlock = delayedI @1 (repeat 0)
+      $ mux keepStable (antiDelay d1 msgBlock)
       $ fmap bitCoerce
-      $ (:>) . maybe 0 (fromRight 0)
-          <$> input
-          <*> collector
+      $ (++) <$> collector
+             <*> ((:> Nil) . maybe 0 (fromRight 0) <$> input)
 
+{-
     -- proceed with the next fold immediately after all computation is
     -- done, where we require at least a one cycle delay.
-    proceed ∷
-      1 ≤ DDiv (BlockSize alg) n ⇒
-      DSignal dom (k + DDiv (BlockSize alg) n) Bool
-    proceed = delayedI False
-      $ (== 0) <$> releaseCount
+    proceedCount ∷
+      DSignal dom k (Maybe (Index (k + DDiv (BlockSize alg) n)))
+    proceedCount = antiDelay d1 $ delayedI @1 Nothing
+      $ mux ((== 0) <$> releaseCount)
+          (pure $ Just maxBound)
+          (maybe Nothing (\x → if x > 0 then Just $ x - 1 else Nothing)
+             <$> proceedCount
+          )
 
+    proceed ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
+    proceed = (== (Just 0)) <$> forward SNat proceedCount
+-}
+
+    -- TODO: optimize @delayedI@; use a counter instead, see commented
+    -- code above
+    proceed ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
+    proceed = delayedI False $ (== 0) <$> releaseCount
+
+    -- TODO: align with proceed; the end of the message alwasy is one
+    -- cycle behind the last 'proceed' trigger
     endOfMessage ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
     endOfMessage = delayedI False $ (== (Just $ Left ())) <$> input
 
     rstF ∷ Reset dom
     rstF = unsafeFromActiveHigh $ toSignal $ delayedI @1 False endOfMessage
 
-    result ∷ DSignal dom (k + DDiv (BlockSize alg) n) (HashBlock alg)
-    result = withReset rstF $
+    hashBlock ∷ DSignal dom (k + DDiv (BlockSize alg) n) (HashBlock alg)
+    hashBlock = withReset rstF $
       dsFold
         (_H⁰ alg)
         proceed
-        (computeBlock @alg @(DDiv (BlockSize alg) n) SNat)
+        (computeBlock @alg @(DDiv (BlockSize alg) n - 1) SNat)
         msgBlock
   in
-    mux endOfMessage
-      (Just <$> result)
-      (pure Nothing)
+    ( mux endOfMessage
+        (Just <$> hashBlock)
+        (pure Nothing)
+    , ( collector
+      , releaseCount
+      , keepStable
+      , msgBlock
+      , proceed
+      , endOfMessage
+      , hashBlock
+      )
+    )
 
  where
   lemma₀ ∷
@@ -681,21 +717,11 @@ hashStream input
     Dict (((Div a b - 1) + 1) * b ~ a)
   lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
-isFallingD ∷
-  ∀ dom k a.
-  (HiddenClockResetEnable dom, NFDataX a, Bounded a, Eq a) ⇒
-  a -> DSignal dom k a -> DSignal dom k Bool
-isFallingD is s = liftA2 edgeDetect prev s
-  where
-    prev = registerD is s
-    edgeDetect old new = old == maxBound && new == minBound
-{-# INLINABLE isFallingD #-}
-
-registerD ∷
-  ∀ dom a k.
-  (HiddenClockResetEnable dom, NFDataX a) ⇒
-  a → DSignal dom k a → DSignal dom k a
-registerD v = antiDelay d1 . delayedI v
+  lemma₂ ∷
+    ∀ (a ∷ Nat) (b ∷ Nat).
+    (1 ≤ a, a ≤ b) ⇒
+    Dict (a - 1 ≤ b)
+  lemma₂ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
 -- | Temporally folds a signal over time. The folding function is
 -- allowed to introduce an m-cycle delay and is assumed to require the
@@ -713,7 +739,7 @@ registerD v = antiDelay d1 . delayedI v
 -- TODO: model the aformentioned assumptions as part of the type.
 dsFold ∷
   forall dom b a k m.
-  (HiddenClockResetEnable dom, NFDataX b, KnownNat m) ⇒
+  (HiddenClockResetEnable dom, NFDataX b, KnownNat m, 1 ≤ k + m) ⇒
   b →
   -- ^ initial value of the accumulator (only set after releasing the
   -- reset)
@@ -725,13 +751,15 @@ dsFold ∷
   -- ^ input stream
   DSignal dom (k + m) b
   -- ^ output stream
-dsFold ival trg circuit is = acc
+dsFold ival trg circuit is = result
  where
-  acc = registerD ival
-    $ gate acc $ circuit (antiDelay (SNat @m) acc) is
+  result = gate (circuit (antiDelay (SNat @m) acc) is) acc
+
+  acc ∷ DSignal dom (k + m) b
+  acc = delayedI @1 @b @dom @(k + m - 1) ival $ antiDelay d1 result
 
   gate ∷ DSignal dom (k + m) b → DSignal dom (k + m) b → DSignal dom (k + m) b
-  gate = flip $ case compareSNat @m @0 SNat SNat of
+  gate = case compareSNat @m @0 SNat SNat of
     -- Check: https://github.com/clash-lang/clash-compiler/pull/2784
     SNatLE → const
     SNatGT → mux trg
@@ -1178,18 +1206,41 @@ sha ∷
   -- be used via marking none of the bits as unused. This way, the
   -- user is free in the choice of message termination system he likes
   -- to apply.
-  Signal dom (Maybe (BitVector (MessageDigestSize alg)))
-  -- ^ The response stream providing a @Just messageDigest@ as soon as
-  -- the hash has been computed (after arrival of a terminated
-  -- message).
-sha
-  = fmap (fmap toDigest)
-  . toSignal
-  . hashStream @alg
-  . fromSignal
-  . padMessageStream @alg
-
+  ( Signal dom (Maybe (BitVector (MessageDigestSize alg)))
+    -- ^ The response stream providing a @Just messageDigest@ as soon as
+    -- the hash has been computed (after arrival of a terminated
+    -- message).
+  , Signal dom
+      ( (Vec (DDiv (BlockSize alg) n - 1) (BitVector n))
+      , (Index (DDiv (BlockSize alg) n))
+      , Bool
+      , (MessageBlock alg)
+      , Bool
+      , Bool
+      , HashBlock alg
+      )
+  , Signal dom (Maybe (Either () (BitVector n)))
+  )
+sha inp
+  = (\(a,b) -> (a,b,padMsg))
+    ( first (fmap (fmap toDigest) . toSignal)
+    $ second
+        (\(a,b,c,d,e,f,g) → bundle
+          ( toSignal a
+          , toSignal b
+          , toSignal c
+          , toSignal d
+          , toSignal e
+          , toSignal f
+          , toSignal g
+          )
+        )
+    $ hashStream @alg
+    $ fromSignal padMsg
+    )
  where
+  padMsg = padMessageStream @alg inp
+
   toDigest ∷ HashBlock alg → BitVector (MessageDigestSize alg)
   toDigest
     | SHAFacts _ ← knownSHA @alg
