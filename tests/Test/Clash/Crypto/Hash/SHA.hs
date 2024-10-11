@@ -29,6 +29,146 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA
 
+tastyTests ∷ TestTree
+tastyTests = localOption (HedgehogTestLimit (Just 1))
+  $ testGroup "Clash.Crypto.Hash.SHA"
+    [ testProperty "SHA-256 (i1, pure)" $ testHashPure @SHA256 testInput1
+    , testProperty "SHA-256 (i2, pure)" $ testHashPure @SHA256 testInput2
+    , testProperty "SHA-256 (i3, pure)" $ testHashPure @SHA256 testInput3
+    , testProperty "SHA-256 (i4, pure)" $ testHashPure @SHA256 testInput4
+    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput1
+    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput2
+    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput3
+    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput4
+    ]
+
+-- bs ← forAll $ Gen.bytes $ linear 0 1000
+
+testInput1 ∷ BS.ByteString
+testInput1 = BS.pack [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
+
+testInput2 ∷ BS.ByteString
+testInput2 = BS.pack
+  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
+  ]
+
+testInput3 ∷ BS.ByteString
+testInput3 = BS.pack
+  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
+  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  ]
+
+testInput4 ∷ BS.ByteString
+testInput4 = BS.pack
+  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
+  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  , 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
+  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
+  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
+  ]
+
+testHashStream ∷
+  ∀ (alg ∷ SHA).
+  ( KnownSHA alg, 1 <= Div (BlockSize alg) 8, 8 <= BlockSize alg
+  , Div (BlockSize alg) 8 <= ScheduleCount alg
+  , (Div (MessageDigestSize alg) 8 * 8) ~ MessageDigestSize alg
+  , Mod (BlockSize alg) 8 ~ 0
+  ) ⇒
+  BS.ByteString →
+  Property
+testHashStream bs | SHAFacts{} ← knownSHA @alg = property $ do
+  let
+    inputAsBv8 ∷ [BitVector 8]
+    inputAsBv8 = pack <$> BS.unpack bs
+
+    n = List.length inputAsBv8
+
+    inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
+    inputPlusCtrl
+      = [ Nothing, Nothing, Nothing ]
+     <> ( Just . (, Nothing) <$> inputAsBv8 )
+     <> [ Just (0, Just maxBound) ]
+     <> List.replicate 256 Nothing
+
+    inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
+    inputAsSignal = fromList inputPlusCtrl
+
+    samples :: Int
+    samples = 64 * (n `div` 64 + if n `mod` 64 > 0 then 3 else 2) + 4
+
+    (output, debug, padMsg) = List.unzip3 $ sampleN samples
+      $ bundle $ sha @alg inputAsSignal
+
+    resultDigestAsVBv8 ∷ Vec (Div (MessageDigestSize alg) 8) (BitVector 8)
+    resultDigestAsVBv8 = unconcatBitVector# $ List.head $ catMaybes output
+
+    dut = Vec.toList $ unpack <$> resultDigestAsVBv8
+
+  let
+    ref = BS.unpack $ CryptoHash.hash bs
+
+  footnote
+    $ (List.concatMap (printf "|%02x" . toInteger) $ toList resultDigestAsVBv8)
+
+  footnote $ unlines $ fmap prLine $ List.zip4 output debug padMsg $ sampleN samples inputAsSignal
+
+--  fail ""
+  ref === dut
+ where
+  prLine ( result
+         , ( collector
+           , releaseCount
+           , keepStable
+           , msgBlock
+           , proceed
+           , endOfMessage
+           , hashBlock
+           )
+         , padMsg
+         , inp
+         )
+    = unlines
+        [ "----------------------------"
+        , "I " <> showX inp
+        , "P " <> showX padMsg
+        , "C " <> (List.concatMap
+                     (\(i,x) ->
+                         printf (if i `mod` 21 == 20 then "|%02x\n  " else "|%02x")
+                         $ toInteger x
+                     ) $ List.zip [0 :: Int,1..] $ toList collector)
+        , "R " <> showX releaseCount
+        , "K " <> showX keepStable
+        , "M " <> (List.concatMap (printf "|%08x" . toInteger) $ toList msgBlock)
+        , "P " <> showX proceed
+        , "E " <> showX endOfMessage
+        , "H " <> (List.concatMap (printf "|%08x" . toInteger) $ toList hashBlock)
+        , "> " <> showX result
+        , "----------------------------"
+        ]
+
+testHashPure ∷
+  ∀ (alg ∷ SHA).
+  KnownSHA alg ⇒
+  BS.ByteString →
+  Property
+testHashPure bs = property $ do
+  let ref = BS.unpack $ CryptoHash.hash bs
+  dut ← BS.unpack <$> hashPure @alg bs
+
+  ref === dut
+--  fail ""
+
+
 hashPure ∷ ∀ (alg ∷ SHA) (m ∷ Type → Type).
   (KnownSHA alg, Monad m) ⇒
   BS.ByteString →
@@ -160,15 +300,15 @@ hashPure input | SHAFacts alg ← knownSHA @alg = do
         $ "I "<> (List.concatMap (printf "|%08x" . toInteger) $ toList $ hb)
       x <- foldM (\h f -> do
                      footnote
-                       $ "C " <> (List.concatMap (printf "|%08x" . toInteger) $ toList $ snd $ f h)
+                       $ "C " <> (List.concatMap (printf "|%08x" . toInteger) $ toList $ f h)
                      return $ f h
-                 ) (mb, hb) $ Vec.toList $ computeCycles @alg
+                 ) hb $ Vec.toList (($ mb) <$> computeCycles @alg)
 
       footnote
-        $ "R "<> (List.concatMap (printf "|%08x" . toInteger) $ toList $ zipWith (+) hb $ snd x)
+        $ "R "<> (List.concatMap (printf "|%08x" . toInteger) $ toList $ zipWith (+) hb x)
       footnote
         $ "M "<> (List.concatMap (printf "|%08x" . toInteger) $ toList mb)
-      return $ zipWith (+) hb $ snd x
+      return $ zipWith (+) hb x
 
   lemma₀ ∷ ∀ (ℓ ∷ Nat). Dict
     ( 1 ≤
@@ -222,122 +362,3 @@ hashPure input | SHAFacts alg ← knownSHA @alg = do
     Mod a (c * b) ~ 0 ⇒
     Dict (Div a b ~ Div a (c * b) * c)
   lemma₇ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-tastyTests ∷ TestTree
-tastyTests = testGroup "Clash.Crypto.Hash.SHA"
-  [ --testPropertyNamed "SHA-256" "b" $ myProp
-    testPropertyNamed "SHA-256" "b" $ myProp2
-  ]
-
-testInput1 ∷ BS.ByteString
-testInput1 = BS.pack [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
-
-testInput2 ∷ BS.ByteString
-testInput2 = BS.pack
-  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
-  ]
-
-testInput3 ∷ BS.ByteString
-testInput3 = BS.pack
-  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
-  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  ]
-
-testInput4 ∷ BS.ByteString
-testInput4 = BS.pack
-  [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
-  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  , 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
-  , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
-  , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
-  ]
-
-myProp2 ∷ Property
-myProp2 = property $ do
---  bs ← forAll $ Gen.bytes $ linear 0 1000
-  let
-    inputAsBv8 ∷ [BitVector 8]
-    inputAsBv8 = pack <$> BS.unpack bs
-
-    n = List.length inputAsBv8
-
-    inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
-    inputPlusCtrl
-      = [ Nothing, Nothing, Nothing ]
-     <> ( Just . (, Nothing) <$> inputAsBv8 )
-     <> [ Just (0, Just maxBound) ]
-     <> List.replicate 256 Nothing
-
-    inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
-    inputAsSignal = fromList inputPlusCtrl
-
-    samples :: Int
-    samples = 64 * (n `div` 64 + if n `mod` 64 > 0 then 3 else 2) + 4
-
-    (output, debug, padMsg) = List.unzip3 $ sampleN samples
-      $ bundle $ sha @SHA256 inputAsSignal
-
-    resultDigestAsVBv8 ∷ Vec (Div (MessageDigestSize SHA256) 8) (BitVector 8)
-    resultDigestAsVBv8 = unconcatBitVector# $ List.head $ catMaybes output
-
-    dut = Vec.toList $ unpack <$> resultDigestAsVBv8
-
-  let
-    ref = BS.unpack $ CryptoHash.hash bs
-
-  footnote
-    $ (List.concatMap (printf "|%02x" . toInteger) $ toList resultDigestAsVBv8)
-
-  footnote $ unlines $ fmap prLine $ List.zip4 output debug padMsg $ sampleN samples inputAsSignal
-
-  ref === dut
- where
-  prLine ( result
-         , ( collector
-           , releaseCount
-           , keepStable
-           , msgBlock
-           , proceed
-           , endOfMessage
-           , hashBlock
-           )
-         , padMsg
-         , inp
-         )
-    = unlines
-        [ "----------------------------"
-        , "I " <> showX inp
-        , "P " <> showX padMsg
-        , "C " <> (List.concatMap (\(i,x) -> printf (if i `mod` 21 == 20 then "|%02x\n  " else "|%02x") $ toInteger x) $ List.zip [0,1..] $ toList collector)
-        , "R " <> showX releaseCount
-        , "K " <> showX keepStable
-        , "M " <> (List.concatMap (printf "|%08x" . toInteger) $ toList msgBlock)
-        , "P " <> showX proceed
-        , "E " <> showX endOfMessage
-        , "H " <> (List.concatMap (printf "|%08x" . toInteger) $ toList hashBlock)
-        , "> " <> showX result
-        , "----------------------------"
-        ]
-
-
-
-
-myProp ∷ Property
-myProp = property $ do
-  --bs ← forAll $ Gen.bytes $ linear 0 1000
-  let bs = testInput3
-  let ref = BS.unpack $ CryptoHash.hash bs
-  dut ← BS.unpack <$> hashPure @SHA256 bs
-
-  ref === dut
---  fail ""

@@ -12,8 +12,6 @@ module Clash.Crypto.Hash.SHA where
 import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
-import qualified Clash.Signal.Delayed.Bundle as DSignal
-
 import Data.Constraint
 import Data.Either
 import Control.Arrow
@@ -435,65 +433,61 @@ computeBlock stages@SNat hbs mbs
     -- using 'forward' is safe here, as 'dsFold' keeps the input
     -- stable for exactly @stages@ many cycles
   = ((zipWith (+) <$> forward stages hbs) <*>)
-  $ fmap snd
-  $ distributeStages stages undefined (computeCycles @alg)
-  $ DSignal.bundle (mbs, hbs)
+  $ distributeStages stages undefined (computeCycles @alg) mbs hbs
 
 computeCycles ∷
   ∀ (alg ∷ SHA). KnownSHA alg ⇒
-  Vec (ScheduleCount alg)
-    ( (MessageBlock alg, HashBlock alg)
-    → (MessageBlock alg, HashBlock alg)
-    )
+  Vec (ScheduleCount alg) (MessageBlock alg → HashBlock alg → HashBlock alg)
 computeCycles
   | SHAFacts alg ← knownSHA @alg
-  = smapWithBounds @(ScheduleCount alg) computeCycle'
+  = smapWithBounds @(ScheduleCount alg) (\t a → computeCycle a t)
   $ repeat @(ScheduleCount alg - 1 + 1) alg
- where
-  -- TODO: don't copy m, forward the signal instead
-  computeCycle' t alg (m, v) =
-    (m, computeCycle alg t m v)
 
 -- | Evenly distributes @d@ registers between @n@ combinational
--- computations. The registers are all initialized with the provided
--- initial value. The introduced delay is tracked using 'DSignal'.
+-- computations. The computations all share a common input given via
+-- the first argument and are chained via their second arguemnt. The
+-- introduced registers are all initialized with the provided initial
+-- value. The introduced delay is tracked using 'DSignal'.
 distributeStages ∷
-  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type).
+  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type) (b ∷ Type).
   (KnownNat n, NFDataX a) ⇒
   SNat d →
   a →
-  Vec n (a → a) →
+  Vec n (b → a → a) →
   ∀ (dom ∷ Domain) (k ∷ Nat).
   (KnownDomain dom, HiddenClockResetEnable dom) ⇒
+  DSignal dom k b →
   DSignal dom k a →
   DSignal dom (k + d) a
-distributeStages d@SNat x vec =
-  distributeStages# (SNat @0) d $ reverse vec
+distributeStages d@SNat ival computations shared =
+  distributeStages# (SNat @0) d (reverse computations) shared
  where
   distributeStages# ∷
     ∀ (m ∷ Nat) (i ∷ Nat) (r ∷ Nat).
     (KnownNat m, NFDataX a) ⇒
     SNat i → SNat r →
-    Vec m (a → a) →
+    Vec m (b → a → a) →
     ∀ (dom ∷ Domain) (k ∷ Nat).
     (KnownDomain dom, HiddenClockResetEnable dom) ⇒
+    DSignal dom k b →
     DSignal dom k a →
     DSignal dom (k + r) a
-  distributeStages# i@SNat r@SNat cs = case toUNat @m SNat of
-    UZero   → delayedI x
+  distributeStages# i@SNat r@SNat cs s = case toUNat @m SNat of
+    UZero   → delayedI ival
     USucc _ → case toUNat r of
       UZero
-        → fmap (head cs)
-        . distributeStages# (succSNat i) r (tail cs)
+        → liftA2 (head cs) s
+        . distributeStages# (succSNat i) r (tail cs) s
       USucc _
         | Dict ← atMostOnePerStage @n @d @i
         , Dict ← leTrans @(DistributedStages n d i) @1 @(r - 1 + 1)
-        → delayedI @(DistributedStages n d i) x
-        . fmap (head cs)
+        → delayedI @(DistributedStages n d i) ival
+        . liftA2 (head cs) (forward SNat s)
         . distributeStages#
             (succSNat i)
             (SNat @(r - DistributedStages n d i))
             (tail cs)
+            s
 
 -- | A type family for calculating the positions at which we need to
 -- put a register in front, if we like to evenly distribute m
@@ -654,7 +648,6 @@ hashStream input
       $ (++) <$> collector
              <*> ((:> Nil) . maybe 0 (fromRight 0) <$> input)
 
-{-
     -- proceed with the next fold immediately after all computation is
     -- done, where we require at least a one cycle delay.
     proceedCount ∷
@@ -668,17 +661,14 @@ hashStream input
 
     proceed ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
     proceed = (== (Just 0)) <$> forward SNat proceedCount
--}
 
-    -- TODO: optimize @delayedI@; use a counter instead, see commented
-    -- code above
-    proceed ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
-    proceed = delayedI False $ (== 0) <$> releaseCount
+    endOfInputReceived ∷ DSignal dom k Bool
+    endOfInputReceived = antiDelay d1 $ delayedI @1 False
+      $    ((== (Just $ Left ())) <$> input)
+      .||. (endOfInputReceived .&&. ((/= (Just 0)) <$> proceedCount))
 
-    -- TODO: align with proceed; the end of the message alwasy is one
-    -- cycle behind the last 'proceed' trigger
     endOfMessage ∷ DSignal dom (k + DDiv (BlockSize alg) n) Bool
-    endOfMessage = delayedI False $ (== (Just $ Left ())) <$> input
+    endOfMessage = proceed .&&. forward SNat endOfInputReceived
 
     rstF ∷ Reset dom
     rstF = unsafeFromActiveHigh $ toSignal $ delayedI @1 False endOfMessage
@@ -753,14 +743,13 @@ dsFold ∷
   -- ^ output stream
 dsFold ival trg circuit is = result
  where
-  result = gate (circuit (antiDelay (SNat @m) acc) is) acc
+  result = dmux (circuit (antiDelay (SNat @m) acc) is) acc
 
   acc ∷ DSignal dom (k + m) b
   acc = delayedI @1 @b @dom @(k + m - 1) ival $ antiDelay d1 result
 
-  gate ∷ DSignal dom (k + m) b → DSignal dom (k + m) b → DSignal dom (k + m) b
-  gate = case compareSNat @m @0 SNat SNat of
-    -- Check: https://github.com/clash-lang/clash-compiler/pull/2784
+  dmux ∷ DSignal dom (k + m) b → DSignal dom (k + m) b → DSignal dom (k + m) b
+  dmux = case compareSNat @m @0 SNat SNat of
     SNatLE → const
     SNatGT → mux trg
 

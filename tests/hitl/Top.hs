@@ -11,5 +11,5 @@ topEntity ∷
   HiddenClockResetEnable System ⇒
   Signal System (Maybe (BitVector 8, Bool)) →
   Signal System (Maybe (BitVector (MessageDigestSize SHA256)))
-topEntity inp = sha @SHA256 @System @8
+topEntity inp = (\(a,_,_) → a) $ sha @SHA256 @System @8
   $ fmap (fmap (second (bool Nothing $ Just maxBound))) inp
