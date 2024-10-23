@@ -69,6 +69,17 @@ library
     , constraints
   exposed-modules:
     Clash.Crypto.Hash.SHA
+    Clash.Crypto.Hash.SHA.Specification
+    Clash.Crypto.Hash.SHA.Specification.Types
+    Clash.Crypto.Hash.SHA.Specification.Definitions
+    Clash.Crypto.Hash.SHA.Specification.Properties
+    Clash.Crypto.Hash.SHA.Specification.Algorithm
+    Clash.Crypto.Hash.SHA.Streaming
+    Clash.Crypto.Hash.SHA.Streaming.Stages
+    Clash.Crypto.Hash.SHA.Streaming.Padding
+    Clash.Signal.Delayed.Extra
+    Data.Constraint.Nat.Extra
+    Language.Haskell.Unicode
 
 test-suite tasty
   import: common-options
@@ -83,7 +94,7 @@ test-suite tasty
     , clash-crypto
     , clash-prelude-hedgehog
     , constraints
-    , cryptohash-sha256
+    , cryptohash
     , hedgehog >= 1.0 && < 1.5
     , tasty
     , tasty-hedgehog >= 1.2 && < 1.5

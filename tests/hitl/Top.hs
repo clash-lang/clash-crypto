@@ -2,14 +2,11 @@
 module Top where
 
 import Clash.Prelude
-import Control.Arrow
-import Data.Bool
 
 import Clash.Crypto.Hash.SHA
 
 topEntity ∷
   HiddenClockResetEnable System ⇒
-  Signal System (Maybe (BitVector 8, Bool)) →
+  Signal System (Maybe (BitVector 8, Maybe (Index 9))) →
   Signal System (Maybe (BitVector (MessageDigestSize SHA256)))
-topEntity inp = (\(a,_,_) → a) $ sha @SHA256 @System @8
-  $ fmap (fmap (second (bool Nothing $ Just maxBound))) inp
+topEntity = sha @SHA256 @System @8

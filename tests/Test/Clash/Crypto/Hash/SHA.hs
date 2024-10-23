@@ -1,61 +1,173 @@
+{-|
+Module      : Test.Clash.Crypto.Hash.SHA
+Copyright   : Copyright © 2024 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Test suite for 'Clash.Crypto.Hash.SHA'.
+-}
+
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MagicHash #-}
 
-{-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 module Test.Clash.Crypto.Hash.SHA where
 
 import Clash.Prelude
+import Clash.Sized.Vector (unsafeFromList)
 
-
-import qualified Clash.Sized.Vector as Vec
-import qualified Crypto.Hash.SHA256 as CryptoHash
-import qualified Data.ByteString as BS
-
-import qualified Data.List as List
-import Text.Printf
-
-import Control.Monad
 import Data.Constraint
-import Data.Function
+import Data.Constraint.Nat.Extra
 import Data.Maybe
 import Data.Proxy
 import Hedgehog
-import Hedgehog.Gen as Gen
-import Hedgehog.Range as Range
+--import Hedgehog.Gen as Gen
+--import Hedgehog.Range as Range
+import Language.Haskell.Unicode (type (≤))
 import Test.Tasty
 import Test.Tasty.Hedgehog
-import Unsafe.Coerce (unsafeCoerce)
+
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.SHA224 as SHA224
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.SHA384 as SHA384
+import qualified Crypto.Hash.SHA512 as SHA512
+import qualified Crypto.Hash.SHA512t as SHA512t
+import qualified Data.ByteString as BS
+import qualified Data.List as List
 
 import Clash.Crypto.Hash.SHA
 
+import qualified Clash.Crypto.Hash.SHA.Specification as Spec
+
 tastyTests ∷ TestTree
 tastyTests = localOption (HedgehogTestLimit (Just 1))
-  $ testGroup "Clash.Crypto.Hash.SHA"
-    [ testProperty "SHA-256 (i1, pure)" $ testHashPure @SHA256 testInput1
-    , testProperty "SHA-256 (i2, pure)" $ testHashPure @SHA256 testInput2
-    , testProperty "SHA-256 (i3, pure)" $ testHashPure @SHA256 testInput3
-    , testProperty "SHA-256 (i4, pure)" $ testHashPure @SHA256 testInput4
-    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput1
-    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput2
-    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput3
-    , testProperty "SHA-256 (i1, stream)" $ testHashStream @SHA256 testInput4
+  $ testGroup "Clash.Crypto.Hash.SHA (sanity checks / unit tests)"
+  $ List.concat
+    [ [ testP "pure" $ hashPure i
+      , testP "stream" $ hashStream  i
+      ]
+    | (hashPure, hashStream, algName) ←
+        [ (testHashPure @SHA1,      testHashStream @SHA1,      "1")
+        , (testHashPure @SHA224,    testHashStream @SHA224,    "224")
+        , (testHashPure @SHA256,    testHashStream @SHA256,    "256")
+        , (testHashPure @SHA512,    testHashStream @SHA512,    "512")
+        , (testHashPure @SHA512224, testHashStream @SHA512224, "512/224")
+        , (testHashPure @SHA512256, testHashStream @SHA512256, "512/246")
+        ]
+    , (i, iIndex) ← List.zip
+        [input1, input2, input3, input4]
+        [1 :: Int, 2, 3, 4]
+    , let testP hName = testProperty
+            $ "SHA-" <> algName <>
+            ", input " <> show iIndex <>
+            ", " <> hName <> ")"
     ]
 
--- bs ← forAll $ Gen.bytes $ linear 0 1000
+testHashPure ∷
+  ∀ (alg ∷ SHA).
+  (KnownSHA alg, CryptoHash alg) ⇒
+  BS.ByteString →
+  Property
+testHashPure bs
+  | SHAFacts alg ← knownSHA @alg
+  , Dict ← cancelMultiple @(MessageDigestSize alg) @8
+  = property $ do
+      Just (SomeNat (_ ∷ Proxy n)) ←
+        return $ someNatVal $ toInteger $ BS.length bs
 
-testInput1 ∷ BS.ByteString
-testInput1 = BS.pack [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
+      let
+        inputAsBv8 ∷ [BitVector 8]
+        inputAsBv8 = pack <$> BS.unpack bs
 
-testInput2 ∷ BS.ByteString
-testInput2 = BS.pack
+        inputAsVBv8 ∷ Vec n (BitVector 8)
+        inputAsVBv8 = unsafeFromList @n inputAsBv8
+
+        inputAsBv ∷ Message (n * 8)
+        inputAsBv = concatBitVector# inputAsVBv8
+
+        resultDigestAsBv ∷ BitVector (MessageDigestSize alg)
+        resultDigestAsBv = Spec.hash @alg @(n * 8) inputAsBv
+
+        resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
+        resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
+
+        dut = toList $ unpack <$> resultDigestAsVBv8
+        ref = BS.unpack $ cryptoHash alg bs
+
+      ref === dut
+
+testHashStream ∷
+  ∀ (alg ∷ SHA).
+  ( KnownSHA alg, CryptoHash alg
+  , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
+  ) ⇒
+  BS.ByteString →
+  Property
+testHashStream bs
+  | SHAFacts alg ← knownSHA @alg
+  , Dict ← cancelMultiple @(MessageDigestSize alg) @8
+  = property $ do
+      let
+        inputAsBv8 ∷ [BitVector 8]
+        inputAsBv8 = pack <$> BS.unpack bs
+
+        n = List.length inputAsBv8
+
+        inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
+        inputPlusCtrl
+          = [ Nothing, Nothing, Nothing ]
+         <> ( Just . (, Nothing) <$> inputAsBv8 )
+         <> [ Just (0, Just maxBound) ]
+         <> List.replicate 256 Nothing
+
+        inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
+        inputAsSignal = fromList inputPlusCtrl
+
+        sc = max
+          (natToNum @(ScheduleCount alg))
+          (natToNum @(BlockSize alg) `div` 8)
+
+        requiredSamples =
+          sc * (n `div` sc + if n `mod` sc > 0 then 3 else 2) + 4
+
+        output = sampleN requiredSamples $ sha @alg inputAsSignal
+
+        resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
+        resultDigestAsVBv8
+          = unconcatBitVector#
+          $ maybe 0 fst
+          $ List.uncons
+          $ catMaybes output
+
+        dut = toList $ unpack <$> resultDigestAsVBv8
+        ref = BS.unpack $ cryptoHash alg bs
+
+      ref === dut
+
+class CryptoHash (alg ∷ SHA) where
+  cryptoHash ∷ Proxy alg → BS.ByteString → BS.ByteString
+
+instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
+instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash
+instance CryptoHash SHA256    where cryptoHash _ = SHA256.hash
+instance CryptoHash SHA384    where cryptoHash _ = SHA384.hash
+instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
+instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 224
+instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
+
+input1 ∷ BS.ByteString
+input1 = BS.pack [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
+
+input2 ∷ BS.ByteString
+input2 = BS.pack
   [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
   ]
 
-testInput3 ∷ BS.ByteString
-testInput3 = BS.pack
+input3 ∷ BS.ByteString
+input3 = BS.pack
   [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
@@ -63,8 +175,8 @@ testInput3 = BS.pack
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   ]
 
-testInput4 ∷ BS.ByteString
-testInput4 = BS.pack
+input4 ∷ BS.ByteString
+input4 = BS.pack
   [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99, 41, 31, 231, 199, 25, 32
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   , 255, 23, 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 231
@@ -77,288 +189,5 @@ testInput4 = BS.pack
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   ]
 
-testHashStream ∷
-  ∀ (alg ∷ SHA).
-  ( KnownSHA alg, 1 <= Div (BlockSize alg) 8, 8 <= BlockSize alg
-  , Div (BlockSize alg) 8 <= ScheduleCount alg
-  , (Div (MessageDigestSize alg) 8 * 8) ~ MessageDigestSize alg
-  , Mod (BlockSize alg) 8 ~ 0
-  ) ⇒
-  BS.ByteString →
-  Property
-testHashStream bs | SHAFacts{} ← knownSHA @alg = property $ do
-  let
-    inputAsBv8 ∷ [BitVector 8]
-    inputAsBv8 = pack <$> BS.unpack bs
-
-    n = List.length inputAsBv8
-
-    inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
-    inputPlusCtrl
-      = [ Nothing, Nothing, Nothing ]
-     <> ( Just . (, Nothing) <$> inputAsBv8 )
-     <> [ Just (0, Just maxBound) ]
-     <> List.replicate 256 Nothing
-
-    inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
-    inputAsSignal = fromList inputPlusCtrl
-
-    samples :: Int
-    samples = 64 * (n `div` 64 + if n `mod` 64 > 0 then 3 else 2) + 4
-
-    (output, debug, padMsg) = List.unzip3 $ sampleN samples
-      $ bundle $ sha @alg inputAsSignal
-
-    resultDigestAsVBv8 ∷ Vec (Div (MessageDigestSize alg) 8) (BitVector 8)
-    resultDigestAsVBv8 = unconcatBitVector# $ List.head $ catMaybes output
-
-    dut = Vec.toList $ unpack <$> resultDigestAsVBv8
-
-  let
-    ref = BS.unpack $ CryptoHash.hash bs
-
-  footnote
-    $ (List.concatMap (printf "|%02x" . toInteger) $ toList resultDigestAsVBv8)
-
-  footnote $ unlines $ fmap prLine $ List.zip4 output debug padMsg $ sampleN samples inputAsSignal
-
---  fail ""
-  ref === dut
- where
-  prLine ( result
-         , ( collector
-           , releaseCount
-           , keepStable
-           , msgBlock
-           , proceed
-           , endOfMessage
-           , hashBlock
-           )
-         , padMsg
-         , inp
-         )
-    = unlines
-        [ "----------------------------"
-        , "I " <> showX inp
-        , "P " <> showX padMsg
-        , "C " <> (List.concatMap
-                     (\(i,x) ->
-                         printf (if i `mod` 21 == 20 then "|%02x\n  " else "|%02x")
-                         $ toInteger x
-                     ) $ List.zip [0 :: Int,1..] $ toList collector)
-        , "R " <> showX releaseCount
-        , "K " <> showX keepStable
-        , "M " <> (List.concatMap (printf "|%08x" . toInteger) $ toList msgBlock)
-        , "P " <> showX proceed
-        , "E " <> showX endOfMessage
-        , "H " <> (List.concatMap (printf "|%08x" . toInteger) $ toList hashBlock)
-        , "> " <> showX result
-        , "----------------------------"
-        ]
-
-testHashPure ∷
-  ∀ (alg ∷ SHA).
-  KnownSHA alg ⇒
-  BS.ByteString →
-  Property
-testHashPure bs = property $ do
-  let ref = BS.unpack $ CryptoHash.hash bs
-  dut ← BS.unpack <$> hashPure @alg bs
-
-  ref === dut
---  fail ""
-
-
-hashPure ∷ ∀ (alg ∷ SHA) (m ∷ Type → Type).
-  (KnownSHA alg, Monad m) ⇒
-  BS.ByteString →
-  PropertyT m BS.ByteString
-hashPure input | SHAFacts alg ← knownSHA @alg = do
-  Just (SomeNat (_ ∷ Proxy n)) ← return $ someNatVal $ toInteger $ BS.length input
-
-  -- TODO: figure out why all these lemma's need to be re-stated
-  Dict ← return $ lemma₀ @(n * 8)
-  Dict ← return $ lemma₀ @(8 * n)
-  Dict ← return $ lemma₁ @(n * 8)
-  Dict ← return $ lemma₁ @(8 * n)
-  Dict ← return $ lemma₂ @(n * 8)
-  Dict ← return $ lemma₃ @(8 * n) @(BlockSize alg)
-
-  let
-    inputAsBv8 ∷ [BitVector 8]
-    inputAsBv8 = pack <$> BS.unpack input
-
-    inputAsVBv8 ∷ Vec n (BitVector 8)
-    inputAsVBv8 = Vec.unsafeFromList @n inputAsBv8
-
-    inputAsBv ∷ Message (n * 8)
-    inputAsBv = concatBitVector# inputAsVBv8
-
-    paddedMessage = padMessage @alg @(n * 8) inputAsBv
-
-    ℓ ∷ Integer
-    ℓ = case paddedMessage of { (_ ∷ Message ℓ) → natToInteger @ℓ }
-
-  assert $ ℓ `mod` natToInteger @(WordSize alg) == 0
-  assert $ ℓ `mod` natToInteger @(BlockSize alg) == 0
-
-  Just (SomeNat (_ ∷ Proxy ℓ)) ← return $ someNatVal ℓ
-
-  Dict ← return $ fact₀  @(n * 8) @ℓ
-  Dict ← return $ lemma₄ @(n * 8) @ℓ
-  Dict ← return $ fact₁  @(n * 8) @ℓ
-  Dict ← return $ lemma₅ @ℓ @(WordSize alg) @16
-  Dict ← return $ lemma₆ @ℓ @(WordSize alg)
-  Dict ← return $ lemma₆ @(MessageDigestSize alg) @8
-  Dict ← return $ lemma₆ @ℓ @8
-  Dict ← return $ lemma₇ @ℓ @(WordSize alg) @16
-
-  let
-    pmAsVWords ∷ Vec (Div ℓ (WordSize alg)) (BitVector (WordSize alg))
-    pmAsVWords = unconcatBitVector# paddedMessage
-
-    pmAsVBlocks ∷ Vec (Div ℓ (16 * WordSize alg)) (MessageBlock alg)
-    pmAsVBlocks = Vec.unconcat (SNat @16) pmAsVWords
-
-    k ∷ Integer
-    k = case pmAsVBlocks of
-          (_ ∷ Vec k (MessageBlock alg)) → natToInteger @k
-
-  assert $ k * 16 * natToInteger @(WordSize alg) == ℓ
-
-  Just (SomeNat (_ ∷ Proxy k)) ← return $ someNatVal k
-
-  resultHB <- foldM computeB (_H⁰ alg) $ Vec.toList pmAsVBlocks
-
-  let
-    resultDigestAsBv ∷ BitVector (MessageDigestSize alg)
-    resultDigestAsBv = truncateB @_ @(MessageDigestSize alg)
-      @(MessageBlockWords alg * WordSize alg - MessageDigestSize alg)
-      $ concatBitVector# resultHB
-
-    resultDigestAsVBv8 ∷ Vec (Div (MessageDigestSize alg) 8) (BitVector 8)
-    resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
-
-  {-
-  footnote $ unlines $
-    [ "rounds: " <> show (Vec.length (computeCycles @alg))
-    ]
-
-  footnote $ unlines $
-    [ "digest:\n"
-    , List.concatMap (\(i,v) → printf "%3d" (toInteger v) <> " (" <> show i <> ")\n")
-    $ List.zip [0 :: Int,1..]
-    $ Vec.toList
-    $ resultDigestAsVBv8
-    , ""
-    ]
-
-  footnote $ unlines $
-    [ "final hash (" <> show (natToInteger @(BitSize (HashBlock alg))) <> " bits):\n"
-    , List.concatMap (\(i,v) → printf "%08x" (toInteger v) <> " (H_" <> show i <> ")\n")
-    $ List.zip [0 :: Int,1..]
-    $ Vec.toList
-    $ resultHB
-    , ""
-    ]
-
-  footnote $ unlines $
-    [ "initial hash:\n"
-    , List.concatMap (\(i,v) → printf "%x" (toInteger v) <> " (H_" <> show i <> ")\n")
-    $ List.zip [0 :: Int,1..]
-    $ Vec.toList
-    $ _H⁰ alg
-    , ""
-    ]
-
-  footnote $ unlines $
-    [ "blocks (" <> show k <> "):"
-    ] <> fmap (("\n - " <>) . List.concatMap (\(i,v) → show v <> " (M_" <> show i <> ")\n   ") . List.zip [0 :: Int,1..] . Vec.toList) (Vec.toList pmAsVBlocks) <>
-    [ ""
-    ]
-
-  footnote $ unlines
-    [ "padded message (" <> show (ℓ `div` 8) <> "):\n"
-    , show paddedMessage
-    , ""
-    ]
-
-  footnote $ unlines
-    [ "input message (" <> show (natToInteger @n) <> "):\n"
-    , show inputAsBv
-    , ""
-    ]
-  -}
-
-  return $ BS.pack $ Vec.toList $ unpack <$> resultDigestAsVBv8
- where
-  computeB ∷  HashBlock alg → MessageBlock alg → PropertyT m (HashBlock alg)
-  computeB hb mb
-    | SHAFacts{} ← knownSHA @alg
-    = do
-      footnote
-        $ "I "<> (List.concatMap (printf "|%08x" . toInteger) $ toList $ hb)
-      x <- foldM (\h f -> do
-                     footnote
-                       $ "C " <> (List.concatMap (printf "|%08x" . toInteger) $ toList $ f h)
-                     return $ f h
-                 ) hb $ Vec.toList (($ mb) <$> computeCycles @alg)
-
-      footnote
-        $ "R "<> (List.concatMap (printf "|%08x" . toInteger) $ toList $ zipWith (+) hb x)
-      footnote
-        $ "M "<> (List.concatMap (printf "|%08x" . toInteger) $ toList mb)
-      return $ zipWith (+) hb x
-
-  lemma₀ ∷ ∀ (ℓ ∷ Nat). Dict
-    ( 1 ≤
-        RequiredBlocks alg ℓ * BlockSize alg
-          - Mod ℓ (BlockSize alg)
-    )
-  lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  lemma₁ ∷ ∀ (ℓ ∷ Nat). Dict
-    ( Mod ℓ (BlockSize alg) ≤
-        RequiredBlocks alg ℓ * BlockSize alg
-    )
-  lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  lemma₂ ∷ ∀ (ℓ ∷ Nat). Dict
-    ( SizeBits alg ≤
-        RequiredBlocks alg ℓ * BlockSize alg
-          - Mod ℓ (BlockSize alg)
-          - 1
-    )
-  lemma₂ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  lemma₃ ∷ ∀ (a ∷ Nat) (b ∷ Nat). Dict (Mod a b ≤ b)
-  lemma₃ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  fact₀ ∷ ∀ (ℓ ∷ Nat) (ℓ' ∷ Nat).
-    Dict (ℓ' ~ ℓ + 1 + PaddingZeros alg ℓ + SizeBits alg)
-  fact₀ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-  fact₁ ∷ ∀ (ℓ ∷ Nat) (ℓ' ∷ Nat).
-    ℓ' ~ ℓ + 1 + PaddingZeros alg ℓ + SizeBits alg ⇒
-    Dict (Mod ℓ' 8 ~ 0)
-  fact₁ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-  lemma₄ ∷ ∀ (ℓ ∷ Nat) (ℓ' ∷ Nat).
-    ℓ' ~ ℓ + 1 + PaddingZeros alg ℓ + SizeBits alg ⇒
-    Dict (Mod ℓ' (16 * WordSize alg) ~ 0)
-  lemma₄ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-  lemma₅ ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat).
-    Mod a (c * b) ~ 0 ⇒
-    Dict (Mod a b ~ 0)
-  lemma₅ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-  lemma₆ ∷ ∀ (a ∷ Nat) (b ∷ Nat).
-    Mod a b ~ 0 ⇒
-    Dict (Div a b * b ~ a)
-  lemma₆ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
-  lemma₇ ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat).
-    Mod a (c * b) ~ 0 ⇒
-    Dict (Div a b ~ Div a (c * b) * c)
-  lemma₇ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+-- TODO: test on generated input
+-- bs ← forAll $ Gen.bytes $ linear 0 1000
