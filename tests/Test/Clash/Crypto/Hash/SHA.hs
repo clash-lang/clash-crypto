@@ -21,11 +21,12 @@ import Data.Constraint.Nat.Extra
 import Data.Maybe
 import Data.Proxy
 import Hedgehog
---import Hedgehog.Gen as Gen
---import Hedgehog.Range as Range
 import Language.Haskell.Unicode (type (≤))
 import Test.Tasty
 import Test.Tasty.Hedgehog
+
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA224 as SHA224
@@ -41,109 +42,121 @@ import Clash.Crypto.Hash.SHA
 import qualified Clash.Crypto.Hash.SHA.Specification as Spec
 
 tastyTests ∷ TestTree
-tastyTests = localOption (HedgehogTestLimit (Just 1))
-  $ testGroup "Clash.Crypto.Hash.SHA (sanity checks / unit tests)"
-  $ List.concat
-    [ [ testP "pure" $ hashPure i
-      , testP "stream" $ hashStream  i
+tastyTests = testGroup "Clash.Crypto.Hash.SHA"
+  [ localOption (HedgehogTestLimit (Just 4))
+  $ testGroup "Specification: sanity checks / unit tests"
+      [ testProperty ("SHA-" <> algName)
+          $ property
+          $ forAll (Gen.element inputs)
+              >>= hashPure
+      | (hashPure, algName) ←
+          [ (testHashPure @SHA1,      "1")
+          , (testHashPure @SHA224,    "224")
+          , (testHashPure @SHA256,    "256")
+          , (testHashPure @SHA512,    "512")
+          , (testHashPure @SHA512224, "512/224")
+          , (testHashPure @SHA512256, "512/246")
+          ]
+      , let inputs = [input1, input2, input3, input4]
       ]
-    | (hashPure, hashStream, algName) ←
-        [ (testHashPure @SHA1,      testHashStream @SHA1,      "1")
-        , (testHashPure @SHA224,    testHashStream @SHA224,    "224")
-        , (testHashPure @SHA256,    testHashStream @SHA256,    "256")
-        , (testHashPure @SHA512,    testHashStream @SHA512,    "512")
-        , (testHashPure @SHA512224, testHashStream @SHA512224, "512/224")
-        , (testHashPure @SHA512256, testHashStream @SHA512256, "512/246")
-        ]
-    , (i, iIndex) ← List.zip
-        [input1, input2, input3, input4]
-        [1 :: Int, 2, 3, 4]
-    , let testP hName = testProperty
-            $ "SHA-" <> algName <>
-            ", input " <> show iIndex <>
-            ", " <> hName <> ")"
-    ]
+  , testGroup "Streaming: property based tests"
+      [ testProperty ("SHA-" <> algName)
+          $ property
+          $ forAll (Gen.bytes $ Range.linear 0 1000)
+              >>= hashStream
+      | (hashStream, algName) ←
+          [ (testHashStream @SHA1,      "1")
+          , (testHashStream @SHA224,    "224")
+          , (testHashStream @SHA256,    "256")
+          , (testHashStream @SHA512,    "512")
+          , (testHashStream @SHA512224, "512/224")
+          , (testHashStream @SHA512256, "512/246")
+          ]
+      ]
+  ]
 
 testHashPure ∷
-  ∀ (alg ∷ SHA).
-  (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) m.
+  (Monad m, KnownSHA alg, CryptoHash alg) ⇒
   BS.ByteString →
-  Property
+  PropertyT m ()
 testHashPure bs
   | SHAFacts alg ← knownSHA @alg
   , Dict ← cancelMultiple @(MessageDigestSize alg) @8
-  = property $ do
-      Just (SomeNat (_ ∷ Proxy n)) ←
-        return $ someNatVal $ toInteger $ BS.length bs
+  = do
 
-      let
-        inputAsBv8 ∷ [BitVector 8]
-        inputAsBv8 = pack <$> BS.unpack bs
+  Just (SomeNat (_ ∷ Proxy n)) ←
+    return $ someNatVal $ toInteger $ BS.length bs
 
-        inputAsVBv8 ∷ Vec n (BitVector 8)
-        inputAsVBv8 = unsafeFromList @n inputAsBv8
+  let
+    inputAsBv8 ∷ [BitVector 8]
+    inputAsBv8 = pack <$> BS.unpack bs
 
-        inputAsBv ∷ Message (n * 8)
-        inputAsBv = concatBitVector# inputAsVBv8
+    inputAsVBv8 ∷ Vec n (BitVector 8)
+    inputAsVBv8 = unsafeFromList @n inputAsBv8
 
-        resultDigestAsBv ∷ BitVector (MessageDigestSize alg)
-        resultDigestAsBv = Spec.hash @alg @(n * 8) inputAsBv
+    inputAsBv ∷ Message (n * 8)
+    inputAsBv = concatBitVector# inputAsVBv8
 
-        resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
-        resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
+    resultDigestAsBv ∷ BitVector (MessageDigestSize alg)
+    resultDigestAsBv = Spec.hash @alg @(n * 8) inputAsBv
 
-        dut = toList $ unpack <$> resultDigestAsVBv8
-        ref = BS.unpack $ cryptoHash alg bs
+    resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
+    resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
 
-      ref === dut
+    dut = toList $ unpack <$> resultDigestAsVBv8
+    ref = BS.unpack $ cryptoHash alg bs
+
+  ref === dut
 
 testHashStream ∷
-  ∀ (alg ∷ SHA).
-  ( KnownSHA alg, CryptoHash alg
+  ∀ (alg ∷ SHA) m.
+  ( Monad m, KnownSHA alg, CryptoHash alg
   , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
   ) ⇒
   BS.ByteString →
-  Property
+  PropertyT m ()
 testHashStream bs
   | SHAFacts alg ← knownSHA @alg
   , Dict ← cancelMultiple @(MessageDigestSize alg) @8
-  = property $ do
-      let
-        inputAsBv8 ∷ [BitVector 8]
-        inputAsBv8 = pack <$> BS.unpack bs
+  = do
 
-        n = List.length inputAsBv8
+  let
+    inputAsBv8 ∷ [BitVector 8]
+    inputAsBv8 = pack <$> BS.unpack bs
 
-        inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
-        inputPlusCtrl
-          = [ Nothing, Nothing, Nothing ]
-         <> ( Just . (, Nothing) <$> inputAsBv8 )
-         <> [ Just (0, Just maxBound) ]
-         <> List.replicate 256 Nothing
+    n = List.length inputAsBv8
 
-        inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
-        inputAsSignal = fromList inputPlusCtrl
+    sc = max
+      (natToNum @(ScheduleCount alg))
+      (natToNum @(BlockSize alg) `div` 8)
 
-        sc = max
-          (natToNum @(ScheduleCount alg))
-          (natToNum @(BlockSize alg) `div` 8)
+    requiredSamples =
+      sc * (n `div` sc + if n `mod` sc > 0 then 3 else 2) + 4
 
-        requiredSamples =
-          sc * (n `div` sc + if n `mod` sc > 0 then 3 else 2) + 4
+    inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
+    inputPlusCtrl
+      = [ Nothing, Nothing, Nothing ]
+     <> ( Just . (, Nothing) <$> inputAsBv8 )
+     <> [ Just (0, Just maxBound) ]
+     <> List.replicate requiredSamples Nothing
 
-        output = sampleN requiredSamples $ sha @alg inputAsSignal
+    inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
+    inputAsSignal = fromList inputPlusCtrl
 
-        resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
-        resultDigestAsVBv8
-          = unconcatBitVector#
-          $ maybe 0 fst
-          $ List.uncons
-          $ catMaybes output
+    output = sampleN requiredSamples $ sha @alg inputAsSignal
 
-        dut = toList $ unpack <$> resultDigestAsVBv8
-        ref = BS.unpack $ cryptoHash alg bs
+    resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
+    resultDigestAsVBv8
+      = unconcatBitVector#
+      $ maybe 0 fst
+      $ List.uncons
+      $ catMaybes output
 
-      ref === dut
+    dut = toList $ unpack <$> resultDigestAsVBv8
+    ref = BS.unpack $ cryptoHash alg bs
+
+  ref === dut
 
 class CryptoHash (alg ∷ SHA) where
   cryptoHash ∷ Proxy alg → BS.ByteString → BS.ByteString
@@ -188,6 +201,3 @@ input4 = BS.pack
   , 42, 38, 199, 25, 32, 29, 48, 244, 65, 2, 99, 41, 31, 255, 23, 231
   , 65, 2, 99, 41, 31, 231, 199, 25, 32, 255, 23, 42, 38, 29, 48, 244
   ]
-
--- TODO: test on generated input
--- bs ← forAll $ Gen.bytes $ linear 0 1000

@@ -20,6 +20,8 @@ module Clash.Crypto.Hash.SHA.Specification.Definitions where
 import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
+import Data.Constraint (Dict(..))
+import Data.Constraint.Nat.Extra (leTrans)
 import Data.Proxy (Proxy)
 import Data.Type.Bool (If)
 import Language.Haskell.Unicode (type (≤))
@@ -313,47 +315,42 @@ instance SHAInitials SHA512256 where
 --
 -- The remaining steps are formalized separately.
 class SHAHashCompute alg where
-  _W ∷
-    Proxy alg →
-    ∀ t. t + 1 ≤ ScheduleCount alg ⇒
-    SNat t → MessageBlock alg → SHAWord alg
-
   computeCycle ∷
     Proxy alg →
     ∀ t. t + 1 ≤ ScheduleCount alg ⇒
     SNat t → MessageBlock alg → HashValue alg → HashValue alg
 
 instance SHAHashCompute SHA1 where
-  _W alg t@(SNat ∷ SNat t) m = case compareSNat t (SNat @15) of
-    SNatLE → at @t @(15 - t) SNat m
-    SNatGT → _ROTL (SNat @1)
-           $ _W alg (SNat @(t -  3)) m
-           ⊕ _W alg (SNat @(t -  8)) m
-           ⊕ _W alg (SNat @(t - 14)) m
-           ⊕ _W alg (SNat @(t - 16)) m
-
-  computeCycle alg t m v =
+  computeCycle (alg ∷ Proxy alg) (t@SNat ∷ SNat t) m v =
     _T :> a :> _ROTL @30 SNat b :> c :> d :> Nil
    where
-    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg t + _W alg t m
+    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t _W
+    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg t + _Wₜ
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
     d = at @3 SNat v
     e = at @4 SNat v
 
-instance SHAHashCompute SHA256 where
-  _W alg t@(SNat ∷ SNat t) m = case compareSNat t (SNat @15) of
-    SNatLE → at @t @(15 - t) SNat m
-    SNatGT → _σ₁ alg (_W alg (SNat @(t -  2)) m)
-           +          _W alg (SNat @(t -  7)) m
-           + _σ₀ alg (_W alg (SNat @(t - 15)) m)
-           +          _W alg (SNat @(t - 16)) m
+    _W = smapWithBounds prepare $ repeat ()
 
-  computeCycle alg t m v =
+    prepare ∷ ∀ n. n + 1 ≤ ScheduleCount SHA1 ⇒ SNat n → () → SHAWord SHA1
+    prepare n@(SNat ∷ SNat n) _ =
+      case compareSNat n (SNat @15) of
+        SNatLE → at @n @(15 - n) SNat m
+        SNatGT → _ROTL (SNat @1)
+               $ at @(n -  3) @(ScheduleCount SHA1 - (n - 2))  SNat _W
+               ⊕ at @(n -  8) @(ScheduleCount SHA1 - (n - 7))  SNat _W
+               ⊕ at @(n - 14) @(ScheduleCount SHA1 - (n - 13)) SNat _W
+               ⊕ at @(n - 16) @(ScheduleCount SHA1 - (n - 15)) SNat _W
+
+
+instance SHAHashCompute SHA256 where
+  computeCycle (alg ∷ Proxy alg) (t ∷ SNat t) m v =
     _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil
    where
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _W alg t m
+    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t (_W# alg m)
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _Wₜ
     _T₂ = _Σ₀ alg a + _Mai a b c
     a = at @0 SNat v
     b = at @1 SNat v
@@ -367,17 +364,11 @@ instance SHAHashCompute SHA256 where
 deriving via SHA256 instance SHAHashCompute SHA224
 
 instance SHAHashCompute SHA512 where
-  _W alg t@(SNat ∷ SNat t) m = case compareSNat t (SNat @15) of
-    SNatLE → at @t @(15 - t) SNat m
-    SNatGT → _σ₁ alg (_W alg (SNat @(t -  2)) m)
-           +          _W alg (SNat @(t -  7)) m
-           + _σ₀ alg (_W alg (SNat @(t - 15)) m)
-           +          _W alg (SNat @(t - 16)) m
-
-  computeCycle alg t m v =
+  computeCycle (alg ∷ Proxy alg) (t ∷ SNat t) m v =
     _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil
    where
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _W alg t m
+    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t (_W# alg m)
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _Wₜ
     _T₂ = _Σ₀ alg a + _Mai a b c
     a = at @0 SNat v
     b = at @1 SNat v
@@ -391,3 +382,32 @@ instance SHAHashCompute SHA512 where
 deriving via SHA512 instance SHAHashCompute SHA384
 deriving via SHA512 instance SHAHashCompute SHA512224
 deriving via SHA512 instance SHAHashCompute SHA512256
+
+-- | Message schedule preparation scheme of SHA256 and SHA512.
+_W# ∷
+  ∀ alg.
+  (KnownNat (WordSize alg), KnownNat (ScheduleCount alg)) ⇒
+  (SHAFunctions alg, 1 ≤ WordSize alg, 1 ≤ ScheduleCount alg) ⇒
+  Proxy alg →
+  MessageBlock alg →
+  Vec (ScheduleCount alg) (SHAWord alg)
+_W# alg m =
+  let
+    prepare ∷ ∀ t. t + 1 ≤ ScheduleCount alg ⇒ SNat t → () → SHAWord alg
+    prepare t@(SNat ∷ SNat t) _ =
+      case compareSNat t (SNat @15) of
+        SNatLE → at @t @(15 - t) SNat m
+        SNatGT
+          | Dict ← leTrans @(t -  1) @(t + 1) @(ScheduleCount alg)
+          , Dict ← leTrans @(t -  6) @(t + 1) @(ScheduleCount alg)
+          , Dict ← leTrans @(t - 14) @(t + 1) @(ScheduleCount alg)
+          , Dict ← leTrans @(t - 15) @(t + 1) @(ScheduleCount alg)
+          → _σ₁ alg (at @(t -  2) @(ScheduleCount alg - (t - 1))  SNat wV)
+          +          at @(t -  7) @(ScheduleCount alg - (t - 6))  SNat wV
+          + _σ₀ alg (at @(t - 15) @(ScheduleCount alg - (t - 14)) SNat wV)
+          +          at @(t - 16) @(ScheduleCount alg - (t - 15)) SNat wV
+
+    wV ∷ Vec (ScheduleCount alg) (SHAWord alg)
+    wV = smapWithBounds prepare $ repeat ()
+  in
+    wV
