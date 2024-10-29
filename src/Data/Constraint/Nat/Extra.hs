@@ -13,7 +13,6 @@ Some extra type families and properties for type level naturals.
 
 module Data.Constraint.Nat.Extra
   ( DDiv
-  , dDivEqDiv
   , timesMod
   , leTrans
   , modBound
@@ -27,37 +26,30 @@ import Clash.Prelude
 
 import Data.Constraint (Dict(..))
 import Data.Type.Bool (If)
+import Data.Type.Equality (type (==))
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | Divisible division operation, which ensures that the dividend is
--- always a multiple of the divisor. Type family resolution will get
--- /stuck/ if the dividend is not a multiple of the divisor.
+-- always a multiple of the divisor. Type family resolution will error
+-- if the dividend is not a multiple of the divisor.
 type DDiv ∷ Nat → Nat → Nat
-type family DDiv a b where
-  DDiv a b = DDivCheck (a `Mod` b) a b
-
--- | Helper type family for checking the reminder of
--- 'DDiv'. Unfortunately type families cannot be scoped.
-type DDivCheck ∷ Nat → Nat → Nat → Nat
-type family DDivCheck a b c where
-  DDivCheck 0 a b = a `Div` b
-
--- | Evidence that if the dividend is a multiple of the of the
--- divisor, then 'DDiv' and 'Div' return the same result.
---
--- prop> ∀ a b ∈ ℕ. b > 0 ∧ a mod b ≡ 0 → a ddiv b ≡ a div b
-dDivEqDiv ∷
-  ∀ (a ∷ Nat) (b ∷ Nat).
-  (1 ≤ b, a `Mod` b ~ 0) ⇒
-  Dict (a `DDiv` b ~ a `Div` b)
-dDivEqDiv =
-  unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+type family DDiv n m where
+  DDiv n m = If (n `Mod` m == 0)
+    {- Then -}
+      (n `Div` m)
+    {- Else -}
+      ( TypeError
+          (    Text "n `DDiv` m requires n to be a multiple of m, "
+          :<>: Text "which is not given for n = " :<>: ShowType n
+          :<>: Text " and m = " :<>: ShowType m :<>: Text "."
+          )
+      )
 
 -- Developers Note:
 --
--- Don't use any dictionaries of 'Data.Constraint.Nat', as they suffer
--- from https://github.com/clash-lang/clash-compiler/issues/2376
+-- Don't use any dictionaries of 'Data.Constraint.Nat', as they suffer from
+-- https://github.com/clash-lang/clash-compiler/issues/2376#issuecomment-2376326236
 
 -- | Evidence for
 --

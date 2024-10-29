@@ -168,6 +168,7 @@ distributeStages d@SNat ival computations =
 -- Internal --
 --------------
 
+{-
 -- | Some quick test code for checking the 'DistributedStages' type
 -- family calculation
 _placeRegister ∷ Nat → Nat → IO ()
@@ -196,3 +197,4 @@ _placeRegister n m = do
                      then i `mod` (k + 1) == 0
                      else (i - b) `mod` k == 0
         ]
+-}

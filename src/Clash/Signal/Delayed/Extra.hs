@@ -22,7 +22,7 @@ import Language.Haskell.Unicode (type (≤))
 -- inputs to be stable for at least @m@ cycles. 'dsFold' takes care
 -- about satisifying the stability requirements for the accumulator,
 -- but stability of the input stream needs the asserted outside of
--- 'dsFold', simiply for the reason of minimizing register usage, as
+-- 'dsFold', simply for the reason of minimizing register usage, as
 -- the latches for keeping the input streams stable also may be used
 -- elsewhere.
 --

@@ -10,6 +10,7 @@ Streaming based padding implementation of FIPS 180-4.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -18,6 +19,10 @@ Streaming based padding implementation of FIPS 180-4.
 module Clash.Crypto.Hash.SHA.Streaming.Padding
   ( ReqSizeFrames
   , atLeastOneSizeFrame
+  , PaddedMsgFrame
+  , pattern NoData
+  , pattern Data
+  , pattern EndOfMessage
   , MsgBits(..)
   , MsgPad(..)
   , padMessageStream
@@ -27,12 +32,12 @@ import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
 import Data.Constraint (Dict(..))
+import Data.Constraint.Nat.Extra (DDiv, leTrans, modBound, timesMod)
 import Data.Type.Bool (If)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
-import Data.Constraint.Nat.Extra
 
 -- | The number of @n@-bit frames required to store the size of the
 -- message.
@@ -101,6 +106,25 @@ deriving instance
   ) ⇒
   BitPack (MsgPad alg n)
 
+-- | Messages are streamed via using multiple message frames, where
+-- the individual data frames are encoded using the 'DataFrame'
+-- pattern, the end of a message is encoded using an 'EndOfMessage'
+-- frame the 'NoData' pattern is used, if no frames a currenlty
+-- transfered on the bus.
+type PaddedMsgFrame n = Maybe (Either () (BitVector n))
+
+-- | @Nothing@ encodes that there is no data frames being transfered.
+pattern NoData ∷ PaddedMsgFrame n
+pattern NoData = Nothing
+
+-- | @Just . Right@ encodes a data frame.
+pattern Data ∷ BitVector n → PaddedMsgFrame n
+pattern Data f = Just (Right f)
+
+-- | @Just (Left ())@ encodes an end-of-message frame.
+pattern EndOfMessage ∷ PaddedMsgFrame n
+pattern EndOfMessage = Just (Left ())
+
 -- | Extends the input message via adding some padding to ensure that
 -- the message's length is always a multiple of 'BlockSize alg'.
 padMessageStream ∷
@@ -110,13 +134,11 @@ padMessageStream ∷
   Signal dom (Maybe (BitVector n, Maybe (Index (n + 1)))) →
   -- ^ Input stream for passing messages (see 'sha' fore mode details
   -- on the data serialization).
-  Signal dom (Maybe (Either () (BitVector n)))
+  Signal dom (PaddedMsgFrame n)
   -- ^ Output message stream, where messages are padded according to
   -- the SHA standard. As for the input, the actual data may be
-  -- non-continuous. The message is terminated by @Left ()@, while all
-  -- data frames are @Right@-wrapped instead. Note that, in contrast
-  -- to the input, the bitsize of the message will always be aligned
-  -- with the frame size @n@.
+  -- non-continuous. Note that, in contrast to the input, the bitsize
+  -- of the message will always be aligned with the frame size @n@.
 padMessageStream
   | SHAFacts{} ← knownSHA @alg
   , Dict ← fact₁
@@ -126,16 +148,15 @@ padMessageStream
     (KnownNat ((2 ^ SizeBits alg) `DDiv` n), KnownNat (BlockSize alg)) ⇒
     Either (MsgBits alg n) (MsgPad alg n) →
     Maybe (BitVector n, Maybe (Index (n + 1))) →
-    ( Either (MsgBits alg n) (MsgPad alg n)
-    , Maybe (Either () (BitVector n))
-    )
+    (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n)
+
   -- no input
   state@(Left _) ~~> Nothing
-    = (state, Nothing)
+    = (state, NoData)
   -- non-terminal data input
   Left (MsgBits s r) ~~> Just (d, Nothing)
     = ( Left $ MsgBits (s + 1) r
-      , Just $ Right d
+      , Data d
       )
   -- end of input / start padding
   Left msgBits ~~> Just (d, Just e)
@@ -151,9 +172,7 @@ padMessageStream
     MsgBits alg n →
     BitVector n →
     Index (n + 1) →
-    ( Either (MsgBits alg n) (MsgPad alg n)
-    , Maybe (Either () (BitVector n))
-    )
+    (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n)
   initiatePaddingWith (MsgBits s _) dLast trim
     = terminate dLast trim
     $ addPaddingWith
@@ -167,12 +186,9 @@ padMessageStream
   terminate ∷
     BitVector n →
     Index (n + 1) →
-    ( Either (MsgBits alg n) (MsgPad alg n)
-    , Maybe (Either () (BitVector n))
-    ) →
-    ( Either (MsgBits alg n) (MsgPad alg n)
-    , Maybe (Either () (BitVector n))
-    )
+    (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n) →
+    (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n)
+
   terminate dLast trim (ePad, meVec)
     | trim == natToNum @n
     = ( ePad
@@ -183,7 +199,7 @@ padMessageStream
 
     | trim == 0
     = ( (\p → p { terminated = False }) <$> ePad
-      , Just $ Right dLast
+      , Data dLast
       )
 
     | SHAFacts{} ← knownSHA @alg
@@ -197,16 +213,14 @@ padMessageStream
 
   addPaddingWith ∷
     MsgPad alg n →
-    ( Either (MsgBits alg n) (MsgPad alg n)
-    , Maybe (Either () (BitVector n))
-    )
+    (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n)
   addPaddingWith p@MsgPad{..}
     | remainingFrames > remainingSizeFrames
     , SHAFacts{} ← knownSHA @alg
     = ( Right p
           { remainingFrames = remainingFrames - 1
           }
-      , Just $ Right $
+      , Data $
           if terminated
           then 0
           else (1 ∷ BitVector 1) ++# (0 :: BitVector (n - 1))
@@ -223,8 +237,8 @@ padMessageStream
                      }
         else Left (MsgBits 0 0)
       , if remainingSizeFrames == 0
-        then Just $ Left ()
-        else Just $ Right $
+        then EndOfMessage
+        else Data $
                let d = head @(ReqSizeFrames alg n - 1) msgSize
                 in if terminated
                    then d
@@ -353,7 +367,6 @@ padMessageStream
         @((2 ^ SizeBits alg) `Div` BlockSize alg)
         @n
     , Dict ← lemma₀ @n
-    , Dict ← dDivEqDiv @(2 ^ SizeBits alg) @n
     = Dict
    where
     lemma₀ ∷

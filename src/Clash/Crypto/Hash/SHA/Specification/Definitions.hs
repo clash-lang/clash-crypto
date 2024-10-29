@@ -406,10 +406,14 @@ _W# alg m =
           +          at @(t -  7) @(ScheduleCount alg - (t - 6))  SNat wV
           + _σ₀ alg (at @(t - 15) @(ScheduleCount alg - (t - 14)) SNat wV)
           +          at @(t - 16) @(ScheduleCount alg - (t - 15)) SNat wV
+    -- required for working around
+    -- https://github.com/clash-lang/clash-compiler/issues/2834
     {-# NOINLINE prepare #-}
 
     wV ∷ Vec (ScheduleCount alg) (SHAWord alg)
     wV = smapWithBounds prepare $ repeat ()
+    -- required for working around
+    -- https://github.com/clash-lang/clash-compiler/issues/2834
     {-# NOINLINE wV #-}
   in
     wV

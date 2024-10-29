@@ -16,14 +16,13 @@ import Clash.Prelude
 import Clash.Signal.Delayed.Extra
 
 import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (DDiv, dDivEqDiv)
+import Data.Constraint.Nat.Extra (DDiv)
 import Data.Either (fromRight)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
 import Clash.Crypto.Hash.SHA.Streaming.Stages
-
 
 -- | Perform the steps 1 to 4 for one iteration of the loop.
 computeBlock ∷
@@ -50,7 +49,6 @@ hashStream ∷
   DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashValue alg))
 hashStream input
   | SHAFacts alg ← knownSHA @alg
-  , Dict ← dDivEqDiv @(BlockSize alg) @n
   , Dict ← lemma₀ @(BlockSize alg) @n
   , Dict ← lemma₁ @(16 * WordSize alg) @n
   =
