@@ -53,16 +53,65 @@ common common-options
     -fno-unbox-strict-fields
   default-language: GHC2021
   build-depends:
-    ghc-typelits-extra >= 0.4.4,
-    ghc-typelits-knownnat >= 0.7.7,
-    ghc-typelits-natnormalise >= 0.7.7,
+    , base
+    , clash-prelude
+    , ghc-typelits-extra >= 0.4.4
+    , ghc-typelits-knownnat >= 0.7.7
+    , ghc-typelits-natnormalise >= 0.7.7
 
 library
   import: common-options
   hs-source-dirs: src
   build-depends:
-    base,
-    clash-lib,
-    clash-prelude,
-    constraints,
+    , clash-lib
+    , constraints
   exposed-modules:
+    Clash.Crypto.Hash.SHA
+    Clash.Crypto.Hash.SHA.Specification
+    Clash.Crypto.Hash.SHA.Specification.Types
+    Clash.Crypto.Hash.SHA.Specification.Definitions
+    Clash.Crypto.Hash.SHA.Specification.Properties
+    Clash.Crypto.Hash.SHA.Specification.Algorithm
+    Clash.Crypto.Hash.SHA.Streaming
+    Clash.Crypto.Hash.SHA.Streaming.Stages
+    Clash.Crypto.Hash.SHA.Streaming.Padding
+    Clash.Signal.Delayed.Extra
+    Data.Constraint.Nat.Extra
+    Language.Haskell.Unicode
+
+test-suite tasty
+  import: common-options
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  ghc-options: -Wall -Wcompat -threaded
+  main-is: tasty/Main.hs
+  other-modules:
+    Test.Clash.Crypto.Hash.SHA
+  build-depends:
+    , bytestring
+    , clash-crypto
+    , clash-prelude-hedgehog
+    , constraints
+    , cryptohash
+    , hedgehog >= 1.0 && < 1.5
+    , tasty
+    , tasty-hedgehog >= 1.2 && < 1.5
+
+library hitlt
+  import: common-options
+  hs-source-dirs: tests/hitl
+  build-depends:
+    , clash-crypto
+  exposed-modules:
+    Top
+
+executable clash
+  import: common-options
+  hs-source-dirs: app/clash
+  ghc-options: -Wall -Wcompat -threaded
+  main-is: Main.hs
+  build-depends:
+    , base
+    , clash-crypto
+    , clash-ghc
+    , hitlt
