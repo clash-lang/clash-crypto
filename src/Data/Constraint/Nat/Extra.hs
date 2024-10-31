@@ -20,6 +20,8 @@ module Data.Constraint.Nat.Extra
   , timesMonotoneRight
   , cancelMultiple
   , cancelFactor
+  , maxDominates1
+  , minOverLE
   ) where
 
 import Clash.Prelude
@@ -90,15 +92,31 @@ condMonotone =
 
 -- | Evidence for
 --
--- prop> ∀ a b. a mod b ≡ 0 → (a div b) · b ≡ a
+-- prop> ∀ a b ∈ ℕ. a mod b ≡ 0 → (a div b) · b ≡ a
 cancelMultiple ∷ ∀ (a ∷ Nat) (b ∷ Nat). a `Mod` b ~ 0 ⇒ Dict (a `Div` b * b ~ a)
 cancelMultiple =
   unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
 -- | Evidence for
 --
--- prop> ∀ a b c. a mod (c * b) ≡ 0 → (a div (c · b)) · c ≡ a div b
+-- prop> ∀ a b c ∈ ℕ. a mod (c * b) ≡ 0 → (a div (c · b)) · c ≡ a div b
 cancelFactor ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat).
   a `Mod` (c * b) ~ 0 ⇒ Dict (a `Div` (c * b) * c ~ a `Div` b)
 cancelFactor =
   unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+
+-- | Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. b ≤ a → max a b ≡ a
+maxDominates1 ∷ ∀ (a ∷ Nat) (b ∷ Nat).
+  b ≤ a ⇒ Dict (Max a b ~ a)
+maxDominates1 =
+  unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+
+-- | Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. c ≤ a ∧ c ≤ b → c ≤ min a b
+minOverLE ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat).
+  (c ≤ a, c ≤ b) ⇒ Dict (c ≤ Min a b)
+minOverLE =
+  unsafeCoerce (Dict ∷ Dict (0 ≤ 0))

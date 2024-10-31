@@ -29,15 +29,15 @@ computeBlock ∷
   ∀ (alg ∷ SHA). KnownSHA alg ⇒
   ∀ stages. SNat stages →
   ∀ dom n. (KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  DSignal dom n (HashValue alg) →
-  DSignal dom n (MessageBlock alg) →
+  DSignal dom n (Maybe (MessageBlock alg, HashValue alg)) →
   DSignal dom (n + stages) (HashValue alg)
-computeBlock stages@SNat hvs mbs
-  | SHAFacts{} ← knownSHA @alg
-    -- using 'forward' is safe here, as 'dsFold' keeps the input
-    -- stable for exactly @stages@ many cycles
-  = ((zipWith (+) <$> forward stages hvs) <*>)
-  $ distributeStages stages undefined (computeCycles @alg) mbs hvs
+computeBlock stages@SNat input
+  | SHAFacts alg ← knownSHA @alg
+  = let hvs = (`maybe` snd)
+          <$> antiDelay d1 (delayedI @1 undefined hvs)
+          <*> input
+     in ((zipWith (+) <$> forward stages hvs) <*>)
+      $ snd <$> mealyStages stages (slidingWindowCycle alg) input
 
 -- | Streaming based implementation of the hashing algorithms defined
 -- in FIPS 180-4.
@@ -115,9 +115,10 @@ hashStream input
     hashValue = withReset rstF $
       dsFold
         (_H⁰ alg)
-        proceed
         (computeBlock @alg @(DDiv (BlockSize alg) n - 1) SNat)
-        msgBlock
+        $ mux (delayedI @1 False ((== 0) <$> releaseCount))
+            (Just <$> msgBlock)
+            (pure Nothing)
   in
     mux endOfMessage
       (Just <$> hashValue)

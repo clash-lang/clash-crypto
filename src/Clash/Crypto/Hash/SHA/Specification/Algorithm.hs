@@ -59,7 +59,7 @@ hash msg
   , Dict ← lemma₂ @alg @ℓ
   , Dict ← lemma₃ @alg @ℓ
   , Dict ← cancelMultiple @(PaddedMsgBits alg ℓ) @(WordSize alg)
-  , Dict ← cancelFactor @(PaddedMsgBits alg ℓ) @(WordSize alg) @16
+  , Dict ← cancelFactor @(PaddedMsgBits alg ℓ) @(WordSize alg) @MessageBlockWords
   = let
       -- pad the message according to description of Section 5.1
       paddedMessage ∷ Message (PaddedMsgBits alg ℓ)
@@ -77,9 +77,10 @@ hash msg
 
       -- group the words into message blocks
       pmAsVBlocks ∷
-        Vec (PaddedMsgBits alg ℓ `Div` (16 * WordSize alg)) (MessageBlock alg)
+        Vec (PaddedMsgBits alg ℓ
+               `Div` (MessageBlockWords * WordSize alg)) (MessageBlock alg)
       pmAsVBlocks =
-        unconcat (SNat @16) pmAsVWords
+        unconcat (SNat @MessageBlockWords) pmAsVWords
 
       -- apply the for loop "For i=1 to N:"
       hashValue ∷ HashValue alg
@@ -94,7 +95,7 @@ hash msg
     = -- step 4
       zipWith (+) hb
       -- steps 1 to 3
-    $ foldl (&) hb (($ mb) <$> computeCycles @alg)
+    $ snd $ foldl (&) (mb, hb) (computeCycles @alg)
 
   lemma₀ ∷
     ∀ alg' n.
@@ -141,8 +142,11 @@ toDigest
 --  - Step "/3. For t=0 to .../"
 computeCycles ∷
   ∀ (alg ∷ SHA). KnownSHA alg ⇒
-  Vec (ScheduleCount alg) (MessageBlock alg → HashValue alg → HashValue alg)
+  Vec (ScheduleCount alg)
+    ( (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
+      (Vec MessageBlockWords (SHAWord alg), HashValue alg)
+    )
 computeCycles
   | SHAFacts alg ← knownSHA @alg
-  = smapWithBounds @(ScheduleCount alg) (\t a → computeCycle a t)
+  = imap @(ScheduleCount alg) (flip slidingWindowCycle)
   $ repeat @(ScheduleCount alg - 1 + 1) alg
