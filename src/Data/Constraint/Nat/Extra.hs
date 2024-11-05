@@ -20,7 +20,6 @@ module Data.Constraint.Nat.Extra
   , timesMonotoneRight
   , cancelMultiple
   , cancelFactor
-  , maxDominates1
   , minOverLE
   ) where
 
@@ -103,14 +102,6 @@ cancelMultiple =
 cancelFactor ∷ ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat).
   a `Mod` (c * b) ~ 0 ⇒ Dict (a `Div` (c * b) * c ~ a `Div` b)
 cancelFactor =
-  unsafeCoerce (Dict ∷ Dict (0 ~ 0))
-
--- | Evidence for
---
--- prop> ∀ a b ∈ ℕ. b ≤ a → max a b ≡ a
-maxDominates1 ∷ ∀ (a ∷ Nat) (b ∷ Nat).
-  b ≤ a ⇒ Dict (Max a b ~ a)
-maxDominates1 =
   unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
 -- | Evidence for

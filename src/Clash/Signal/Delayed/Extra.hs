@@ -24,9 +24,9 @@ import Language.Haskell.Unicode (type (≤))
 -- cycles, i.e., there must be at least @m-1@ consecutive 'Nothing'
 -- inputs between every two consecutive 'Just's.
 --
--- A new round round of a fold is initiated via providing a
--- 'Just'-wrapped input, where every two consequitve 'Just'-wrapped
--- inputs must be at least @m@ cycles apart.
+-- A new round of a fold is initiated via providing a 'Just'-wrapped
+-- input, where every two consequitve 'Just'-wrapped inputs must be at
+-- least @m@ cycles apart.
 
 -- TODO: model the aformentioned assumptions as part of the type.
 dsFold ∷

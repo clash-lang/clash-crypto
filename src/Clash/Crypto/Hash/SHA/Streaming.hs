@@ -22,6 +22,7 @@ import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
+import Clash.Crypto.Hash.SHA.Streaming.Padding
 import Clash.Crypto.Hash.SHA.Streaming.Stages
 
 -- | Perform the steps 1 to 4 for one iteration of the loop.
@@ -45,12 +46,12 @@ hashStream ∷
   ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat) (k ∷ Nat).
   (KnownNat k, KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
   (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
-  DSignal dom k (Maybe (Either () (BitVector n))) →
+  DSignal dom k (PaddedMsgFrame n) →
   DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashValue alg))
 hashStream input
   | SHAFacts alg ← knownSHA @alg
   , Dict ← lemma₀ @(BlockSize alg) @n
-  , Dict ← lemma₁ @(16 * WordSize alg) @n
+  , Dict ← lemma₁ @(BitSize (MessageBlock alg)) @n
   =
   let
     -- some buffer to shift in @(BlockSize alg / n) - 1@ frames

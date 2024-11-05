@@ -317,20 +317,22 @@ class SHAHashCompute alg where
     -- MessageBlockWords@ to @Max MessageBlockWords t - 1@ initially
     -- holding M⁽ⁱ⁾, which shifts to the right with every increment of
     -- @t@. Respectively, the content inside the window shifts to the
-    -- left. The window's size implicetly follows from the message
+    -- left. The window's size implicitly follows from the message
     -- schedule preparation definition in FIPS 180-4, since every Wₜ
     -- only depends on smaller Wⱼ that satisfy @j ≥ 0 @ and @t -
     -- MessageBlockWords ≤ j < t@.
     HashValue alg →
-    -- ^ H⁽ⁱ⁻¹⁾
+    -- ^ The working variables @a@, @b@, ... before the tᵗʰ
+    -- iteration, initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
     ( SHAWord alg
       -- ^ Wₜ
     , HashValue alg
-      -- ^ H⁽ⁱ⁾
+      -- ^ The working variables @a@, @b@, ... after the tᵗʰ
+      -- iteration.
     )
 
   -- | Extends 'computeCycle' with a sliding window for W, as it
-  -- implicetly follows form the definition in FIPS 180-4.
+  -- implicitly follows from the definition in FIPS 180-4.
   slidingWindowCycle ∷
     SHAHashCompute alg ⇒
     Proxy alg →
@@ -343,13 +345,13 @@ class SHAHashCompute alg where
 
 instance SHAHashCompute SHA1 where
   computeCycle (alg ∷ Proxy alg) t w v
-    = (_Wₜ, _T :> a :> _ROTL @30 SNat b :> c :> d :> Nil)
+    = (_Wₜ, a' :> b' :> c' :> d' :> e' :> Nil)
    where
     _Wₜ =
       if t < natToNum @MessageBlockWords
       then
         -- due to w being defined relative to t, accessing M⁽ⁱ⁾ at the
-        -- first 'MessageBlockWords' positions alwasy resolves to
+        -- first 'MessageBlockWords' positions always resolves to
         -- reading the first position in the window
         w ‼ 0
       else
@@ -359,24 +361,28 @@ instance SHAHashCompute SHA1 where
           ⊕ w ‼ (natToNum @(MessageBlockWords - 14))
           ⊕ w ‼ (natToNum @(MessageBlockWords - 16))
 
-    _Kₜ = (_K alg) ‼ t
-    _T = _ROTL @5 SNat a + _f t b c d + e + _Kₜ + _Wₜ
-
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
     d = at @3 SNat v
     e = at @4 SNat v
 
+    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg ‼ t + _Wₜ
+    e' = d
+    d' = c
+    c' = _ROTL @30 SNat b
+    b' = a
+    a' = _T
+
 instance SHAHashCompute SHA256 where
   computeCycle (alg ∷ Proxy alg) t w v =
-    (_Wₜ, _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil)
+    (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
     _Wₜ =
       if t < natToNum @MessageBlockWords
       then
         -- due to w being defined relative to t, accessing M⁽ⁱ⁾ at the
-        -- first 'MessageBlockWords' positions alwasy resolves to
+        -- first 'MessageBlockWords' positions always resolves to
         -- reading the first position in the window
         w ‼ 0
       else
@@ -384,10 +390,6 @@ instance SHAHashCompute SHA256 where
         +          w ‼ (natToNum @(MessageBlockWords -  7))
         + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
         +          w ‼ (natToNum @(MessageBlockWords - 16))
-
-    _Kₜ = (_K alg) ‼ t
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _Kₜ + _Wₜ
-    _T₂ = _Σ₀ alg a + _Mai a b c
 
     a = at @0 SNat v
     b = at @1 SNat v
@@ -397,12 +399,23 @@ instance SHAHashCompute SHA256 where
     f = at @5 SNat v
     g = at @6 SNat v
     h = at @7 SNat v
+
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₂ = _Σ₀ alg a + _Mai a b c
+    h' = g
+    g' = f
+    f' = e
+    e' = d + _T₁
+    d' = c
+    c' = b
+    b' = a
+    a' = _T₁ + _T₂
 
 deriving via SHA256 instance SHAHashCompute SHA224
 
 instance SHAHashCompute SHA512 where
   computeCycle (alg ∷ Proxy alg) t w v =
-    (_Wₜ, _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil)
+    (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
     _Wₜ =
       if t < natToNum @MessageBlockWords
@@ -417,10 +430,6 @@ instance SHAHashCompute SHA512 where
         + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
         +          w ‼ (natToNum @(MessageBlockWords - 16))
 
-    _Kₜ = (_K alg) ‼ t
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _Kₜ + _Wₜ
-    _T₂ = _Σ₀ alg a + _Mai a b c
-
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
@@ -429,6 +438,18 @@ instance SHAHashCompute SHA512 where
     f = at @5 SNat v
     g = at @6 SNat v
     h = at @7 SNat v
+
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₂ = _Σ₀ alg a + _Mai a b c
+    h' = g
+    g' = f
+    f' = e
+    e' = d + _T₁
+    d' = c
+    c' = b
+    b' = a
+    a' = _T₁ + _T₂
+
 
 deriving via SHA512 instance SHAHashCompute SHA384
 deriving via SHA512 instance SHAHashCompute SHA512224
