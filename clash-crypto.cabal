@@ -76,6 +76,7 @@ library
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
     Clash.Signal.Delayed.Extra
+    Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
 

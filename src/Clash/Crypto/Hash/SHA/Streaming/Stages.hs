@@ -11,6 +11,7 @@ with the input rate resulting from the chosen input frame size.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -19,13 +20,13 @@ module Clash.Crypto.Hash.SHA.Streaming.Stages
   ( DistributedStages
   , atMostOnePerStage
   , distributeStages
+  , mealyStages
   ) where
 
 import Clash.Prelude
 
-import Control.Monad
 import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (leTrans)
+import Data.Constraint.Nat.Extra (leTrans, minOverLE)
 import Data.Proxy (Proxy(..))
 import Data.Type.Bool (type (&&), If)
 import Data.Type.Equality (type (==))
@@ -102,34 +103,30 @@ atMostOnePerStage ∷ ∀ x y z. Dict (DistributedStages x y z ≤ 1)
 atMostOnePerStage = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
 -- | Evenly distributes @d@ registers between @n@ combinational
--- computations. The computations all share a common input given via
--- the first argument and are chained via their second arguemnt. The
--- introduced registers are all initialized with the provided initial
--- value. The introduced delay is tracked using 'DSignal'.
+-- computations. The introduced registers are all initialized with the
+-- provided initial value. The introduced delay is tracked using
+-- 'DSignal'.
 --
--- __Illustration:__ for introducing a register after every second computation
+-- __Illustration:__ for introducing a register after every second
+-- computation
 --
 -- @
---   shared input  ──┬────┬────────┬────┬──────────────┐
---                   ↓    ↓        ↓    ↓              ↓
---    front input  → c₀ → c₁ → R → c₂ → c₃ → R → ... → cₙ →  output
---                             ⇡             ⇡
---                             vᵢ            vᵢ
+--   front input  → c₀ → c₁ → R → c₂ → c₃ → R → ... → cₙ →  output
+--                            ⇡             ⇡
+--                            vᵢ            vᵢ
 -- @
 distributeStages ∷
-  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type) (b ∷ Type).
+  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type).
   (KnownNat n, NFDataX a) ⇒
   SNat d →
   -- ^ number of stages
   a →
   -- ^ initial value (vᵢ) assigned to the introduced registers after
   -- coming out of the reset
-  Vec n (b → a → a) →
+  Vec n (a → a) →
   -- ^ the computations to be added in between the different stages.
   ∀ (dom ∷ Domain) (k ∷ Nat).
   (KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  DSignal dom k b →
-  -- ^ the /shared input/ that is shared among all computations
   DSignal dom k a →
   -- ^ the /front input/ that is fed at the beginning of the chain
   DSignal dom (k + d) a
@@ -141,28 +138,76 @@ distributeStages d@SNat ival computations =
     ∀ (m ∷ Nat) (i ∷ Nat) (r ∷ Nat).
     (KnownNat m, NFDataX a) ⇒
     SNat i → SNat r →
-    Vec m (b → a → a) →
+    Vec m (a → a) →
     ∀ (dom ∷ Domain) (k ∷ Nat).
     (KnownDomain dom, HiddenClockResetEnable dom) ⇒
-    DSignal dom k b →
     DSignal dom k a →
     DSignal dom (k + r) a
-  distributeStages# i@SNat r@SNat cs s = case toUNat @m SNat of
+  distributeStages# i@SNat r@SNat cs = case toUNat @m SNat of
     UZero   → delayedI ival
     USucc _ → case toUNat r of
       UZero
-        → liftA2 (head cs) s
-        . distributeStages# (succSNat i) r (tail cs) s
+        → fmap (head cs)
+        . distributeStages# (succSNat i) r (tail cs)
       USucc _
         | Dict ← atMostOnePerStage @n @d @i
         , Dict ← leTrans @(DistributedStages n d i) @1 @(r - 1 + 1)
         → delayedI @(DistributedStages n d i) ival
-        . liftA2 (head cs) (forward SNat s)
+        . fmap (head cs)
         . distributeStages#
             (succSNat i)
             (SNat @(r - DistributedStages n d i))
             (tail cs)
-            s
+
+-- | A less resource hungry variant of 'distributeStages', which
+-- utilizes a state machine instead of a pipe. This variant
+-- additionally requires
+-- * that the computation function is uniform for all iterations and
+--   also works with a run time available index of the current
+--   iteration, and
+-- * that all relevant inputs are at least @d@ cycles apart, which
+--   allows to replace a register chain by a single state instance
+--   being iterated over by the Mealy machine.
+mealyStages ∷
+  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type) (dom ∷ Domain) (t ∷ Nat).
+  ( KnownNat n, 1 ≤ n, NFDataX a
+  , KnownDomain dom, HiddenClockResetEnable dom
+  ) ⇒
+  SNat d →
+  -- ^ number of stages
+  (Index n → a → a) →
+  -- ^ the computations
+  DSignal dom t (Maybe a) →
+  -- ^ the input initiating the state machine, where relevant inputs
+  -- are 'Just'-wrapped
+  DSignal dom (t + d) a
+mealyStages SNat compute
+  | Dict ← minOverLE @n @(d + 1) @1
+  , SNat @k ← SNat @(n `Div` Min n (d + 1))
+  , SNat @r ← SNat @(n `Mod` Min n (d + 1))
+  , SNat @b ← SNat @((k + 1) * r)
+  = let m = mealy (~~>) (maxBound ∷ Index n, undefined ∷ a)
+
+        mem ~~> Nothing = step mem
+        _   ~~> Just i  = step (0, i)
+
+        step (c, v)
+          = let k = natToNum @k
+                b = natToNum @b
+                is = iterate (SNat @k) (satSucc SatBound) c
+                r  = foldl (flip compute) v is
+                r' = compute (c + k) r
+             in if c < b
+                then ((c + k + 1, r'), r')
+                else ((c + k, r), r)
+
+     in case compareSNat (SNat @(d + 1)) (SNat @n) of
+          SNatLE → unsafeFromSignal @dom @a @(t + d)
+                 . m . toSignal
+          SNatGT → delayedI @(d - n + 1) undefined
+                 . unsafeFromSignal @dom @_ @(t + n - 1)
+                 . m
+                 . toSignal
 
 --------------
 -- Internal --
@@ -171,8 +216,8 @@ distributeStages d@SNat ival computations =
 {-
 -- | Some quick test code for checking the 'DistributedStages' type
 -- family calculation
-_placeRegister ∷ Nat → Nat → IO ()
-_placeRegister n m = do
+placeRegister ∷ Nat → Nat → IO ()
+placeRegister n m = do
   print (k, r, b)
   putStrLn "---"
   forM_ chain $ \(i, c) → do

@@ -75,9 +75,12 @@ type family ScheduleCount alg where
 -- | The "SHA Word" type.
 type SHAWord (alg ∷ SHA) = BitVector (WordSize alg)
 
+-- | The number of Words of a Message Block.
+type MessageBlockWords = 16
+
 -- | The "Message Block" type.
 type MessageBlock (alg ∷ SHA) =
-  Vec 16 (SHAWord alg)
+  Vec MessageBlockWords (SHAWord alg)
 
 -- | The "Hash Value" type (defined in the first paragraphs of
 -- the sections 6.1, 6.2, and 6.4, respectively).

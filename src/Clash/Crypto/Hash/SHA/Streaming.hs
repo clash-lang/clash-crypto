@@ -22,6 +22,7 @@ import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
+import Clash.Crypto.Hash.SHA.Streaming.Padding
 import Clash.Crypto.Hash.SHA.Streaming.Stages
 
 -- | Perform the steps 1 to 4 for one iteration of the loop.
@@ -29,15 +30,15 @@ computeBlock ∷
   ∀ (alg ∷ SHA). KnownSHA alg ⇒
   ∀ stages. SNat stages →
   ∀ dom n. (KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  DSignal dom n (HashValue alg) →
-  DSignal dom n (MessageBlock alg) →
+  DSignal dom n (Maybe (MessageBlock alg, HashValue alg)) →
   DSignal dom (n + stages) (HashValue alg)
-computeBlock stages@SNat hvs mbs
-  | SHAFacts{} ← knownSHA @alg
-    -- using 'forward' is safe here, as 'dsFold' keeps the input
-    -- stable for exactly @stages@ many cycles
-  = ((zipWith (+) <$> forward stages hvs) <*>)
-  $ distributeStages stages undefined (computeCycles @alg) mbs hvs
+computeBlock stages@SNat input
+  | SHAFacts alg ← knownSHA @alg
+  = let hvs = (`maybe` snd)
+          <$> antiDelay d1 (delayedI @1 undefined hvs)
+          <*> input
+     in ((zipWith (+) <$> forward stages hvs) <*>)
+      $ snd <$> mealyStages stages (slidingWindowCycle alg) input
 
 -- | Streaming based implementation of the hashing algorithms defined
 -- in FIPS 180-4.
@@ -45,12 +46,12 @@ hashStream ∷
   ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat) (k ∷ Nat).
   (KnownNat k, KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
   (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
-  DSignal dom k (Maybe (Either () (BitVector n))) →
+  DSignal dom k (PaddedMsgFrame n) →
   DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashValue alg))
 hashStream input
   | SHAFacts alg ← knownSHA @alg
   , Dict ← lemma₀ @(BlockSize alg) @n
-  , Dict ← lemma₁ @(16 * WordSize alg) @n
+  , Dict ← lemma₁ @(BitSize (MessageBlock alg)) @n
   =
   let
     -- some buffer to shift in @(BlockSize alg / n) - 1@ frames
@@ -115,9 +116,10 @@ hashStream input
     hashValue = withReset rstF $
       dsFold
         (_H⁰ alg)
-        proceed
         (computeBlock @alg @(DDiv (BlockSize alg) n - 1) SNat)
-        msgBlock
+        $ mux (delayedI @1 False ((== 0) <$> releaseCount))
+            (Just <$> msgBlock)
+            (pure Nothing)
   in
     mux endOfMessage
       (Just <$> hashValue)

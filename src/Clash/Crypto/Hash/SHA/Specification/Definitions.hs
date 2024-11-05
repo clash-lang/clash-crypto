@@ -20,13 +20,13 @@ module Clash.Crypto.Hash.SHA.Specification.Definitions where
 import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
-import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (leTrans)
+import Control.Arrow (first)
 import Data.Proxy (Proxy)
 import Data.Type.Bool (If)
 import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Hash.SHA.Specification.Types
+import Clash.Sized.Vector.Extra ((‼))
 
 -------------------------------------------
 -- Section 2.2.2: Symbols and Operations --
@@ -81,12 +81,12 @@ _Parity x y z = x ⊕ y ⊕ z
 _Mai ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w → BitVector w
 _Mai x y z = (x ∧ y) ⊕ (x ∧ z) ⊕ (y ∧ z)
 
-_f ∷ t ≤ 79 ⇒ SNat t → BitVector 32 → BitVector 32 → BitVector 32 → BitVector 32
+_f ∷ Index 80 → BitVector 32 → BitVector 32 → BitVector 32 → BitVector 32
 _f t
-  | SNatLE ← compareSNat t (SNat @19) = _Ch
-  | SNatLE ← compareSNat t (SNat @39) = _Parity
-  | SNatLE ← compareSNat t (SNat @59) = _Mai
-  | otherwise                         = _Parity
+  | t <= 19   = _Ch
+  | t <= 39   = _Parity
+  | t <= 59   = _Mai
+  | otherwise = _Parity
 
 -- | All algorithms define some functions Σ₀, Σ₁, σ₀, and σ₁, which
 -- are different for each algorithm. We use the 'SHAFunctions' class
@@ -123,70 +123,63 @@ deriving via SHA384 instance SHAFunctions SHA512256
 -- each algorithm. We use the 'SHAConstants' class to capture the
 -- differences among the 'SHA' instances.
 class SHAConstants (alg ∷ SHA) where
-  type MaxIndex alg ∷ Nat
-  _K ∷ Proxy alg → ∀ t. t ≤ MaxIndex alg ⇒ SNat t → SHAWord alg
+  type KSize alg ∷ Nat
+  _K ∷ Proxy alg → Vec (KSize alg) (SHAWord alg)
 
 instance SHAConstants SHA1 where
-  type MaxIndex SHA1 = 79
-  _K _ t
-    | SNatLE ← compareSNat t (SNat @19) = 0x5a827999
-    | SNatLE ← compareSNat t (SNat @39) = 0x6ed9eba1
-    | SNatLE ← compareSNat t (SNat @59) = 0x8f1bbcdc
-    | otherwise                         = 0xca62c1d6
+  type KSize SHA1 = 80
+  _K _ = repeat @20 0x5a827999
+      ++ repeat @20 0x6ed9eba1
+      ++ repeat @20 0x8f1bbcdc
+      ++ repeat @20 0xca62c1d6
 
 instance SHAConstants SHA224 where
-  type MaxIndex SHA224 = 63
-  _K _ (SNat ∷ SNat t) = at @t @(MaxIndex SHA224 - t) SNat v
-   where
-    v ∷ Vec (MaxIndex SHA224 + 1) (SHAWord SHA224)
-    v = 0x428a2f98 :> 0x71374491 :> 0xb5c0fbcf :> 0xe9b5dba5 :> 0x3956c25b
-     :> 0x59f111f1 :> 0x923f82a4 :> 0xab1c5ed5 :> 0xd807aa98 :> 0x12835b01
-     :> 0x243185be :> 0x550c7dc3 :> 0x72be5d74 :> 0x80deb1fe :> 0x9bdc06a7
-     :> 0xc19bf174 :> 0xe49b69c1 :> 0xefbe4786 :> 0x0fc19dc6 :> 0x240ca1cc
-     :> 0x2de92c6f :> 0x4a7484aa :> 0x5cb0a9dc :> 0x76f988da :> 0x983e5152
-     :> 0xa831c66d :> 0xb00327c8 :> 0xbf597fc7 :> 0xc6e00bf3 :> 0xd5a79147
-     :> 0x06ca6351 :> 0x14292967 :> 0x27b70a85 :> 0x2e1b2138 :> 0x4d2c6dfc
-     :> 0x53380d13 :> 0x650a7354 :> 0x766a0abb :> 0x81c2c92e :> 0x92722c85
-     :> 0xa2bfe8a1 :> 0xa81a664b :> 0xc24b8b70 :> 0xc76c51a3 :> 0xd192e819
-     :> 0xd6990624 :> 0xf40e3585 :> 0x106aa070 :> 0x19a4c116 :> 0x1e376c08
-     :> 0x2748774c :> 0x34b0bcb5 :> 0x391c0cb3 :> 0x4ed8aa4a :> 0x5b9cca4f
-     :> 0x682e6ff3 :> 0x748f82ee :> 0x78a5636f :> 0x84c87814 :> 0x8cc70208
-     :> 0x90befffa :> 0xa4506ceb :> 0xbef9a3f7 :> 0xc67178f2 :> Nil
+  type KSize SHA224 = 64
+  _K _ = 0x428a2f98 :> 0x71374491 :> 0xb5c0fbcf :> 0xe9b5dba5 :> 0x3956c25b
+      :> 0x59f111f1 :> 0x923f82a4 :> 0xab1c5ed5 :> 0xd807aa98 :> 0x12835b01
+      :> 0x243185be :> 0x550c7dc3 :> 0x72be5d74 :> 0x80deb1fe :> 0x9bdc06a7
+      :> 0xc19bf174 :> 0xe49b69c1 :> 0xefbe4786 :> 0x0fc19dc6 :> 0x240ca1cc
+      :> 0x2de92c6f :> 0x4a7484aa :> 0x5cb0a9dc :> 0x76f988da :> 0x983e5152
+      :> 0xa831c66d :> 0xb00327c8 :> 0xbf597fc7 :> 0xc6e00bf3 :> 0xd5a79147
+      :> 0x06ca6351 :> 0x14292967 :> 0x27b70a85 :> 0x2e1b2138 :> 0x4d2c6dfc
+      :> 0x53380d13 :> 0x650a7354 :> 0x766a0abb :> 0x81c2c92e :> 0x92722c85
+      :> 0xa2bfe8a1 :> 0xa81a664b :> 0xc24b8b70 :> 0xc76c51a3 :> 0xd192e819
+      :> 0xd6990624 :> 0xf40e3585 :> 0x106aa070 :> 0x19a4c116 :> 0x1e376c08
+      :> 0x2748774c :> 0x34b0bcb5 :> 0x391c0cb3 :> 0x4ed8aa4a :> 0x5b9cca4f
+      :> 0x682e6ff3 :> 0x748f82ee :> 0x78a5636f :> 0x84c87814 :> 0x8cc70208
+      :> 0x90befffa :> 0xa4506ceb :> 0xbef9a3f7 :> 0xc67178f2 :> Nil
 
 deriving via SHA224 instance SHAConstants SHA256
 
 instance SHAConstants SHA384 where
-  type MaxIndex SHA384 = 79
-  _K _ (SNat ∷ SNat t) = at @t @(MaxIndex SHA384 - t) SNat v
-   where
-    v ∷ Vec (MaxIndex SHA384 + 1) (SHAWord SHA384)
-    v = 0x428a2f98d728ae22 :> 0x7137449123ef65cd :> 0xb5c0fbcfec4d3b2f
-     :> 0xe9b5dba58189dbbc :> 0x3956c25bf348b538 :> 0x59f111f1b605d019
-     :> 0x923f82a4af194f9b :> 0xab1c5ed5da6d8118 :> 0xd807aa98a3030242
-     :> 0x12835b0145706fbe :> 0x243185be4ee4b28c :> 0x550c7dc3d5ffb4e2
-     :> 0x72be5d74f27b896f :> 0x80deb1fe3b1696b1 :> 0x9bdc06a725c71235
-     :> 0xc19bf174cf692694 :> 0xe49b69c19ef14ad2 :> 0xefbe4786384f25e3
-     :> 0x0fc19dc68b8cd5b5 :> 0x240ca1cc77ac9c65 :> 0x2de92c6f592b0275
-     :> 0x4a7484aa6ea6e483 :> 0x5cb0a9dcbd41fbd4 :> 0x76f988da831153b5
-     :> 0x983e5152ee66dfab :> 0xa831c66d2db43210 :> 0xb00327c898fb213f
-     :> 0xbf597fc7beef0ee4 :> 0xc6e00bf33da88fc2 :> 0xd5a79147930aa725
-     :> 0x06ca6351e003826f :> 0x142929670a0e6e70 :> 0x27b70a8546d22ffc
-     :> 0x2e1b21385c26c926 :> 0x4d2c6dfc5ac42aed :> 0x53380d139d95b3df
-     :> 0x650a73548baf63de :> 0x766a0abb3c77b2a8 :> 0x81c2c92e47edaee6
-     :> 0x92722c851482353b :> 0xa2bfe8a14cf10364 :> 0xa81a664bbc423001
-     :> 0xc24b8b70d0f89791 :> 0xc76c51a30654be30 :> 0xd192e819d6ef5218
-     :> 0xd69906245565a910 :> 0xf40e35855771202a :> 0x106aa07032bbd1b8
-     :> 0x19a4c116b8d2d0c8 :> 0x1e376c085141ab53 :> 0x2748774cdf8eeb99
-     :> 0x34b0bcb5e19b48a8 :> 0x391c0cb3c5c95a63 :> 0x4ed8aa4ae3418acb
-     :> 0x5b9cca4f7763e373 :> 0x682e6ff3d6b2b8a3 :> 0x748f82ee5defb2fc
-     :> 0x78a5636f43172f60 :> 0x84c87814a1f0ab72 :> 0x8cc702081a6439ec
-     :> 0x90befffa23631e28 :> 0xa4506cebde82bde9 :> 0xbef9a3f7b2c67915
-     :> 0xc67178f2e372532b :> 0xca273eceea26619c :> 0xd186b8c721c0c207
-     :> 0xeada7dd6cde0eb1e :> 0xf57d4f7fee6ed178 :> 0x06f067aa72176fba
-     :> 0x0a637dc5a2c898a6 :> 0x113f9804bef90dae :> 0x1b710b35131c471b
-     :> 0x28db77f523047d84 :> 0x32caab7b40c72493 :> 0x3c9ebe0a15c9bebc
-     :> 0x431d67c49c100d4c :> 0x4cc5d4becb3e42b6 :> 0x597f299cfc657e2a
-     :> 0x5fcb6fab3ad6faec :> 0x6c44198c4a475817 :> Nil
+  type KSize SHA384 = 80
+  _K _ = 0x428a2f98d728ae22 :> 0x7137449123ef65cd :> 0xb5c0fbcfec4d3b2f
+      :> 0xe9b5dba58189dbbc :> 0x3956c25bf348b538 :> 0x59f111f1b605d019
+      :> 0x923f82a4af194f9b :> 0xab1c5ed5da6d8118 :> 0xd807aa98a3030242
+      :> 0x12835b0145706fbe :> 0x243185be4ee4b28c :> 0x550c7dc3d5ffb4e2
+      :> 0x72be5d74f27b896f :> 0x80deb1fe3b1696b1 :> 0x9bdc06a725c71235
+      :> 0xc19bf174cf692694 :> 0xe49b69c19ef14ad2 :> 0xefbe4786384f25e3
+      :> 0x0fc19dc68b8cd5b5 :> 0x240ca1cc77ac9c65 :> 0x2de92c6f592b0275
+      :> 0x4a7484aa6ea6e483 :> 0x5cb0a9dcbd41fbd4 :> 0x76f988da831153b5
+      :> 0x983e5152ee66dfab :> 0xa831c66d2db43210 :> 0xb00327c898fb213f
+      :> 0xbf597fc7beef0ee4 :> 0xc6e00bf33da88fc2 :> 0xd5a79147930aa725
+      :> 0x06ca6351e003826f :> 0x142929670a0e6e70 :> 0x27b70a8546d22ffc
+      :> 0x2e1b21385c26c926 :> 0x4d2c6dfc5ac42aed :> 0x53380d139d95b3df
+      :> 0x650a73548baf63de :> 0x766a0abb3c77b2a8 :> 0x81c2c92e47edaee6
+      :> 0x92722c851482353b :> 0xa2bfe8a14cf10364 :> 0xa81a664bbc423001
+      :> 0xc24b8b70d0f89791 :> 0xc76c51a30654be30 :> 0xd192e819d6ef5218
+      :> 0xd69906245565a910 :> 0xf40e35855771202a :> 0x106aa07032bbd1b8
+      :> 0x19a4c116b8d2d0c8 :> 0x1e376c085141ab53 :> 0x2748774cdf8eeb99
+      :> 0x34b0bcb5e19b48a8 :> 0x391c0cb3c5c95a63 :> 0x4ed8aa4ae3418acb
+      :> 0x5b9cca4f7763e373 :> 0x682e6ff3d6b2b8a3 :> 0x748f82ee5defb2fc
+      :> 0x78a5636f43172f60 :> 0x84c87814a1f0ab72 :> 0x8cc702081a6439ec
+      :> 0x90befffa23631e28 :> 0xa4506cebde82bde9 :> 0xbef9a3f7b2c67915
+      :> 0xc67178f2e372532b :> 0xca273eceea26619c :> 0xd186b8c721c0c207
+      :> 0xeada7dd6cde0eb1e :> 0xf57d4f7fee6ed178 :> 0x06f067aa72176fba
+      :> 0x0a637dc5a2c898a6 :> 0x113f9804bef90dae :> 0x1b710b35131c471b
+      :> 0x28db77f523047d84 :> 0x32caab7b40c72493 :> 0x3c9ebe0a15c9bebc
+      :> 0x431d67c49c100d4c :> 0x4cc5d4becb3e42b6 :> 0x597f299cfc657e2a
+      :> 0x5fcb6fab3ad6faec :> 0x6c44198c4a475817 :> Nil
 
 deriving via SHA384 instance SHAConstants SHA512
 deriving via SHA384 instance SHAConstants SHA512224
@@ -317,41 +310,87 @@ instance SHAInitials SHA512256 where
 class SHAHashCompute alg where
   computeCycle ∷
     Proxy alg →
-    ∀ t. t + 1 ≤ ScheduleCount alg ⇒
-    SNat t → MessageBlock alg → HashValue alg → HashValue alg
+    Index (ScheduleCount alg) →
+    -- ^ t
+    Vec MessageBlockWords (SHAWord alg) →
+    -- ^ A slicing window over W from @Max MessageBlockWords t -
+    -- MessageBlockWords@ to @Max MessageBlockWords t - 1@ initially
+    -- holding M⁽ⁱ⁾, which shifts to the right with every increment of
+    -- @t@. Respectively, the content inside the window shifts to the
+    -- left. The window's size implicitly follows from the message
+    -- schedule preparation definition in FIPS 180-4, since every Wₜ
+    -- only depends on smaller Wⱼ that satisfy @j ≥ 0 @ and @t -
+    -- MessageBlockWords ≤ j < t@.
+    HashValue alg →
+    -- ^ The working variables @a@, @b@, ... before the tᵗʰ
+    -- iteration, initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
+    ( SHAWord alg
+      -- ^ Wₜ
+    , HashValue alg
+      -- ^ The working variables @a@, @b@, ... after the tᵗʰ
+      -- iteration.
+    )
+
+  -- | Extends 'computeCycle' with a sliding window for W, as it
+  -- implicitly follows from the definition in FIPS 180-4.
+  slidingWindowCycle ∷
+    SHAHashCompute alg ⇒
+    Proxy alg →
+    Index (ScheduleCount alg) →
+    (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
+    (Vec MessageBlockWords (SHAWord alg), HashValue alg)
+  slidingWindowCycle alg t (w, h)
+    = first (fst . shiftInAtN w . singleton)
+    $ computeCycle alg t w h
 
 instance SHAHashCompute SHA1 where
-  computeCycle (alg ∷ Proxy alg) (t@SNat ∷ SNat t) m v =
-    _T :> a :> _ROTL @30 SNat b :> c :> d :> Nil
+  computeCycle (alg ∷ Proxy alg) t w v
+    = (_Wₜ, a' :> b' :> c' :> d' :> e' :> Nil)
    where
-    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t _W
-    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg t + _Wₜ
+    _Wₜ =
+      if t < natToNum @MessageBlockWords
+      then
+        -- due to w being defined relative to t, accessing M⁽ⁱ⁾ at the
+        -- first 'MessageBlockWords' positions always resolves to
+        -- reading the first position in the window
+        w ‼ 0
+      else
+        _ROTL (SNat @1)
+          $ w ‼ (natToNum @(MessageBlockWords -  3))
+          ⊕ w ‼ (natToNum @(MessageBlockWords -  8))
+          ⊕ w ‼ (natToNum @(MessageBlockWords - 14))
+          ⊕ w ‼ (natToNum @(MessageBlockWords - 16))
+
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
     d = at @3 SNat v
     e = at @4 SNat v
 
-    _W = smapWithBounds prepare $ repeat ()
-
-    prepare ∷ ∀ n. n + 1 ≤ ScheduleCount SHA1 ⇒ SNat n → () → SHAWord SHA1
-    prepare n@(SNat ∷ SNat n) _ =
-      case compareSNat n (SNat @15) of
-        SNatLE → at @n @(15 - n) SNat m
-        SNatGT → _ROTL (SNat @1)
-               $ at @(n -  3) @(ScheduleCount SHA1 - (n - 2))  SNat _W
-               ⊕ at @(n -  8) @(ScheduleCount SHA1 - (n - 7))  SNat _W
-               ⊕ at @(n - 14) @(ScheduleCount SHA1 - (n - 13)) SNat _W
-               ⊕ at @(n - 16) @(ScheduleCount SHA1 - (n - 15)) SNat _W
-
+    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg ‼ t + _Wₜ
+    e' = d
+    d' = c
+    c' = _ROTL @30 SNat b
+    b' = a
+    a' = _T
 
 instance SHAHashCompute SHA256 where
-  computeCycle (alg ∷ Proxy alg) (t ∷ SNat t) m v =
-    _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil
+  computeCycle (alg ∷ Proxy alg) t w v =
+    (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
-    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t (_W# alg m)
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _Wₜ
-    _T₂ = _Σ₀ alg a + _Mai a b c
+    _Wₜ =
+      if t < natToNum @MessageBlockWords
+      then
+        -- due to w being defined relative to t, accessing M⁽ⁱ⁾ at the
+        -- first 'MessageBlockWords' positions always resolves to
+        -- reading the first position in the window
+        w ‼ 0
+      else
+          _σ₁ alg (w ‼ (natToNum @(MessageBlockWords -  2)))
+        +          w ‼ (natToNum @(MessageBlockWords -  7))
+        + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
+        +          w ‼ (natToNum @(MessageBlockWords - 16))
+
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
@@ -360,16 +399,37 @@ instance SHAHashCompute SHA256 where
     f = at @5 SNat v
     g = at @6 SNat v
     h = at @7 SNat v
+
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₂ = _Σ₀ alg a + _Mai a b c
+    h' = g
+    g' = f
+    f' = e
+    e' = d + _T₁
+    d' = c
+    c' = b
+    b' = a
+    a' = _T₁ + _T₂
 
 deriving via SHA256 instance SHAHashCompute SHA224
 
 instance SHAHashCompute SHA512 where
-  computeCycle (alg ∷ Proxy alg) (t ∷ SNat t) m v =
-    _T₁ + _T₂ :> a :> b :> c :> d + _T₁ :> e :> f :> g :> Nil
+  computeCycle (alg ∷ Proxy alg) t w v =
+    (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
-    _Wₜ = at @_ @(ScheduleCount alg - 1 - t) t (_W# alg m)
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg t + _Wₜ
-    _T₂ = _Σ₀ alg a + _Mai a b c
+    _Wₜ =
+      if t < natToNum @MessageBlockWords
+      then
+        -- due to w being defined relative to t, accessing M⁽ⁱ⁾ at the
+        -- first 'MessageBlockWords' positions alwasy resolves to
+        -- reading the first position in the window
+        w ‼ 0
+      else
+          _σ₁ alg (w ‼ (natToNum @(MessageBlockWords -  2)))
+        +          w ‼ (natToNum @(MessageBlockWords -  7))
+        + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
+        +          w ‼ (natToNum @(MessageBlockWords - 16))
+
     a = at @0 SNat v
     b = at @1 SNat v
     c = at @2 SNat v
@@ -379,41 +439,18 @@ instance SHAHashCompute SHA512 where
     g = at @6 SNat v
     h = at @7 SNat v
 
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₂ = _Σ₀ alg a + _Mai a b c
+    h' = g
+    g' = f
+    f' = e
+    e' = d + _T₁
+    d' = c
+    c' = b
+    b' = a
+    a' = _T₁ + _T₂
+
+
 deriving via SHA512 instance SHAHashCompute SHA384
 deriving via SHA512 instance SHAHashCompute SHA512224
 deriving via SHA512 instance SHAHashCompute SHA512256
-
--- | Message schedule preparation scheme of SHA256 and SHA512.
-_W# ∷
-  ∀ alg.
-  (KnownNat (WordSize alg), KnownNat (ScheduleCount alg)) ⇒
-  (SHAFunctions alg, 1 ≤ WordSize alg, 1 ≤ ScheduleCount alg) ⇒
-  Proxy alg →
-  MessageBlock alg →
-  Vec (ScheduleCount alg) (SHAWord alg)
-_W# alg m =
-  let
-    prepare ∷ ∀ t. t + 1 ≤ ScheduleCount alg ⇒ SNat t → () → SHAWord alg
-    prepare t@(SNat ∷ SNat t) _ =
-      case compareSNat t (SNat @15) of
-        SNatLE → at @t @(15 - t) SNat m
-        SNatGT
-          | Dict ← leTrans @(t -  1) @(t + 1) @(ScheduleCount alg)
-          , Dict ← leTrans @(t -  6) @(t + 1) @(ScheduleCount alg)
-          , Dict ← leTrans @(t - 14) @(t + 1) @(ScheduleCount alg)
-          , Dict ← leTrans @(t - 15) @(t + 1) @(ScheduleCount alg)
-          → _σ₁ alg (at @(t -  2) @(ScheduleCount alg - (t - 1))  SNat wV)
-          +          at @(t -  7) @(ScheduleCount alg - (t - 6))  SNat wV
-          + _σ₀ alg (at @(t - 15) @(ScheduleCount alg - (t - 14)) SNat wV)
-          +          at @(t - 16) @(ScheduleCount alg - (t - 15)) SNat wV
-    -- required for working around
-    -- https://github.com/clash-lang/clash-compiler/issues/2834
-    {-# NOINLINE prepare #-}
-
-    wV ∷ Vec (ScheduleCount alg) (SHAWord alg)
-    wV = smapWithBounds prepare $ repeat ()
-    -- required for working around
-    -- https://github.com/clash-lang/clash-compiler/issues/2834
-    {-# NOINLINE wV #-}
-  in
-    wV
