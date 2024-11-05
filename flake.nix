@@ -32,7 +32,7 @@
           ];
           nativeBuildInputs =
             with pkgs; [
-              gnumake
+              gnumake yosys nextpnr
             ] ++
             (with myHsPkgs; [ cabal-install haskell-language-server ])
           ;
