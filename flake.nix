@@ -34,7 +34,7 @@
             with pkgs; [
               gnumake yosys nextpnr
             ] ++
-            (with myHsPkgs; [ cabal-install haskell-language-server ])
+            (with myHsPkgs; [ cabal-install ])
           ;
         };
       });
