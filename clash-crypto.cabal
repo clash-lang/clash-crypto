@@ -84,12 +84,12 @@ library
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
 
-test-suite tasty
+test-suite simulation
   import: common-options
-  hs-source-dirs: tests
+  hs-source-dirs: tests/sim
   type: exitcode-stdio-1.0
-  ghc-options: -Wall -Wcompat -threaded
-  main-is: tasty/Main.hs
+  ghc-options: -threaded
+  main-is: Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.ECDSA.Karatsuba
@@ -103,13 +103,46 @@ test-suite tasty
     , tasty
     , tasty-hedgehog >= 1.2 && < 1.5
 
-library hitlt
+library hitlt-shared
   import: common-options
-  hs-source-dirs: tests/hitl
+  hs-source-dirs: tests/hitl/lib
   build-depends:
-    , clash-crypto
+    , clash-lib
+    , infinite-list
+    , mtl
+    , pretty-show
+    , string-interpolate
+    , text
   exposed-modules:
-    Top
+    Domain
+    Pll
+
+library hitlt-instances
+  import: common-options
+  hs-source-dirs: tests/hitl/top
+  build-depends:
+    , clash-cores
+    , clash-crypto
+    , clash-crypto:hitlt-shared
+    , constraints
+  exposed-modules:
+    SHA
+
+test-suite hitlt
+  import: common-options
+  hs-source-dirs: tests/hitl/app
+  type: exitcode-stdio-1.0
+  ghc-options: -single-threaded
+  main-is: Main.hs
+  build-depends:
+    , bytestring
+    , clash-crypto
+    , clash-crypto:shake-rules
+    , cryptohash
+    , hedgehog >= 1.0 && < 1.5
+    , serialport >= 0.5.6
+    , tasty
+    , tasty-hedgehog >= 1.2 && < 1.5
 
 executable clash
   import: common-options
@@ -117,10 +150,9 @@ executable clash
   ghc-options: -Wall -Wcompat -threaded
   main-is: Main.hs
   build-depends:
-    , base
     , clash-crypto
+    , clash-crypto:hitlt-shared
     , clash-ghc
-    , clash-crypto:hitlt
 
 common shake-options
   default-language: GHC2021
