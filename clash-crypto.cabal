@@ -1,8 +1,10 @@
-cabal-version:       2.4
+cabal-version:       3.4
 name:                clash-crypto
 synopsis:            Cryptographic hardware in Clash
 description:         Cryptographic hardware that is implemented in the functional hardware description language Clash
 version:             0.1
+license:             CERN-OHL-P-2.0
+license-file:        LICENSE
 author:              QBayLogic B.V.
 maintainer:          devops@qbaylogic.com
 Copyright:           Copyright © 2024 QBayLogic B.V.
