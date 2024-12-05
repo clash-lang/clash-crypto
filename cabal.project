@@ -15,29 +15,29 @@ package clash-ghc
 source-repository-package
   type: git
   location: https://github.com/clash-lang/clash-compiler.git
-  tag: fc9d5a4eaa7f6e8dc8d7b011c53377ef4cf8db46
+  tag: d7150eb64aed6a9633daf8a84296c5df10f849e5
   subdir: clash-prelude
 
 source-repository-package
   type: git
   location: https://github.com/clash-lang/clash-compiler.git
-  tag: fc9d5a4eaa7f6e8dc8d7b011c53377ef4cf8db46
+  tag: d7150eb64aed6a9633daf8a84296c5df10f849e5
   subdir: clash-ghc
 
 source-repository-package
   type: git
   location: https://github.com/clash-lang/clash-compiler.git
-  tag: fc9d5a4eaa7f6e8dc8d7b011c53377ef4cf8db46
+  tag: d7150eb64aed6a9633daf8a84296c5df10f849e5
   subdir: clash-lib
 
 source-repository-package
   type: git
   location: https://github.com/clash-lang/clash-compiler.git
-  tag: fc9d5a4eaa7f6e8dc8d7b011c53377ef4cf8db46
+  tag: d7150eb64aed6a9633daf8a84296c5df10f849e5
   subdir: clash-prelude-hedgehog
 
 source-repository-package
   type: git
   location: https://github.com/clash-lang/clash-compiler.git
-  tag: fc9d5a4eaa7f6e8dc8d7b011c53377ef4cf8db46
+  tag: d7150eb64aed6a9633daf8a84296c5df10f849e5
   subdir: clash-cores

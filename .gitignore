@@ -1,10 +1,13 @@
 .cabal-sandbox/
+.direnv/
 .ghc.environment.*
 .stack-work/
 cabal.sandbox.config
 cabal.config
 dist-newstyle/
 stack.yaml.lock
+tags
+TAGS
 /cabal.project.local
 *.o
 *.o-boot
