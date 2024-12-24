@@ -121,3 +121,35 @@ executable clash
     , clash-crypto
     , clash-ghc
     , clash-crypto:hitlt
+
+common shake-options
+  default-language: GHC2021
+  ghc-options: -Wall -Wcompat -threaded
+  default-extensions:
+    LambdaCase
+    RecordWildCards
+    TypeFamilies
+  hs-source-dirs: app/shake
+  build-depends:
+    , base
+    , clash-crypto
+    , directory
+    , filepath
+    , shake
+    , unordered-containers
+    , utf8-string
+
+library shake-rules
+  import: shake-options
+  exposed-modules:
+    Shake
+  other-modules:
+    Development.Shake.Config.Extra
+
+executable shake
+  import: shake-options
+  ghc-options: -rtsopts "-with-rtsopts=-I0 -qg"
+  main-is: Main.hs
+  other-modules:
+    Shake
+    Development.Shake.Config.Extra
