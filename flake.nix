@@ -8,6 +8,12 @@
   outputs = { self, nixpkgs, flake-utils, clash-compiler, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = clash-compiler.inputs.nixpkgs.legacyPackages.${system};
+          serialportSrc = pkgs.fetchFromGitHub {
+            owner = "standardsemiconductor";
+            repo = "serialport";
+            rev = "ce42a5afebb55d2e2e84be7f5386d69c343e3942";
+            sha256 = "sha256-oBG8DylFwzUu212AiNOg2x+D1jmI2hAvMJQT0F8wWlE=";
+          };
           inherit (pkgs.haskell.lib) dontCheck doJailbreak markUnbroken;
           overlay = final: prev: {
             clash-cores = clash-compiler.packages.${system}.clash-cores;
@@ -16,7 +22,9 @@
             clash-lib = clash-compiler.packages.${system}.clash-lib;
             clash-ghc = clash-compiler.packages.${system}.clash-ghc;
             cabal-install = nixpkgs.legacyPackages.${system}.cabal-install;
-            serialport = doJailbreak (prev.callHackage "serialport" "0.5.6" { });
+            serialport = dontCheck (doJailbreak (prev.callCabal2nix "serialport" serialportSrc { }));
+            # Otherwise fails on `template-haskell < 2.22`.
+            string-interpolate = doJailbreak (prev.string-interpolate);
           };
           # TODO: refer dynamically to the right ghc version (using clash-compiler's default).
           # Might require some changes on clash-compiler's flake.
