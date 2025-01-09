@@ -1,8 +1,9 @@
 hitlt:
 	time cabal run -- clash-crypto:clash \
-    -package-env .ghc.environment.* \
-    -fclash-spec-limit=100 \
+    -fclash-spec-limit=50 \
     -fclash-inline-limit=100 \
+    -isrc \
+    -fconstraint-solver-iterations=0 \
     -outputdir _build \
     --verilog \
     tests/hitl/Top.hs
@@ -17,4 +18,4 @@ nextpnr:
     --package CSFBGA285 \
     --json _build/topEntity.json \
     --out-of-context \
-    --threads "1"
+    --threads 8
