@@ -68,7 +68,6 @@ library
   exposed-modules:
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
-    Clash.Crypto.ECDSA.Utils
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
