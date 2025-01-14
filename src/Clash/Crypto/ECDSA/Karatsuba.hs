@@ -6,7 +6,7 @@ module Clash.Crypto.ECDSA.Karatsuba where
 import Clash.Prelude hiding ((++))
 import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
-import Clash.Class.Counter (countSucc)
+import Clash.Class.Counter (countSucc, countPred)
 import qualified Clash.Signal.Delayed.Bundle as DB
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -152,14 +152,13 @@ karatsubaStreaming# (USucc streamingStagesLeft) x y
   spec :: Signal dom (Unsigned (Div len 2 + depth), Unsigned (Div len 2 + depth))
   spec = (\(a,b,c,(i,_)) -> head $ rotateLeft (a :> b :> c :> Nil) i) <$>
    bundle (s1,s2,s3,counter)
-  o = uncurry (karatsubaStreaming# @_ @_ @combStages @depth streamingStagesLeft) $
+  output = uncurry (karatsubaStreaming# @_ @_ @combStages @depth streamingStagesLeft) $
    unbundle spec
   -- After one entire subcycle, we get the first result.
-  res1 = register 0 $ mux ((== (1,0)) <$> counter) o res1
-  res2 = register 0 $ mux ((== (2,0)) <$> counter) o res2
-  res3 = register 0 $ mux ((== (0,0)) <$> counter) o res3
+  res1 = register 0 $ mux ((== (1,0)) <$> counter) output res1
+  res2 = register 0 $ mux ((== (2,0)) <$> counter) output res2
   res4 = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
-    bundle (res1, res2, res3)
+    bundle (res1, res2, output)
  in
   (\(a, b, c) -> resize a +
   shiftL (resize b) (natToNum @(Div len 2)) +
