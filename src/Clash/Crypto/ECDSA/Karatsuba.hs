@@ -6,7 +6,7 @@ module Clash.Crypto.ECDSA.Karatsuba where
 import Clash.Prelude hiding ((++))
 import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
-import Clash.Class.Counter (countSucc, countPred)
+import Clash.Class.Counter (countSucc)
 import qualified Clash.Signal.Delayed.Bundle as DB
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -155,14 +155,14 @@ karatsubaStreaming# (USucc streamingStagesLeft) x y
   output = uncurry (karatsubaStreaming# @_ @_ @combStages @depth streamingStagesLeft) $
    unbundle spec
   -- After one entire subcycle, we get the first result.
-  res1 = register 0 $ mux ((== (1,0)) <$> counter) output res1
-  res2 = register 0 $ mux ((== (2,0)) <$> counter) output res2
-  res4 = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
-    bundle (res1, res2, output)
+  result1 = register 0 $ mux ((== (1,0)) <$> counter) output result1
+  result2 = register 0 $ mux ((== (2,0)) <$> counter) output result2
+  finalResult = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
+    bundle (result1, result2, output)
  in
   (\(a, b, c) -> resize a +
   shiftL (resize b) (natToNum @(Div len 2)) +
-  shiftL (resize c) (natToNum @len)) <$> res4
+  shiftL (resize c) (natToNum @len)) <$> finalResult
 
 -- * Delayed implementations.
 
@@ -205,18 +205,18 @@ karatsubaStreamingD (USucc streamingStagesLeft) x y
    DB.bundle (s1,s2,s3,counter)
   o = uncurry (karatsubaStreamingD @_ @_ @combStages @depth streamingStagesLeft) $
    DB.unbundle spec
-  res1 :: DSignal dom (2 * 3^(streamingStages - 1)) (Unsigned ((Div len 2 + depth) * 2))
-  res1 = delayedI 0 o
-  res2 :: DSignal dom (3 ^ streamingStages) (Unsigned ((Div len 2 + depth) * 2))
-  res2 = delayedI 0 res1
-  res4 = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
+  result1 :: DSignal dom (2 * 3^(streamingStages - 1)) (Unsigned ((Div len 2 + depth) * 2))
+  result1 = delayedI 0 o
+  result2 :: DSignal dom (3 ^ streamingStages) (Unsigned ((Div len 2 + depth) * 2))
+  result2 = delayedI 0 result1
+  finalResult = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
      DB.bundle (delayedI @(2 * 3 ^ (streamingStages - 1)) 0 o,
-                delayedI @(3 ^ (streamingStages - 1)) 0 res1,
-                res2)
+                delayedI @(3 ^ (streamingStages - 1)) 0 result1,
+                result2)
  in
   (\(a, b, c) -> resize a +
   shiftL (resize b) (natToNum @(Div len 2)) +
-  shiftL (resize c) (natToNum @len)) <$> res4
+  shiftL (resize c) (natToNum @len)) <$> finalResult
 
 -- * Helper functions.
 
