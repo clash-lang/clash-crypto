@@ -4,8 +4,10 @@ import Prelude
 import Test.Tasty
 
 import qualified Test.Clash.Crypto.Hash.SHA as SHA
+import qualified Test.Clash.Crypto.ECDSA.Karatsuba as Karatsuba
 
 main ∷ IO ()
 main = defaultMain $ testGroup "clash-crypto tests"
-  [ SHA.tastyTests
+  [ SHA.tastyTests,
+    Karatsuba.tastyTests
   ]

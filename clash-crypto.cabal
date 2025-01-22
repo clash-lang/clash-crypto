@@ -35,7 +35,7 @@ common common-options
     -fplugin GHC.TypeLits.Extra.Solver
     -fplugin GHC.TypeLits.Normalise
     -fplugin GHC.TypeLits.KnownNat.Solver
-    -fconstraint-solver-iterations=8
+    -fconstraint-solver-iterations=20
 
     -- Clash needs access to the source code in compiled modules
     -fexpose-all-unfoldings
@@ -68,6 +68,8 @@ library
     , clash-lib
     , constraints
   exposed-modules:
+    Clash.Crypto.ECDSA.Karatsuba
+    Clash.Crypto.ECDSA.Lemmas
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -90,6 +92,7 @@ test-suite tasty
   main-is: tasty/Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.ECDSA.Karatsuba
   build-depends:
     , bytestring
     , clash-crypto
