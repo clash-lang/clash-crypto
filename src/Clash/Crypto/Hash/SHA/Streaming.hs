@@ -18,6 +18,7 @@ import Clash.Signal.Delayed.Extra
 import Data.Constraint (Dict(..))
 import Data.Constraint.Nat.Extra (DDiv)
 import Data.Either (fromRight)
+import Data.Maybe (isJust, isNothing)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -73,7 +74,12 @@ hashStream input
     -- keep the data from the collector stable until the releaseCount
     -- reaches zero
     keepStable ∷ DSignal dom k Bool
-    keepStable = (> 0) <$> releaseCount
+    keepStable = (> 0) <$> releaseCount .||. isNothing <$> input
+
+    -- the point in time at which the last frame of the incomming
+    -- message block has arrived
+    blockComplete ∷ DSignal dom k Bool
+    blockComplete = (== 0) <$> releaseCount .&&. isJust <$> input
 
     -- full message block copied over from the collector after the
     -- arrival of the @BlockSize alg / n@-th frame
@@ -89,7 +95,7 @@ hashStream input
     proceedCount ∷
       DSignal dom k (Maybe (Index (k + DDiv (BlockSize alg) n)))
     proceedCount = antiDelay d1 $ delayedI @1 Nothing
-      $ mux ((== 0) <$> releaseCount)
+      $ mux blockComplete
           (pure $ Just maxBound)
           (maybe Nothing (\x → if x > 0 then Just $ x - 1 else Nothing)
              <$> proceedCount
@@ -117,7 +123,7 @@ hashStream input
       dsFold
         (_H⁰ alg)
         (computeBlock @alg @(DDiv (BlockSize alg) n - 1) SNat)
-        $ mux (delayedI @1 False ((== 0) <$> releaseCount))
+        $ mux (delayedI @1 False blockComplete)
             (Just <$> msgBlock)
             (pure Nothing)
   in

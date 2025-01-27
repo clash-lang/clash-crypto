@@ -120,4 +120,4 @@ executable clash
     , base
     , clash-crypto
     , clash-ghc
-    , hitlt
+    , clash-crypto:hitlt
