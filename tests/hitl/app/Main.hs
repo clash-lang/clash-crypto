@@ -5,7 +5,7 @@ import Prelude
 import Control.Concurrent.QSem (QSem, newQSem, waitQSem, signalQSem)
 import Control.Exception
   ( SomeException, Exception, Handler(..)
-  , catches, handle, throw
+  , catches, throw, bracket_
   )
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString
@@ -23,7 +23,8 @@ import System.Hardware.Serialport
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
-import Test.Tasty (TestTree, defaultMain, localOption, testGroup)
+import Test.Tasty
+ (TestTree, DependencyType(..), defaultMain, localOption, sequentialTestGroup)
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
@@ -70,8 +71,8 @@ main = do
     ]
  where
   run sem dev settings
-    = defaultMain $ testGroup "Clash Crytpo HITL tests"
-        [ testGroup "Clash.Crypto.Hash.SHA"
+    = defaultMain $ sequentialTestGroup "Clash Crytpo HITL tests" AllSucceed
+        [ sequentialTestGroup "Clash.Crypto.Hash.SHA" AllSucceed
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
@@ -92,7 +93,7 @@ main = do
     | SHAFacts alg <- knownSHA @alg
     , name <- dropWhile (== '\'') $ show $ typeRep alg
     = localOption (HedgehogTestLimit (Just 1))
-    $ testGroup name
+    $ sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
             $ liftIO $ shake [name <> ":bitstream"]
@@ -134,27 +135,19 @@ runHitlt sem dev settings bs | SHAFacts alg <- knownSHA @alg = do
         $ "Serial Timout: no resonse received witin "
              <> show hitltTimeoutTime <> " seconds"
 
-  dutResponse <- liftIO $ do
-    -- get the semaphore
-    waitQSem sem
-    -- open the serial
-    dutResponse <- handle (\(e :: SomeException) -> signalQSem sem >> throw e)
-      $ hWithSerial dev settings $ \serial → do
-          hSetBuffering serial NoBuffering
-          -- ensure that the receive buffer is empty before we place
-          -- the request
-          emptyBuffer serial
+  dutResponse <- liftIO
+    $ bracket_ (waitQSem sem) (signalQSem sem)
+    $ hWithSerial dev settings $ \serial → do
+        hSetBuffering serial NoBuffering
+        -- ensure that the receive buffer is empty before we place
+        -- the request
+        emptyBuffer serial
 
-          -- send the request
-          hPut serial $ escapeAndTerminate bs
-          -- wait for the response
-          TO.timeout hitltTimeoutTime (hGet serial messageDigestSize)
-            >>= maybe (throw hitltTimeoutErr) return
-
-    -- release the semaphore
-    signalQSem sem
-
-    return dutResponse
+        -- send the request
+        hPut serial $ escapeAndTerminate bs
+        -- wait for the response
+        TO.timeout hitltTimeoutTime (hGet serial messageDigestSize)
+          >>= maybe (throw hitltTimeoutErr) return
 
   pr dutResponse === pr (cryptoHash alg bs)
 

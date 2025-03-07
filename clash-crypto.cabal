@@ -100,7 +100,7 @@ test-suite simulation
     , constraints
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
-    , tasty
+    , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
 
 library hitlt-shared
@@ -141,7 +141,7 @@ test-suite hitlt
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
     , serialport >= 0.5.6
-    , tasty
+    , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
 
 executable clash
