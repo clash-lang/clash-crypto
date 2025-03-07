@@ -16,8 +16,16 @@ module Clash.Crypto.Hash.SHA.Specification.Types where
 
 import Clash.Sized.BitVector (BitVector)
 import Clash.Sized.Vector (Vec)
+import Clash.Class.BitPack (BitPack)
+import Clash.XException (NFDataX)
+import Data.Eq (Eq)
+import Data.Enum (Enum, Bounded)
 import Data.Kind (Type)
+import Data.Ord (Ord)
+import Data.Typeable (Typeable)
+import GHC.Show (Show)
 import GHC.TypeNats (Nat)
+import GHC.Generics (Generic)
 
 -- | Supported hash algorithms.
 type SHA ∷ Type
@@ -29,6 +37,17 @@ data SHA =
   | SHA512
   | SHA512224
   | SHA512256
+  deriving
+    ( Generic
+    , NFDataX
+    , BitPack
+    , Eq
+    , Ord
+    , Show
+    , Enum
+    , Bounded
+    , Typeable
+    )
 
 -- | Word size in bits (defined in Figure 1).
 type WordSize ∷ SHA → Nat
