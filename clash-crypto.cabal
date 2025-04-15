@@ -103,6 +103,7 @@ test-suite simulation
     , hedgehog >= 1.0 && < 1.5
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
+    , tasty-hunit
 
 library hitlt-shared
   import: common-options
