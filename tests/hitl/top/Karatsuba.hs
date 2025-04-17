@@ -49,9 +49,9 @@ top rx = tx
   result = karatsubaStreamingGated @3 @36 @IntegerSize @IntegerSize @Dom24 s
   
   bufferStep ::
-    (Index (IntegerSize `Div` 4 + 1), Vec (IntegerSize `Div` 4) (BitVector 8)) ->
+    (Index (IntegerSize `Div` 4), Vec (IntegerSize `Div` 4) (BitVector 8)) ->
     Maybe (BitVector 8) ->
-    ((Index (IntegerSize `Div` 4 + 1), Vec (IntegerSize `Div` 4) (BitVector 8)), Maybe (Vec (IntegerSize `Div` 4) (BitVector 8)))
+    ((Index (IntegerSize `Div` 4), Vec (IntegerSize `Div` 4) (BitVector 8)), Maybe (Vec (IntegerSize `Div` 4) (BitVector 8)))
   bufferStep state Nothing = (state, Nothing)
   bufferStep (i, v) (Just val) =
     if i == maxBound then ((0,def), Just nv)
@@ -90,27 +90,27 @@ top rx = tx
 -- > 0x00 0b??100000   marks the last byte with 2 bits used
 -- > 0x00 0b?1000000   marks the last byte with 1 bits used
 -- > 0x00 0b10000000   marks the previous byte to be the last byte
-descape ∷
-  HiddenClockResetEnable dom ⇒
-  Signal dom (Maybe (BitVector 8)) →
-  Signal dom (Maybe (BitVector 8, Maybe (Index 9)))
-descape = mealy (~~>) False
- where
-  esc   ~~> Nothing   = (esc, Nothing)
-  False ~~> Just 0x00 = (True, Nothing)
-  False ~~> Just byte = (False, Just (byte, Nothing))
-  True  ~~> Just 0x00 = (False, Just (0x00, Nothing))
-  True  ~~> Just byte = (False, Just (byte, Just $ trailingZeros + 1))
-   where
-    trailingZeros
-      | testBit byte 0 = 0
-      | testBit byte 1 = 1
-      | testBit byte 2 = 2
-      | testBit byte 3 = 3
-      | testBit byte 4 = 4
-      | testBit byte 5 = 5
-      | testBit byte 6 = 6
-      | testBit byte 7 = 7
-      | otherwise      = 8
+-- descape ∷
+--   HiddenClockResetEnable dom ⇒
+--   Signal dom (Maybe (BitVector 8)) →
+--   Signal dom (Maybe (BitVector 8, Maybe (Index 9)))
+-- descape = mealy (~~>) False
+--  where
+--   esc   ~~> Nothing   = (esc, Nothing)
+--   False ~~> Just 0x00 = (True, Nothing)
+--   False ~~> Just byte = (False, Just (byte, Nothing))
+--   True  ~~> Just 0x00 = (False, Just (0x00, Nothing))
+--   True  ~~> Just byte = (False, Just (byte, Just $ trailingZeros + 1))
+--    where
+--     trailingZeros
+--       | testBit byte 0 = 0
+--       | testBit byte 1 = 1
+--       | testBit byte 2 = 2
+--       | testBit byte 3 = 3
+--       | testBit byte 4 = 4
+--       | testBit byte 5 = 5
+--       | testBit byte 6 = 6
+--       | testBit byte 7 = 7
+--       | otherwise      = 8
 
 makeTopEntity 'topEntity

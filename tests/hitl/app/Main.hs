@@ -35,6 +35,8 @@ import qualified System.Timeout  as TO (timeout)
 import qualified Hedgehog.Gen   as Gen (bytes)
 import qualified Hedgehog.Range as Range (linear)
 
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
 import qualified Crypto.Hash.SHA224  as SHA224 (hash)
 import qualified Crypto.Hash.SHA256  as SHA256 (hash)
@@ -42,7 +44,7 @@ import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 
-import Clash.Prelude (type Div, natToNum)
+import Clash.Prelude (type Div, natToNum, Unsigned, bitCoerce, Vec, toList, resize)
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..)
   )
@@ -72,24 +74,51 @@ main = do
  where
   run sem dev settings
     = defaultMain $ sequentialTestGroup "Clash Crytpo HITL tests" AllSucceed
-        [ sequentialTestGroup "Clash.Crypto.Hash.SHA" AllSucceed
-            [ -- we don't test the >256 variants here, as synthesis
-              -- times of the downstream tools for these are too
-              -- exorbitant.
-              test @SHA1   sem dev settings
-            , test @SHA224 sem dev settings
-            , test @SHA256 sem dev settings
+        [
+          -- sequentialTestGroup "Clash.Crypto.Hash.SHA" AllSucceed
+          --   [ -- we don't test the >256 variants here, as synthesis
+          --     -- times of the downstream tools for these are too
+          --     -- exorbitant.
+          --     testSHA @SHA1   sem dev settings
+          --   , testSHA @SHA224 sem dev settings
+          --   , testSHA @SHA256 sem dev settings
+          --   ] ,
+          sequentialTestGroup "Clash.Crypto.ECDSA.Karatsuba" AllSucceed
+            [
+              testKaratsuba "Karatsuba" sem dev settings
             ]
         ]
 
-  test ::
+  testKaratsuba ::
+    String ->
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testKaratsuba name sem dev settings
+    = localOption (HedgehogTestLimit (Just 1))
+    $ sequentialTestGroup name AllSucceed
+        [ localOption (HedgehogTestLimit (Just 1))
+            $ testProperty "build bitstream" $ property
+            $ liftIO $ shake [name <> ":bitstream"]
+        , localOption (HedgehogTestLimit (Just 1))
+            $ testProperty "write bitstream" $ property
+            $ liftIO $ shake [name <> ":upload"]
+        , localOption (HedgehogTestLimit (Just 100))
+            $ testProperty "run HITLT" $ property $ do
+                x <- forAll $ genUnsigned $ Range.linear minBound maxBound
+                y <- forAll $ genUnsigned $ Range.linear minBound maxBound
+                runHitltKaratsuba sem dev settings x y
+        ]
+
+  testSHA ::
     forall alg.
     (KnownSHA alg, CryptoHash alg, Typeable alg) =>
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
-  test sem dev settings
+  testSHA sem dev settings
     | SHAFacts alg <- knownSHA @alg
     , name <- dropWhile (== '\'') $ show $ typeRep alg
     = localOption (HedgehogTestLimit (Just 1))
@@ -103,12 +132,54 @@ main = do
         , localOption (HedgehogTestLimit (Just 100))
             $ testProperty "run HITLT" $ property $ do
                 bs ← forAll $ Gen.bytes $ Range.linear 80 100
-                runHitlt @alg sem dev settings bs
+                runHitltSHA @alg sem dev settings bs
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
-runHitlt ∷
+runHitltKaratsuba ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 128 →
+  Unsigned 128 -> 
+  PropertyT IO ()
+runHitltKaratsuba sem dev settings x y = do
+  let pr = concatMap (printf "%02x " :: Word8 -> String) . unpack
+
+      resultSize =
+        natToNum @(256 `Div` 8)
+
+      emptyBuffer serial = do
+        xs <- hGetNonBlocking serial resultSize
+        if BS.null xs
+          then return ()
+          else emptyBuffer serial
+
+      -- timeout in microseconds
+      hitltTimeoutTime = 1_000_000 :: Int
+
+      hitltTimeoutErr = HitltTimeout
+        $ "Serial Timout: no resonse received witin "
+             <> show hitltTimeoutTime <> " seconds"
+
+  dutResponse <- liftIO
+    $ bracket_ (waitQSem sem) (signalQSem sem)
+    $ hWithSerial dev settings $ \serial → do
+        hSetBuffering serial NoBuffering
+        -- ensure that the receive buffer is empty before we place
+        -- the request
+        emptyBuffer serial
+
+        -- send the request
+        hPut serial $ pack $ toList $ bitCoerce @_ @(Vec 32 Word8) (x,y)
+        -- wait for the response
+        TO.timeout hitltTimeoutTime (hGet serial resultSize)
+          >>= maybe (throw hitltTimeoutErr) return
+
+  dutResponse === pack (toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ resize x * resize y)
+
+runHitltSHA ∷
   ∀ (alg :: SHA).
   (KnownSHA alg, CryptoHash alg) ⇒
   QSem →
@@ -116,7 +187,7 @@ runHitlt ∷
   SerialPortSettings →
   ByteString →
   PropertyT IO ()
-runHitlt sem dev settings bs | SHAFacts alg <- knownSHA @alg = do
+runHitltSHA sem dev settings bs | SHAFacts alg <- knownSHA @alg = do
   let pr = concatMap (printf "%02x " :: Word8 -> String) . unpack
 
       messageDigestSize =

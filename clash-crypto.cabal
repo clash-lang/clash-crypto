@@ -141,6 +141,7 @@ test-suite hitlt
     , bytestring
     , clash-crypto
     , clash-crypto:shake-rules
+    , clash-prelude-hedgehog
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
     , serialport >= 0.5.6
