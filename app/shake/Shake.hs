@@ -108,6 +108,8 @@ shakeRules cfgs wanted = do
   forM_ [minBound :: SHA .. maxBound] $ \alg ->
     hitltRules "SHA" (show alg) [("HITLT_SHA", show alg)]
 
+  hitltRules "Karatsuba" "Karatsuba" []
+
   -- project apps
 
   withoutTargets $ do
