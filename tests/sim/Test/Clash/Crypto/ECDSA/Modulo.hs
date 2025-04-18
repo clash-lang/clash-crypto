@@ -2,7 +2,7 @@
 
 {-|
 Module      : Test.Clash.Crypto.ECDSA.Modulo
-Copyright   : Copyright © 2024 QBayLogic B.V.
+Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
