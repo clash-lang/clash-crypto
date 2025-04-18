@@ -4,8 +4,9 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     clash-compiler.url = "github:clash-lang/clash-compiler/dd/nix-update";
+    ecpprog.url = "github:diegodiv/ecpprog";
   };
-  outputs = { self, nixpkgs, flake-utils, clash-compiler, ... }:
+  outputs = { self, nixpkgs, flake-utils, clash-compiler, ecpprog, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = clash-compiler.inputs.nixpkgs.legacyPackages.${system};
           serialportSrc = pkgs.fetchFromGitHub {
@@ -42,9 +43,10 @@
           ];
           nativeBuildInputs =
             with pkgs; [
-              gnumake yosys nextpnr
+              gnumake yosys nextpnr trellis
             ] ++
             (with myHsPkgs; [ cabal-install ])
+            ++ [ecpprog.defaultPackage.${system}]
           ;
         };
       });
