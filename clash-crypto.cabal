@@ -68,6 +68,7 @@ library
     , clash-lib
     , constraints
   exposed-modules:
+    Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
     Clash.Crypto.ECDSA.Modulo
@@ -94,6 +95,7 @@ test-suite simulation
   main-is: Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
   build-depends:
