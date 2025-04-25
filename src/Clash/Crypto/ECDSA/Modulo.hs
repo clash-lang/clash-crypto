@@ -7,7 +7,6 @@ module Clash.Crypto.ECDSA.Modulo where
 import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Utils
 import Data.Bifunctor (Bifunctor(bimap))
-import GHC.Num (integerToInt)
 
 -- * Useful types
 
@@ -21,9 +20,8 @@ type Prime n = Mod n
 unMod :: Mod n -> Index n
 unMod (Mod s) = s
 
--- |Should not be used in synthesis for big numbers as it uses `mod` internally.
 createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
-createMod u = Mod $ u `mod` (snatToNum (SNat :: SNat n))
+createMod = Mod
 
 -- Instances for Mod.
 instance (KnownNat n, 1 <= n) => Enum (Mod n) where
@@ -63,7 +61,7 @@ computeModuloPos :: forall m len shifts dom.
  Signal dom (Maybe (Unsigned len)) ->
  Signal dom (Maybe (Mod m))
 computeModuloPos =
- (fmap $ fmap (Mod @m . bitCoerce . resize)) . mealy (~~>) Finished . fmap (fmap resize)
+ fmap (fmap (Mod @m . bitCoerce . resize)) . mealy (~~>) Finished . fmap (fmap resize)
  where
   maxShifts :: Index (shifts + 1)
   maxShifts = natToNum @shifts
@@ -74,7 +72,7 @@ computeModuloPos =
   Finished ~~> Nothing = (Finished, Nothing)
   Working (s, n) ~~> Nothing =
    let shiftedm :: Unsigned len
-       shiftedm = natToNum @m `shiftL` (fromEnum s)
+       shiftedm = natToNum @m `shiftL` fromEnum s
    in
    if n < shiftedm
     then if s == 0 then (Finished, Just n) else (Working (s - 1, n), Nothing)
