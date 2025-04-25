@@ -30,6 +30,8 @@ type BAUD = HITLT_BAUD
 
 type IntegerSize = 128
 type ResultSize = IntegerSize * 2
+type ISizeDiv4 = IntegerSize `Div` 4
+type BV8 = BitVector 8
 
 topEntity ∷
   "CLK" ::: Clock Dom48 →
@@ -45,13 +47,13 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  s = bitCoerce <$> mealy bufferStep (0, def) rxData
-  result = karatsubaStreamingGated @3 @36 @IntegerSize @IntegerSize @Dom24 s
+  result = karatsubaStreamingGated @3 @36 @IntegerSize @IntegerSize @Dom24 $
+    bitCoerce <$> mealy bufferStep (0, def) rxData
   
   bufferStep ::
-    (Index (IntegerSize `Div` 4), Vec (IntegerSize `Div` 4) (BitVector 8)) ->
-    Maybe (BitVector 8) ->
-    ((Index (IntegerSize `Div` 4), Vec (IntegerSize `Div` 4) (BitVector 8)), Maybe (Vec (IntegerSize `Div` 4) (BitVector 8)))
+    (Index ISizeDiv4, Vec ISizeDiv4 BV8) ->
+    Maybe BV8 ->
+    ((Index ISizeDiv4, Vec ISizeDiv4 BV8), Maybe (Vec ISizeDiv4 BV8))
   bufferStep state Nothing = (state, Nothing)
   bufferStep (i, v) (Just val) =
     if i == maxBound then ((0,def), Just nv)

@@ -8,18 +8,21 @@ import qualified Hedgehog.Range as Range
 import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaStreamingGated)
 
 import qualified Data.List as List
-import Test.Tasty.HUnit
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, listToMaybe)
 
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Karatsuba"
   [ localOption (HedgehogTestLimit (Just 500))
   $ testGroup "Tests for Karatsuba's algorithm"
-    [ testProperty "Equality" $ property $ do
+    [
+    testProperty "Karatsuba combinatorial algorithm" $ property $ do
         a <- forAll $ genUnsigned $ Range.linear minBound maxBound
         b <- forAll $ genUnsigned $ Range.linear minBound maxBound
         testKaratsubaEqualityWithMultiplication a b
-    ,  testCase "testKaratsubaStreaming" testKaratsubaStreaming
+    , testProperty "Karatsuba sequential algorithm" $ property $ do
+        a <- forAll $ genUnsigned $ Range.linear minBound maxBound
+        b <- forAll $ genUnsigned $ Range.linear minBound maxBound
+        testKaratsubaSequential a b
     ]
   ]
 
@@ -29,23 +32,23 @@ testKaratsubaEqualityWithMultiplication :: Monad m => Unsigned TestLen -> Unsign
 testKaratsubaEqualityWithMultiplication a b =
   (karatsuba @6 @TestLen @TestLen SNat (resize a) (resize b)) === (resize $ resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
 
-testKaratsubaStreaming :: Assertion
-testKaratsubaStreaming = do
-  assertEqual "testEquality" expectedOutput actualOutput
+testKaratsubaSequential :: Monad m => Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
+testKaratsubaSequential p1 p2 = do
+  actualOutput === expectedOutput
  where
-  expectedOutput :: Unsigned 64
+  expectedOutput :: Unsigned (TestLen * 2)
   expectedOutput = resize p1 * resize p2
 
-  p1, p2 :: Unsigned 32
-  p1 = 672389136
-  p2 = 3498732
   testInput =
     [Nothing, Nothing]
       <> [Just (p1, p2)]
       <> List.repeat Nothing
   actualOutput =
-    List.head
-     $ catMaybes
+    case listToMaybe actualOutputList of
+      Just a -> a
+      Nothing -> error "The returned list was empty"
+  actualOutputList =
+     catMaybes
      $ sampleN @System 400
      $ withClockResetEnable clockGen resetGen enableGen
      $ karatsubaStreamingGated @3 @36

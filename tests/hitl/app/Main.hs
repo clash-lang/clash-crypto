@@ -24,7 +24,7 @@ import System.Hardware.Serialport
   )
 import System.IO (BufferMode(..), hSetBuffering)
 import Test.Tasty
- (TestTree, DependencyType(..), defaultMain, localOption, sequentialTestGroup)
+ (TestTree, DependencyType(..), defaultMain, localOption, sequentialTestGroup, testGroup)
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
@@ -73,9 +73,9 @@ main = do
     ]
  where
   run sem dev settings
-    = defaultMain $ sequentialTestGroup "Clash Crytpo HITL tests" AllSucceed
+    = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
-          sequentialTestGroup "Clash.Crypto.Hash.SHA" AllSucceed
+          testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
@@ -83,7 +83,7 @@ main = do
             , testSHA @SHA224 sem dev settings
             , testSHA @SHA256 sem dev settings
             ] ,
-          sequentialTestGroup "Clash.Crypto.ECDSA.Karatsuba" AllSucceed
+          testGroup "Clash.Crypto.ECDSA.Karatsuba"
             [
               testKaratsuba "Karatsuba" sem dev settings
             ]
@@ -145,7 +145,7 @@ runHitltKaratsuba sem dev settings x y =
   runHitlt @(256 `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) (x,y)
-  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ resize x * resize y
+  eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $ resize @_ @_ @256 x * resize y
 
 runHitltSHA ∷
   ∀ (alg :: SHA).
