@@ -71,10 +71,10 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
 -- |A sequential implementation of the Karatsuba algorithm for multiplication.
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
--- subcircuits, which depths are configurable at type-level. The circuit
--- is usable each '3 ^ streamingStages' cycles, and is aligned on '[1, 3 ^
--- streamingStages + 1, ...]'. 'regSize' gives the size of the registers, that
--- will enable the algorithm to compute the appropriate depth.
+-- subcircuits, which depths are configurable at type-level. The circuit is
+-- aligned on '[1, 3 ^ streamingStages + 1, ...]' (notwithstanding the resets).
+-- 'regSize' gives the size of the registers, that will enable the algorithm to
+-- compute the appropriate depth.
 -- This algorithm uses three-step semantics and resets on `Just` values.
 -- __Example:__
 -- @
