@@ -55,6 +55,7 @@ instance (KnownNat n, 1 <= n) => Num (Mod n) where
  fromInteger i = Mod $ fromInteger i
 
 -- |A streaming implementation of the modulo operation.
+-- This implementation is constant-time, as it runs in `shifts` operations.
 computeModuloPos :: forall m len shifts dom.
  (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
   HiddenClockResetEnable dom, shifts ~ len - ModSize m, KnownNat shifts) =>
@@ -63,6 +64,8 @@ computeModuloPos :: forall m len shifts dom.
 computeModuloPos =
  fmap (fmap (Mod @m . bitCoerce . resize)) . mealy (~~>) Finished . fmap (fmap resize)
  where
+  m :: Unsigned len
+  m = natToNum @m
   maxShifts :: Index (shifts + 1)
   maxShifts = natToNum @shifts
   (~~>) :: ComputationState (Index (shifts + 1), Unsigned len) ->
@@ -70,10 +73,9 @@ computeModuloPos =
    (ComputationState (Index (shifts + 1), Unsigned len), Maybe (Unsigned len))
   _ ~~> Just n = (Working (maxShifts, n), Nothing)
   Finished ~~> Nothing = (Finished, Nothing)
+  Working (0, n) ~~> Nothing =
+   (Finished, if n < m then Just n else Just $ n - m)
   Working (s, n) ~~> Nothing =
    let shiftedm :: Unsigned len
-       shiftedm = natToNum @m `shiftL` fromEnum s
-   in
-   if n < shiftedm
-    then if s == 0 then (Finished, Just n) else (Working (s - 1, n), Nothing)
-    else (Working (s, n - shiftedm), Nothing)
+       shiftedm = m `shiftL` fromEnum s
+   in (Working (s - 1, if n < shiftedm then n else n - shiftedm), Nothing)

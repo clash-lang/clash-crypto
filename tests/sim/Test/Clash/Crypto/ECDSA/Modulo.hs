@@ -33,7 +33,7 @@ tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
   [ localOption (HedgehogTestLimit (Just 100))
   $  testGroup "Modulo"
-      [ testProperty ("Equality between streaming modulo and combinatorial modulo")
+      [ testProperty ("Equality between sequential modulo and combinatorial modulo")
         $ property $ do
           n <- forAll $ genUnsigned $ Range.linear 0 (50_000 :: Unsigned 64)
           modulus <- forAll $ genUnsigned $ Range.linear 2 500
