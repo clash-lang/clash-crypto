@@ -39,18 +39,17 @@ testKaratsubaSequential p1 p2 = do
   expectedOutput :: Unsigned (TestLen * 2)
   expectedOutput = resize p1 * resize p2
 
-  testInput =
-    [Nothing, Nothing]
-      <> [Just (p1, p2)]
-      <> List.repeat Nothing
+  testInput = List.repeat (p1, p2)
+  toggleInput =
+    [False, False]
+      <> List.repeat True
   actualOutput =
     case listToMaybe actualOutputList of
       Just a -> a
       Nothing -> error "The returned list was empty"
   actualOutputList =
      catMaybes
-     $ sampleN @System 400
+     $ sampleN @System 4000
      $ withClockResetEnable clockGen resetGen enableGen
-     $ karatsubaSequentialGated @3 @36
-     $ fromList testInput
+     $ karatsubaSequentialGated @4 @36 (fromList toggleInput) (fromList testInput)
 

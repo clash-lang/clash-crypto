@@ -8,18 +8,11 @@ import Clash.Prelude
 
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Cores.UART (uart)
-import Clash.Crypto.Hash.SHA (SHA(..))
 
 import Domain (Dom48, Dom24)
 import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
-
--- allows to select an SHA variant via a CPP define
-#ifndef HITLT_SHA
-type SHAX = SHA256
-#else
-type SHAX = HITLT_SHA
-#endif
+import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -47,8 +40,13 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  result = karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24 $
-    bitCoerce <$> mealy bufferStep (0, def) rxData
+  -- We switch the toggle when we receive a new value
+  toggleSwitch = isJust <$> dataLine
+  toggle = register False $ mux toggleSwitch (not <$> toggle) toggle
+  dataLine = fmap bitCoerce <$> mealy bufferStep (0, def) rxData
+  dataReg = register def $ mux (isJust <$> dataLine) (fromMaybe def <$> dataLine) dataReg
+  result = karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24
+    toggle dataReg
   
   bufferStep ::
     (Index ISizeDiv4, Vec ISizeDiv4 BV8) ->

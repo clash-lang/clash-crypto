@@ -44,7 +44,7 @@ import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 
-import Clash.Prelude (type Div, natToNum, Unsigned, bitCoerce, Vec, toList, resize, Nat, KnownNat)
+import Clash.Prelude (type Div, type (*), natToNum, Unsigned, bitCoerce, Vec, toList, resize, Nat, KnownNat)
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..)
   )
@@ -91,9 +91,9 @@ main = do
 
   testKaratsuba ::
     String ->
-    QSem →
-    FilePath →
-    SerialPortSettings →
+    QSem ->
+    FilePath ->
+    SerialPortSettings ->
     TestTree
   testKaratsuba name sem dev settings
     = test name $ do
@@ -104,9 +104,9 @@ main = do
   testSHA ::
     forall alg.
     (KnownSHA alg, CryptoHash alg, Typeable alg) =>
-    QSem →
-    FilePath →
-    SerialPortSettings →
+    QSem ->
+    FilePath ->
+    SerialPortSettings ->
     TestTree
   testSHA sem dev settings
     | SHAFacts alg <- knownSHA @alg
@@ -134,26 +134,30 @@ main = do
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
+type HitlKaratsubaIntegerSize = 128
+type HitlKaratsubaWordNumber = HitlKaratsubaIntegerSize `Div` 4
+
 runHitltKaratsuba ∷
-  QSem →
-  FilePath →
-  SerialPortSettings →
-  Unsigned 128 →
-  Unsigned 128 -> 
+  QSem ->
+  FilePath ->
+  SerialPortSettings ->
+  Unsigned HitlKaratsubaIntegerSize ->
+  Unsigned HitlKaratsubaIntegerSize ->
   PropertyT IO ()
 runHitltKaratsuba sem dev settings x y =
-  runHitlt @(256 `Div` 8) sem dev settings bs eq
+  runHitlt @(HitlKaratsubaWordNumber) sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) (x,y)
-  eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $ resize @_ @_ @256 x * resize y
+  bs = pack $ toList $ bitCoerce @_ @(Vec HitlKaratsubaWordNumber Word8) (x,y)
+  eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $
+   resize @_ @_ @(2 * HitlKaratsubaIntegerSize) x * resize y
 
 runHitltSHA ∷
   ∀ (alg :: SHA).
   (KnownSHA alg, CryptoHash alg) ⇒
-  QSem →
-  FilePath →
-  SerialPortSettings →
-  ByteString →
+  QSem ->
+  FilePath ->
+  SerialPortSettings ->
+  ByteString ->
   PropertyT IO ()
 runHitltSHA sem dev settings input | SHAFacts alg <- knownSHA @alg =
  let
@@ -162,9 +166,9 @@ runHitltSHA sem dev settings input | SHAFacts alg <- knownSHA @alg =
  in runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
 runHitlt ∷ forall (messageSize :: Nat). KnownNat messageSize =>
-  QSem →
-  FilePath →
-  SerialPortSettings →
+  QSem ->
+  FilePath ->
+  SerialPortSettings ->
   ByteString ->
   ByteString ->
   PropertyT IO ()
@@ -189,7 +193,7 @@ runHitlt sem dev settings bs eq = do
 
   dutResponse <- liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
-    $ hWithSerial dev settings $ \serial → do
+    $ hWithSerial dev settings $ \serial -> do
         hSetBuffering serial NoBuffering
         -- ensure that the receive buffer is empty before we place
         -- the request
@@ -210,7 +214,7 @@ escapeAndTerminate = terminate . escape
     byte -> singleton byte
 
 class CryptoHash (alg :: SHA) where
-  cryptoHash :: Proxy alg -> ByteString → ByteString
+  cryptoHash :: Proxy alg -> ByteString -> ByteString
 
 instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
 instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash
@@ -220,20 +224,20 @@ instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
 instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 244
 instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
 
-parseCS ∷ String → CommSpeed
+parseCS ∷ String -> CommSpeed
 parseCS = \case
-  "110"    → CS110
-  "300"    → CS300
-  "600"    → CS600
-  "1200"   → CS1200
-  "2400"   → CS2400
-  "4800"   → CS4800
-  "9600"   → CS9600
-  "19200"  → CS19200
-  "38400"  → CS38400
-  "57600"  → CS57600
-  "115200" → CS115200
-  str      → case readMaybe str of
+  "110"    -> CS110
+  "300"    -> CS300
+  "600"    -> CS600
+  "1200"   -> CS1200
+  "2400"   -> CS2400
+  "4800"   -> CS4800
+  "9600"   -> CS9600
+  "19200"  -> CS19200
+  "38400"  -> CS38400
+  "57600"  -> CS57600
+  "115200" -> CS115200
+  str      -> case readMaybe str of
     Nothing -> error $ "Invalid baud: " <> str
     Just cs -> CS cs
 
