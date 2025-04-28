@@ -5,7 +5,7 @@ import Clash.Prelude
 import Hedgehog
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import qualified Hedgehog.Range as Range
-import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaStreamingGated)
+import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaSequentialGated)
 
 import qualified Data.List as List
 import Data.Maybe (catMaybes, listToMaybe)
@@ -51,6 +51,6 @@ testKaratsubaSequential p1 p2 = do
      catMaybes
      $ sampleN @System 400
      $ withClockResetEnable clockGen resetGen enableGen
-     $ karatsubaStreamingGated @3 @36
+     $ karatsubaSequentialGated @3 @36
      $ fromList testInput
 

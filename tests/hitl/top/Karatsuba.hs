@@ -12,7 +12,7 @@ import Clash.Crypto.Hash.SHA (SHA(..))
 
 import Domain (Dom48, Dom24)
 import Pll (orangePll24)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaStreamingGated)
+import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
@@ -47,7 +47,7 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  result = karatsubaStreamingGated @3 @36 @IntegerSize @IntegerSize @Dom24 $
+  result = karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24 $
     bitCoerce <$> mealy bufferStep (0, def) rxData
   
   bufferStep ::

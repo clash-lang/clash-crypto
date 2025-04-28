@@ -2,7 +2,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
- (karatsuba, karatsubaStreamingGated, karatsubaStreamingSignedGated)
+ (karatsuba, karatsubaSequentialGated, karatsubaSequentialSignedGated)
 where
 
 import Clash.Prelude hiding ((++))
@@ -31,7 +31,7 @@ lemmaLowIsLess _ = unsafeCoerce (Dict :: Dict (0 <= 0))
 karatsuba ::
   forall regSize n m. (KnownNat n, KnownNat m) =>
   SNat regSize ->
-  -- ^ the lower bound defining the base case at which standard
+  -- ^ The lower bound defining the base case at which standard
   -- multiplication is used instead of another recursive call
   Unsigned n -> Unsigned m -> Unsigned (n + m)
 karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
@@ -45,11 +45,11 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
   karatsubaInternal s@SNat = case compareSNat d4 s of
     SNatGT -> extend x * extend y
     SNatLE -> resize z0
-            + resize (z1 `shiftLeft` (SNat @(Low s)))
-            + resize (z2 `shiftLeft` (SNat @(Low s + Low s)))
+            + resize (extendRight @(Low s) z1)
+            + resize (extendRight @(Low s + Low s) z2)
    where
-    shiftLeft :: KnownNat a => Unsigned a -> SNat b -> Unsigned (a + b)
-    shiftLeft a (SNat :: SNat b) = bitCoerce (a, 0 :: Unsigned b)
+    extendRight :: forall b a. (KnownNat a, KnownNat b) => Unsigned a -> Unsigned (a + b)
+    extendRight a = bitCoerce (a, 0 :: Unsigned b)
 
     xLow,  yLow  :: Unsigned (Low s)
     xHigh, yHigh :: Unsigned (High s)
@@ -72,38 +72,39 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
 -- subcircuits, which depths are configurable at type-level. The circuit is
--- aligned on '[1, 3 ^ streamingStages + 1, ...]' (notwithstanding the resets).
+-- aligned on @ [1, 3 ^ streamingStages + 1, ...] @ (notwithstanding the resets).
 -- 'regSize' gives the size of the registers, that will enable the algorithm to
 -- compute the appropriate depth.
 -- This algorithm uses three-step semantics and resets on `Just` values.
+--
 -- __Example:__
 -- @
--- karatsubaSequentialGated @256 @2 @36
+-- karatsubaSequentialGated @3 @36 @256 @256
 -- @
 -- will produce a sequential circuit with latency '9 = 3 ^ 2' that is able
 -- to multiply two 256-bit unsigned numbers.
-karatsubaStreamingGated :: forall streamingStages regSize n m dom.
+karatsubaSequentialGated :: forall streamingStages regSize n m dom.
  (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
   KnownNat m, KnownNat streamingStages) =>
   Signal dom (Maybe (Unsigned n, Unsigned m)) ->
   Signal dom (Maybe (Unsigned (n + m)))
-karatsubaStreamingGated mSignal =
+karatsubaSequentialGated mSignal =
  fmap truncateB <$>
-  karatsubaStreamingGated# @streamingStages @regSize @n @m SNat
+  karatsubaSequentialGated# @streamingStages @regSize @n @m SNat
    (toUNat (SNat :: SNat streamingStages))
    (fmap (bimap resize resize) <$> mSignal)
 
--- |The internal function called by `karatsubaStreamingGated`
-karatsubaStreamingGated# :: forall streamingStages regSize n m dom s.
+-- |The internal function called by `karatsubaSequentialGated`
+karatsubaSequentialGated# :: forall streamingStages regSize n m dom s.
  (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
   KnownNat streamingStages, KnownNat m, s ~ Max n m) =>
   SNat s ->
   UNat streamingStages ->
   Signal dom (Maybe (Unsigned n, Unsigned m)) ->
   Signal dom (Maybe (Unsigned (n + m)))
-karatsubaStreamingGated# _ UZero s = register Nothing $
+karatsubaSequentialGated# _ UZero s = register Nothing $
  fmap (uncurry (karatsuba @regSize SNat) <$>) s
-karatsubaStreamingGated# stages@SNat (USucc streamingStagesLeft) s
+karatsubaSequentialGated# stages@SNat (USucc streamingStagesLeft) s
  | _ :: UNat streamLeft <- streamingStagesLeft
  , Dict <- lemma_pow @streamLeft
  , Dict <- lemmaLowIsLess stages
@@ -118,25 +119,22 @@ karatsubaStreamingGated# stages@SNat (USucc streamingStagesLeft) s
   (xHigh, xLow) = unbundle $ bitCoerce . resize <$> x
   (yHigh, yLow) = unbundle $ bitCoerce . resize <$> y
   -- Register the new entries at the beginning of a cycle.
-  muxCounter a b = mux newInput a $ register undefined b
   s1, s2, s3 :: Signal dom (Unsigned (High s + 1), Unsigned (High s + 1))
-  s1 = muxCounter (bundle (extend <$> xHigh, extend <$> yHigh)) s1
-  s2 = muxCounter (bundle
-    (extend <$> xLow,
-     extend @_ @(Low s) @(High s - Low s + 1) <$> yLow)) s2
-  s3 = muxCounter (bundle (fmap extend yHigh + fmap extend yLow,
-                           fmap extend xHigh + fmap extend xLow)) s3
+  s1 = (bundle (extend <$> xHigh, extend <$> yHigh))
+  s2 = (bundle (extend <$> xLow, extend @_ @(Low s) @(High s - Low s + 1) <$> yLow))
+  s3 = (bundle (fmap extend yHigh + fmap extend yLow,
+                fmap extend xHigh + fmap extend xLow))
   spec :: Signal dom (Maybe (Unsigned (High s + 1), Unsigned (High s + 1)))
   specInit = liftA3 (\a b c -> a :> b :> c :> Nil) s1 s2 s3
   specVec = mux newInput specInit $ register undefined $
    mux (isJust <$> output)
-    ((\v -> rotateLeft v (1 :: Integer)) <$> specVec)
+    ((\v -> rotateLeftS v d1) <$> specVec)
     specVec
   spec = mux (register False (isJust <$> output) .||. newInput)
    (Just . head <$> specVec)
    (pure Nothing)
   output :: Signal dom (Maybe (Unsigned ((High s + 1) + (High s + 1))))
-  output = karatsubaStreamingGated# @_ @regSize SNat streamingStagesLeft spec
+  output = karatsubaSequentialGated# @_ @regSize SNat streamingStagesLeft spec
   results :: Signal dom (Vec 3 (Maybe (Unsigned ((High s + 1) + (High s + 1)))))
   rInit = Nothing :> Nothing :> Nothing :> Nil
   results = mux (latched .||. newInput) (pure rInit) $
@@ -145,42 +143,42 @@ karatsubaStreamingGated# stages@SNat (USucc streamingStagesLeft) s
     (register rInit results)
   finalResult =
    liftA3 (\z2 z0 z3 -> (z0, computeZ1 z3 z2 z0, z2)) <$>
-   ((!! (0 :: Integer)) <$> results) <*>
-   ((!! (1 :: Integer)) <$> results) <*>
-   ((!! (2 :: Integer)) <$> results)
+   ((at d0) <$> results) <*>
+    ((at d1) <$> results) <*>
+    ((at d2) <$> results)
   -- Latch the value only once.
   outputCondition = isJust . sequenceA <$> results
   latched = (not <$> newInput) .&&.
     (   (register True outputCondition .&&. register False (not <$> newInput))
     .||. register True latched
     )
-  shiftLeft :: KnownNat a => Unsigned a -> SNat b -> Unsigned (a + b)
-  shiftLeft a (SNat :: SNat b) = bitCoerce (a, 0 :: Unsigned b)
+  extendRight :: forall b a. (KnownNat a, KnownNat b) => Unsigned a -> Unsigned (a + b)
+  extendRight a = bitCoerce (a, 0 :: Unsigned b)
  in
   mux
    (outputCondition .&&. not <$> latched)
    (fmap (\(a, b, c) ->
     resize a +
-    resize (b `shiftLeft` (SNat :: SNat (Low s))) +
-    resize (c `shiftLeft` (SNat :: SNat (Low s + Low s))))
+    resize (extendRight @(Low s) b) +
+    resize (extendRight @(Low s + Low s) c))
     <$> finalResult)
     -- undefined
    (pure Nothing)
 
--- |Same as `karatsubaStreamingGated`, but on signed integers.
-karatsubaStreamingSignedGated :: forall streamingStages regSize n m dom.
+-- |Same as `karatsubaSequentialGated`, but on signed integers.
+karatsubaSequentialSignedGated :: forall streamingStages regSize n m dom.
   (KnownDomain dom, HiddenClockResetEnable dom, KnownNat n, KnownNat m,
   KnownNat streamingStages, KnownNat regSize) =>
   Signal dom (Maybe (Signed (n + 1), Signed (m + 1))) ->
   Signal dom (Maybe (Signed (n + m + 1)))
-karatsubaStreamingSignedGated mSignal =
+karatsubaSequentialSignedGated mSignal =
  fmap addSign <$> (liftA2 (,) <$> sign <*> res)
  where
   addSign :: (Bit, Unsigned (n + m)) -> Signed (n + m + 1)
   addSign (s,v) = (if s == low then id else negate) $ bitCoerce $ resize v
   res :: Signal dom (Maybe (Unsigned (n + m)))
   res =
-   karatsubaStreamingGated @streamingStages @regSize @n @m $
+   karatsubaSequentialGated @streamingStages @regSize @n @m $
    (fmap (bimap signedToUnsigned signedToUnsigned) <$> mSignal)
   sign :: Signal dom (Maybe Bit)
   sign =
