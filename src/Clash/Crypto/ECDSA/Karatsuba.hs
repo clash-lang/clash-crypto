@@ -141,8 +141,8 @@ karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
      $ (\c -> maybe c ((c <<+) . bitCoerce)) <$> collatingVector <*> output
   -- 3. Collect the results from downstream multiplications into `results`.
   sendNew, childrenToggle :: Signal dom Bool
-  sendNew = (register False (isJust <$> output .||. toggleSwitched))
-   .&&. not <$> latched .&&. (/=2) <$> outputCounter
+  sendNew = register False (isJust <$> output .||. toggleSwitched) .&&.
+            not <$> latched .&&. (/=2) <$> outputCounter
   childrenToggle = register False $ childrenToggle ./=. sendNew
   inputVector :: Signal dom (Vec 3 (Unsigned (High s + 1), Unsigned (High s + 1)))
   inputVector = bitCoerce <$> collatingVector
