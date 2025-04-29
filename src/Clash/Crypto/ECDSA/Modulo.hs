@@ -1,20 +1,26 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 
-module Clash.Crypto.ECDSA.Modulo where
+module Clash.Crypto.ECDSA.Modulo
+ (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize)
+where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Utils
-import Data.Bifunctor (Bifunctor(bimap))
 import Clash.Num.Wrapping (Wrapping (fromWrapping), toWrapping)
 
 -- * Useful types
 
 type ModSize n = CLog 2 (n + 1)
 
-newtype Mod (n :: Nat) = Mod (Wrapping (Index n)) deriving anyclass Num -- via (Wrapping (Index n))
+newtype Mod (n :: Nat) = Mod (Wrapping (Index n))
+ deriving (Show, Eq, Generic, Ord) deriving newtype NFDataX
+
+deriving newtype instance (KnownNat n, 1 <= n) => Num (Mod n)
+deriving newtype instance (KnownNat n, 1 <= n) => Enum (Mod n)
+deriving newtype instance (KnownNat n, 1 <= n) => Real (Mod n)
+deriving newtype instance (KnownNat n, 1 <= n) => Integral (Mod n)
 
 type Prime n = Mod n
 
@@ -23,23 +29,6 @@ unMod (Mod s) = fromWrapping s
 
 createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
 createMod = Mod . toWrapping
-
--- Instances for Mod.
-instance (KnownNat n, 1 <= n) => Enum (Mod n) where
- toEnum :: Int -> Mod n
- toEnum = fromIntegral
- fromEnum :: Mod n -> Int
- fromEnum = fromIntegral . unMod
-
-instance (KnownNat n, 1 <= n, Ord (Mod n)) => Real (Mod n) where
- toRational = toRational . unMod
-
-instance (KnownNat n, 1 <= n, Num (Mod n), Enum (Mod n), Real (Mod n)) => Integral (Mod n)
- where
-  quotRem :: KnownNat n => Mod n -> Mod n -> (Mod n, Mod n)
-  quotRem (Mod i) (Mod j) = bimap Mod Mod $ quotRem i j
-  toInteger :: KnownNat n => Mod n -> Integer
-  toInteger (Mod i) = toInteger i
 
 -- |A streaming implementation of the modulo operation.
 -- This implementation is constant-time, as it runs in `shifts` operations.
@@ -59,7 +48,7 @@ computeModuloPos toggle value =
   maxShifts :: Index (shifts + 1)
   maxShifts = natToNum @shifts
   (~~>) :: ComputationState (Index (shifts + 1), Unsigned len) ->
-   (Maybe (Unsigned len)) ->
+   Maybe (Unsigned len) ->
    (ComputationState (Index (shifts + 1), Unsigned len), Maybe (Unsigned len))
   _ ~~> Just n = (Working (maxShifts, n), Nothing)
   Finished ~~> Nothing = (Finished, Nothing)

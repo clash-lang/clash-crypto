@@ -23,7 +23,6 @@ import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
 import GHC.Stack (HasCallStack)
 
-
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Proxy
@@ -56,7 +55,7 @@ testOutput ::
 testOutput n testInput modulus
   = let output =
           catMaybes
-          $ sampleN @System (ceiling (fromIntegral (abs n) / fromIntegral modulus :: Double) + 100)
+          $ sampleN @System (fromEnum (n `div` modulus) + 100)
           $ withClockResetEnable clockGen resetGen enableGen
           $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT
             (traceShowId <$> fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)

@@ -11,10 +11,10 @@ import Clash.Prelude
 type ComputationState a = Maybe a
 
 {-# COMPLETE Working, Finished #-}
-pattern Working :: a -> Maybe a
+pattern Working :: a -> ComputationState a
 pattern Working a = Just a
 
-pattern Finished :: Maybe a
+pattern Finished :: ComputationState a
 pattern Finished = Nothing
 
 unsignedToSigned :: forall len . KnownNat len => Unsigned len -> Signed (len + 1)
