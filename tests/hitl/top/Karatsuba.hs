@@ -44,9 +44,11 @@ top rx = tx
   toggleSwitch = isJust <$> dataLine
   toggle = register False $ mux toggleSwitch (not <$> toggle) toggle
   dataLine = fmap bitCoerce <$> mealy bufferStep (0, def) rxData
-  dataReg = register def $ mux (isJust <$> dataLine) (fromMaybe def <$> dataLine) dataReg
-  result = karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24
-    toggle dataReg
+  dataReg =
+   register def $ mux (isJust <$> dataLine) (fromMaybe def <$> dataLine) dataReg
+  (x,y) = unbundle dataReg
+  result =
+   karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24 toggle x y
   
   bufferStep ::
     (Index ISizeDiv4, Vec ISizeDiv4 BV8) ->

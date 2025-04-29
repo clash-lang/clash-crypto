@@ -28,11 +28,15 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.Karatsuba"
 
 type TestLen = 512
 
-testKaratsubaEqualityWithMultiplication :: Monad m => Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
+testKaratsubaEqualityWithMultiplication :: Monad m =>
+ Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
 testKaratsubaEqualityWithMultiplication a b =
-  (karatsuba @6 @TestLen @TestLen SNat (resize a) (resize b)) === (resize $ resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
+  (karatsuba @6 @TestLen @TestLen SNat (resize a) (resize b))
+  ===
+  (resize $ resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
 
-testKaratsubaSequential :: Monad m => Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
+testKaratsubaSequential :: Monad m =>
+ Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
 testKaratsubaSequential p1 p2 = do
   actualOutput === expectedOutput
  where
@@ -47,9 +51,11 @@ testKaratsubaSequential p1 p2 = do
     case listToMaybe actualOutputList of
       Just a -> a
       Nothing -> error "The returned list was empty"
+  (x,y) = List.unzip testInput
   actualOutputList =
-     catMaybes
-     $ sampleN @System 4000
-     $ withClockResetEnable clockGen resetGen enableGen
-     $ karatsubaSequentialGated @4 @36 (fromList toggleInput) (fromList testInput)
+    catMaybes $
+    sampleN @System 4000 $
+    withClockResetEnable clockGen resetGen enableGen $
+    karatsubaSequentialGated @4 @36
+    (fromList toggleInput) (fromList x) (fromList y)
 

@@ -9,7 +9,9 @@ import Clash.Prelude hiding ((++))
 import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
 import Unsafe.Coerce (unsafeCoerce)
-import Data.Maybe (isJust, fromMaybe)
+import Data.Maybe (isJust)
+import Data.Functor ((<&>))
+import Clash.Netlist.Util (orNothing)
 
 -- * Combinatorial implementations
 
@@ -46,9 +48,6 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
             + resize (extendRight @(Low s) z1)
             + resize (extendRight @(Low s + Low s) z2)
    where
-    extendRight :: forall b a. (KnownNat a, KnownNat b) => Unsigned a -> Unsigned (a + b)
-    extendRight a = bitCoerce (a, 0 :: Unsigned b)
-
     xLow,  yLow  :: Unsigned (Low s)
     xHigh, yHigh :: Unsigned (High s)
     (xHigh, xLow) = bitCoerce $ resize x
@@ -69,11 +68,11 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
 -- |A sequential implementation of the Karatsuba algorithm for multiplication.
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
--- subcircuits, which depths are configurable at type-level. The circuit is
--- aligned on @ [1, 3 ^ streamingStages + 1, ...] @ (notwithstanding the resets).
--- 'regSize' gives the size of the registers, that will enable the algorithm to
--- compute the appropriate depth.
--- This algorithm uses three-step semantics and resets on `Just` values.
+-- subcircuits, which depths are configurable at type-level.  'regSize' gives
+-- the size of the multiplication units of the board, that will enable the
+-- algorithm to compute the appropriate depth.
+-- This algorithm uses two-step semantics with a toggle line that starts on
+-- `False`.
 --
 -- __Example:__
 -- @
@@ -81,31 +80,32 @@ karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
 -- @
 -- will produce a sequential circuit with latency '9 = 3 ^ 2' that is able
 -- to multiply two 256-bit unsigned numbers.
-karatsubaSequentialGated :: forall streamingStages regSize n m dom.
+karatsubaSequentialGated :: forall streamingStages regSize n m dom s.
  (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
-  KnownNat m, KnownNat streamingStages) =>
-  Signal dom Bool ->
-  Signal dom (Unsigned n, Unsigned m) ->
+  KnownNat streamingStages, KnownNat m, KnownNat s, s ~ Max n m) =>
+  Signal dom Bool -> -- ^ Toggle line
+  Signal dom (Unsigned n) ->
+  Signal dom (Unsigned m) ->
+  -- ^ Value line that has to be maintained during the entire computation
   Signal dom (Maybe (Unsigned (n + m)))
-karatsubaSequentialGated toggle signal =
- fmap truncateB <$>
-  karatsubaSequentialGated# @streamingStages @regSize @n @m
-   (toUNat (SNat :: SNat streamingStages)) toggle
-   signal
+karatsubaSequentialGated =
+ karatsubaSequentialGated# @streamingStages @regSize @n @m @dom @s
+  (toUNat (SNat :: SNat streamingStages))
 
--- |The internal function called by `karatsubaSequentialGated`
+-- |The internal function called by `karatsubaSequentialGated`.
 karatsubaSequentialGated# :: forall streamingStages regSize n m dom s.
  (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
   KnownNat streamingStages, KnownNat m, KnownNat s, s ~ Max n m) =>
   UNat streamingStages ->
   Signal dom Bool -> -- ^ Toggle line
-  Signal dom (Unsigned n, Unsigned m) ->
+  Signal dom (Unsigned n) ->
+  Signal dom (Unsigned m) ->
   -- ^ Value line that has to be maintained during the entire computation
   Signal dom (Maybe (Unsigned (n + m)))
-karatsubaSequentialGated# UZero toggle input = register Nothing $
+karatsubaSequentialGated# UZero toggle x y = register Nothing $
  mux (toggle ./=. register False toggle)
- (Just . uncurry (karatsuba @regSize SNat) <$> input) (pure Nothing)
-karatsubaSequentialGated# (USucc streamingStagesLeft) toggle input
+ (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
+karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
  | _ :: UNat streamLeft <- streamingStagesLeft
  , Dict <- lemma_pow @streamLeft
  , Dict <- lemmaLowIsLess (SNat :: SNat s)
@@ -114,86 +114,65 @@ karatsubaSequentialGated# (USucc streamingStagesLeft) toggle input
  let
   toggleSwitched = toggle ./=. register False toggle
   -- 1. Separate the two numbers into a high part and a low part.
-  x = fst <$> input
-  y = snd <$> input
-  xLow, yLow :: Signal dom (Unsigned (Low s))
-  xHigh, yHigh :: Signal dom (Unsigned (High s))
-  (xHigh, xLow) = unbundle $ bitCoerce . resize <$> x
-  (yHigh, yLow) = unbundle $ bitCoerce . resize <$> y
-  -- 2. Compute the values that'll be given to downstream multiplications.
-  s1, s2, s3 :: Signal dom (Unsigned (High s + 1), Unsigned (High s + 1))
-  s1 = bundle (extend <$> xHigh, extend <$> yHigh)
-  s2 = bundle (extend <$> xLow,
-                extend @_ @(Low s) @(High s - Low s + 1) <$> yLow)
-  s3 = bundle (fmap extend yHigh + fmap extend yLow,
-                fmap extend xHigh + fmap extend xLow)
+  --    and compute the values that'll be given to downstream multiplications.
+  restructure a b =
+   let
+    xLow, yLow   :: Unsigned (Low s)
+    xHigh, yHigh :: Unsigned (High s)
+    (xHigh, xLow) = bitCoerce $ resize a
+    (yHigh, yLow) = bitCoerce $ resize b
+   in
+    bitCoerce
+     $  extend xHigh
+     :> extend yHigh
+     :> extend xLow
+     :> extend @_ @_ @(High s - Low s + 1) yLow
+     :> extend yHigh + extend yLow
+     :> extend xHigh + extend xLow
+     :> Nil
   -- Collating these values into `inputVec` on which the algorithm will iterate.
-  inputInit :: Signal dom (Vec 3 (Unsigned (High s + 1), Unsigned (High s + 1)))
-  inputInit = liftA3 (\a b c -> a :> b :> c :> Nil) s1 s2 s3
   collatingVector :: Signal dom (Vec 3 (BitVector (2 * (High s + 1))))
-  collatingVector = register def $
-   mux toggleSwitched
+  collatingVector = register def
    -- Reset the vector on toggling
-    (bitCoerce <$> inputInit) $
-    mux (isJust <$> output .&&. not <$> register False toggleSwitched .&&. not <$> latched)
+   $ mux toggleSwitched (liftA2 restructure x y)
+    -- Don't update if already latched or if a new input just arrived
+    $ mux (register False toggleSwitched .||. latched) collatingVector
      -- Insert the last output of Karatsuba in the vector when it's ready
-     (liftA2 (<<+) collatingVector (bitCoerce . fromMaybe def <$> output))
-     collatingVector
+     $ (\c -> maybe c ((c <<+) . bitCoerce)) <$> collatingVector <*> output
   -- 3. Collect the results from downstream multiplications into `results`.
   sendNew, childrenToggle :: Signal dom Bool
-  sendNew = (isJust <$> register def output .||. register False toggleSwitched)
+  sendNew = (register False (isJust <$> output .||. toggleSwitched))
    .&&. not <$> latched .&&. (/=2) <$> outputCounter
-  childrenToggle = register False $ mux sendNew (not <$> childrenToggle) childrenToggle
+  childrenToggle = register False $ childrenToggle ./=. sendNew
   inputVector :: Signal dom (Vec 3 (Unsigned (High s + 1), Unsigned (High s + 1)))
   inputVector = bitCoerce <$> collatingVector
-  nextInput = at d0 <$> inputVector
   output :: Signal dom (Maybe (Unsigned ((High s + 1) * 2)))
-  output = karatsubaSequentialGated# @_ @regSize streamingStagesLeft childrenToggle nextInput
-  results :: Signal dom (Vec 3 (Unsigned ((High s + 1) * 2)))
-  results = bitCoerce <$> collatingVector
+  (nextX, nextY) = unbundle $ head <$> inputVector
+  output = karatsubaSequentialGated# @_ @regSize streamingStagesLeft
+   childrenToggle nextX nextY
   -- 4. When we get three total results, compute the final result.
-  finalResult = register undefined
-   (liftA3 (\z2 z0 z3 -> (z0, computeZ1 z3 z2 z0, z2))
-   (at d0 <$> results) (at d1 <$> results) (at d2 <$> results))
+  finalResult = register undefined $
+    fmap bitCoerce collatingVector <&> \(z2, z0, z3) ->
+      (z0 :: Unsigned ((High s + 1) * 2), computeZ1 z3 z2 z0, z2)
   outputCounter :: Signal dom (Index 4)
   outputCounter = mux toggleSwitched 0 $ register 0 $
-   mux (isJust <$> register Nothing output) (satAdd SatBound 1 <$> outputCounter) outputCounter
+   mux (register False (isJust <$> output))
+    (satAdd SatBound 1 <$> outputCounter)
+    outputCounter
   outputCondition = (==3) <$> outputCounter
   -- Latch the value only once.
   latched =
-   (not <$> toggleSwitched) .&&. outputCondition .&&. register False outputCondition
-  extendRight :: forall b a. (KnownNat a, KnownNat b) =>
-   Unsigned a -> Unsigned (a + b)
-  extendRight a = bitCoerce (a, 0 :: Unsigned b)
+   (not <$> toggleSwitched) .&&.
+   outputCondition .&&.
+   register False outputCondition
  in
-  mux
-   (outputCondition .&&. not <$> latched)
-   (Just <$> fmap (\(a, b, c) ->
-    resize a +
-    resize (extendRight @(Low s) b) +
-    resize (extendRight @(Low s + Low s) c))
-    finalResult)
-   (pure Nothing)
-
--- -- |Same as `karatsubaSequentialGated`, but on signed integers.
--- karatsubaSequentialSignedGated :: forall streamingStages regSize n m dom.
---   (KnownDomain dom, HiddenClockResetEnable dom, KnownNat n, KnownNat m,
---   KnownNat streamingStages, KnownNat regSize) =>
---   Signal dom (Maybe (Signed (n + 1), Signed (m + 1))) ->
---   Signal dom (Maybe (Signed (n + m + 1)))
--- karatsubaSequentialSignedGated mSignal =
---  fmap addSign <$> (liftA2 (,) <$> sign <*> res)
---  where
---   addSign :: (Bit, Unsigned (n + m)) -> Signed (n + m + 1)
---   addSign (s,v) = (if s == low then id else negate) $ bitCoerce $ resize v
---   res :: Signal dom (Maybe (Unsigned (n + m)))
---   res =
---    karatsubaSequentialGated @streamingStages @regSize @n @m $
---    (fmap (bimap signedToUnsigned signedToUnsigned) <$> mSignal)
---   sign :: Signal dom (Maybe Bit)
---   sign =
---    mux (isJust <$> mSignal) (fmap (\(a,b) -> msb a `xor` msb b) <$> mSignal) $
---     register Nothing sign
+   orNothing
+    <$> (outputCondition .&&. not <$> latched)
+    <*> (finalResult <&> \(a, b, c) ->
+           resize a +
+           resize (extendRight @(Low s) b) +
+           resize (extendRight @(Low s + Low s) c)
+        )
 
 -- * Helper functions.
 
@@ -201,3 +180,6 @@ computeZ1 :: forall len. KnownNat len =>
   Unsigned len -> Unsigned len -> Unsigned len -> Unsigned len
 computeZ1 z3 z2 z0 = z3 - z2 - z0
 
+extendRight :: forall b a. (KnownNat a, KnownNat b) =>
+ Unsigned a -> Unsigned (a + b)
+extendRight a = bitCoerce (a, 0 :: Unsigned b)
