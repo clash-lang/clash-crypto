@@ -139,7 +139,7 @@ karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
     $ mux (register False toggleSwitched .||. latched) collatingVector
      -- Insert the last output of Karatsuba in the vector when it's ready
      $ (\c -> maybe c ((c <<+) . bitCoerce)) <$> collatingVector <*> output
-  -- 3. Collect the results from downstream multiplications into `results`.
+  -- 2. Collect the results from downstream multiplications.
   sendNew, childrenToggle :: Signal dom Bool
   sendNew = register False (isJust <$> output .||. toggleSwitched) .&&.
             not <$> latched .&&. (/=2) <$> outputCounter
@@ -150,7 +150,7 @@ karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
   (nextX, nextY) = unbundle $ head <$> inputVector
   output = karatsubaSequentialGated# @_ @regSize streamingStagesLeft
    childrenToggle nextX nextY
-  -- 4. When we get three total results, compute the final result.
+  -- 3. When we get three total results, compute the final result.
   finalResult = register undefined $
     fmap bitCoerce collatingVector <&> \(z2, z0, z3) ->
       (z0 :: Unsigned ((High s + 1) * 2), computeZ1 z3 z2 z0, z2)
