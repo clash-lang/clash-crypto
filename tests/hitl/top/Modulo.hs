@@ -2,24 +2,16 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 
-module Modulo where
+module Modulo (topEntity) where
 
 import Clash.Prelude
 
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Cores.UART (uart)
-import Clash.Crypto.Hash.SHA (SHA(..))
 
 import Domain (Dom48, Dom24)
 import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, unMod)
-
--- allows to select an SHA variant via a CPP define
-#ifndef HITLT_SHA
-type SHAX = SHA256
-#else
-type SHAX = HITLT_SHA
-#endif
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -31,6 +23,9 @@ type BAUD = HITLT_BAUD
 type IntegerSize = 256
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
+
+type ISizeDiv8 = IntegerSize `Div` 8
+type BV8 = BitVector 8
 
 topEntity ∷
   "CLK" ::: Clock Dom48 →
@@ -46,13 +41,13 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  s = bitCoerce <$> mealy bufferStep (0, def) rxData
-  result = fmap unMod <$> computeModuloPos @Q @IntegerSize @_ @Dom24 s
+  result = fmap (bitCoerce . unMod) <$> (computeModuloPos @Q @IntegerSize @_ @Dom24 $
+   bitCoerce <$> mealy bufferStep (0, def) rxData)
 
   bufferStep ::
-    (Index (IntegerSize `Div` 8), Vec (IntegerSize `Div` 8) (BitVector 8)) ->
-    Maybe (BitVector 8) ->
-    ((Index (IntegerSize `Div` 8), Vec (IntegerSize `Div` 8) (BitVector 8)), Maybe (Vec (IntegerSize `Div` 8) (BitVector 8)))
+    (Index ISizeDiv8, Vec ISizeDiv8 BV8) ->
+    Maybe BV8 ->
+    ((Index ISizeDiv8, Vec ISizeDiv8 BV8), Maybe (Vec ISizeDiv8 BV8))
   bufferStep state Nothing = (state, Nothing)
   bufferStep (i, v) (Just val) =
     if i == maxBound then ((0,def), Just nv)

@@ -15,21 +15,19 @@ module Test.Clash.Crypto.ECDSA.Modulo where
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit), testProperty)
 import Clash.Prelude
-import Hedgehog ((===), property, forAll)
+import Hedgehog ((===), property, forAll, MonadTest)
 
 import qualified Hedgehog.Range as Range
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, listToMaybe)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
 import GHC.Stack (HasCallStack)
-import Data.Constraint (Dict (..))
-import Unsafe.Coerce (unsafeCoerce)
 
 
 import qualified Data.List as List
 import Data.Proxy
-
-type DenMaxTest = 200
+import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
+import Data.Type.Equality (type (:~:)(Refl))
 
 tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
@@ -37,7 +35,6 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
   $  testGroup "Modulo"
       [ testProperty ("Equality between streaming modulo and combinatorial modulo")
         $ property $ do
-          -- TODO: Include negative numbers in test
           n <- forAll $ genUnsigned $ Range.linear 0 (50_000 :: Unsigned 64)
           modulus <- forAll $ genUnsigned $ Range.linear 2 500
           testMod n modulus
@@ -46,7 +43,7 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
 
 testOutput ::
   forall (modT :: Nat).
-  (KnownNat modT) =>
+  (KnownNat modT, 1 <= modT, ModSize modT <= 64) =>
   Unsigned 64 ->
   -- ^ n
   [Maybe (Unsigned 64)] ->
@@ -55,20 +52,26 @@ testOutput ::
   -- ^ Modulus
   Unsigned 64
 testOutput n testInput modulus
- | Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (1 <= modT)
- , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (ModSize modT <= 64)
- =
- List.head
-  $ catMaybes
-  $ sampleN @System (ceiling (fromIntegral (abs n) / fromIntegral modulus) + 100)
-  $ withClockResetEnable clockGen resetGen enableGen
-  $ fmap (fmap (resize . unMod)) $ computeModuloPos @modT (fromList testInput)
+  = let output =
+          catMaybes
+          $ sampleN @System (ceiling (fromIntegral (abs n) / fromIntegral modulus :: Double) + 100)
+          $ withClockResetEnable clockGen resetGen enableGen
+          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT (fromList testInput)
+  in case listToMaybe output of
+        Just a -> a
+        Nothing -> error "The returned list was empty"
+    
 
+testMod :: (MonadFail m, MonadTest m) => Unsigned 64 -> Unsigned 64 -> m ()
 testMod n modulus = do
   Just (SomeNat (_ :: Proxy modT)) <- return $ someNatVal $ toInteger modulus
   let testInput =
         [Nothing, Nothing]
         <> [Just n]
         <> List.repeat Nothing
-  testOutput @modT n testInput modulus === fromIntegral n `mod` modulus
+  case (Proxy :: Proxy 1) %<=? (Proxy :: Proxy modT) of
+    LE Refl -> case (Proxy :: Proxy (ModSize modT)) %<=? (Proxy :: Proxy 64) of
+      LE Refl -> testOutput @modT n testInput modulus === fromIntegral n `mod` modulus
+      NLE _ _ -> error "ModSize modulus should be less than or equal to 64"
+    NLE _ _ -> error "The given modulus should be greater than 1"
 

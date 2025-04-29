@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Clash.Crypto.ECDSA.Modulo where
 
@@ -12,16 +13,16 @@ import GHC.Num (integerToInt)
 
 type ModSize n = CLog 2 (n + 1)
 
-newtype Mod (n :: Nat) = Mod (Unsigned (ModSize n))
- deriving (Show, Eq, Generic, Ord, NFDataX)
+newtype Mod (n :: Nat) = Mod (Index n)
+ deriving (Show, Eq, Generic, Ord) deriving anyclass NFDataX
 
 type Prime n = Mod n
 
-unMod :: Mod n -> Unsigned (ModSize n)
+unMod :: Mod n -> Index n
 unMod (Mod s) = s
 
 -- |Should not be used in synthesis for big numbers as it uses `mod` internally.
-createMod :: forall n. (KnownNat n, 1 <= n) => Unsigned (ModSize n) -> Mod n
+createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
 createMod u = Mod $ u `mod` (snatToNum (SNat :: SNat n))
 
 -- Instances for Mod.
@@ -43,48 +44,17 @@ instance (KnownNat n, 1 <= n, Num (Mod n), Enum (Mod n), Real (Mod n)) => Integr
 
 instance (KnownNat n, 1 <= n) => Num (Mod n) where
  (+) :: Mod n -> Mod n -> Mod n
- (+) = addMod @n
+ Mod a + Mod b = Mod $ satAdd SatWrap a b
  (-) :: Mod n -> Mod n -> Mod n
- (-) = subMod @n
+ Mod a - Mod b = Mod $ satSub SatWrap a b
  (*) :: Mod n -> Mod n -> Mod n
- (*) = mulMod @n
+ Mod a * Mod b = Mod $ satMul SatWrap a b
  abs :: Mod n -> Mod n
  abs = id
  signum :: Mod n -> Mod n
  signum = const (Mod 1)
  fromInteger :: Integer -> Mod n
- fromInteger i = Mod $ resize $ s `mod` (snatToNum (SNat @n))
-  where
-   s :: Unsigned (ModSize n * 2)
-   s = fromInteger i
-
-subMod :: forall n. (KnownNat n, 1 <= n) => Mod n -> Mod n -> Mod n
-subMod (Mod i) (Mod j)
- | j <= i = Mod $ i - j
- | otherwise = Mod $ truncateB $ (i_ + (natToNum @n)) - j_
-  where
-  i_, j_ :: Unsigned (ModSize n + 1)
-  i_ = extend i
-  j_ = extend j
-
-addMod :: forall n. (KnownNat n, 1 <= n) => Mod n -> Mod n -> Mod n
-addMod (Mod i) (Mod j) = Mod $ truncateB $
- if res < m then res else res - m
- where
-  m = natToNum @n
-  i_, j_ :: Unsigned (ModSize n + 1)
-  i_ = extend i
-  j_ = extend j
-  res = (i_ + j_)
-
--- |This multiplication implementation shouldn't be used for large numbers.
-mulMod :: forall n. (KnownNat n, 1 <= n) => Mod n -> Mod n -> Mod n
-mulMod (Mod i) (Mod j) = Mod res
- where
-  res = resize $ (i' * j') `mod` (natToNum @n)
-  i',j' :: Unsigned (ModSize n * 2)
-  i' = resize i
-  j' = resize j
+ fromInteger i = Mod $ fromInteger i
 
 -- |A streaming implementation of the modulo operation.
 computeModuloPos :: forall m len shifts dom.
@@ -93,7 +63,7 @@ computeModuloPos :: forall m len shifts dom.
  Signal dom (Maybe (Unsigned len)) ->
  Signal dom (Maybe (Mod m))
 computeModuloPos =
- (fmap $ fmap (Mod @m . resize)) . mealy (~~>) Finished . fmap (fmap resize)
+ (fmap $ fmap (Mod @m . bitCoerce . resize)) . mealy (~~>) Finished . fmap (fmap resize)
  where
   maxShifts :: Index (shifts + 1)
   maxShifts = natToNum @shifts
@@ -104,7 +74,7 @@ computeModuloPos =
   Finished ~~> Nothing = (Finished, Nothing)
   Working (s, n) ~~> Nothing =
    let shiftedm :: Unsigned len
-       shiftedm = natToNum @m `shiftL` (integerToInt $ toInteger s)
+       shiftedm = natToNum @m `shiftL` (fromEnum s)
    in
    if n < shiftedm
     then if s == 0 then (Finished, Just n) else (Working (s - 1, n), Nothing)

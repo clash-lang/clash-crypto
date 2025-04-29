@@ -26,6 +26,7 @@
             serialport = dontCheck (doJailbreak (prev.callCabal2nix "serialport" serialportSrc { }));
             # Otherwise fails on `template-haskell < 2.22`.
             string-interpolate = doJailbreak (prev.string-interpolate);
+            typelits-witnesses = markUnbroken prev.typelits-witnesses;
           };
           # TODO: refer dynamically to the right ghc version (using clash-compiler's default).
           # Might require some changes on clash-compiler's flake.
@@ -49,5 +50,6 @@
             ++ [ecpprog.defaultPackage.${system}]
           ;
         };
+        default = myHsPkgs.clash-crypto;
       });
 }
