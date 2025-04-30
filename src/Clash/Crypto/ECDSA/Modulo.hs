@@ -30,7 +30,8 @@ unMod (Mod s) = fromWrapping s
 createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
 createMod = Mod . toWrapping
 
--- |A streaming implementation of the modulo operation.
+-- |A streaming implementation of the modulo operation using long division
+-- in a binary base
 -- This implementation is constant-time, as it runs in `shifts` operations.
 computeModuloPos :: forall m len shifts dom.
  (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
