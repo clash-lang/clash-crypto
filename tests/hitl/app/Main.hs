@@ -86,8 +86,23 @@ main = do
           testGroup "Clash.Crypto.ECDSA.Karatsuba"
             [
               testKaratsuba "Karatsuba" sem dev settings
+            ] ,
+          testGroup "Clash.Crypto.ECDSA.Modulo"
+            [
+              testModulo "Modulo" sem dev settings
             ]
         ]
+
+  testModulo ::
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testModulo name sem dev settings
+    = test name $ do
+        x <- forAll $ genUnsigned $ Range.linear minBound maxBound
+        runHitltModulo sem dev settings x
 
   testKaratsuba ::
     String →
@@ -133,6 +148,21 @@ main = do
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
+
+-- TODO: Once all PRs are merged, move this to one place.
+type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
+
+runHitltModulo ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 256 →
+  PropertyT IO ()
+runHitltModulo sem dev settings x =
+  runHitlt @(256 `Div` 8) sem dev settings bs eq
+ where
+  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
+  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ x `mod` natToNum @Q
 
 type HitlKaratsubaIntegerSize = 128
 type HitlKaratsubaWordNumber = HitlKaratsubaIntegerSize `Div` 4
@@ -205,6 +235,7 @@ runHitlt sem dev settings bs eq = do
           >>= maybe (throw hitltTimeoutErr) return
   pr dutResponse === pr eq
 
+-- Useful for variable-length data.
 escapeAndTerminate :: ByteString → ByteString
 escapeAndTerminate = terminate . escape
  where

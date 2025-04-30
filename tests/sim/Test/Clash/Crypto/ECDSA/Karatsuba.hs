@@ -1,3 +1,13 @@
+{-|
+Module      : Test.Clash.Crypto.ECDSA.Modulo
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Test suite for 'Clash.Crypto.ECDSA.Karatsuba'.
+-}
+
 module Test.Clash.Crypto.ECDSA.Karatsuba where
 import Test.Tasty
 import Test.Tasty.Hedgehog

@@ -109,6 +109,7 @@ shakeRules cfgs wanted = do
     hitltRules "SHA" (show alg) [("HITLT_SHA", show alg)]
 
   hitltRules "Karatsuba" "Karatsuba" []
+  hitltRules "Modulo" "Modulo" []
 
   -- project apps
 
