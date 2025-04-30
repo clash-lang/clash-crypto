@@ -28,7 +28,6 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Proxy
 import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
 import Data.Type.Equality (type (:~:)(Refl))
-import Debug.Trace (traceShowId)
 
 tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
@@ -58,8 +57,9 @@ testOutput n testInput modulus
           $ sampleN @System (fromEnum (n `div` modulus) + 100)
           $ withClockResetEnable clockGen resetGen enableGen
           $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT
-            (traceShowId <$> fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)
-        listToggle = NonEmpty.tail $ NonEmpty.scanl (\t m -> maybe t (const (not t)) m) False testInput
+            (fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)
+        listToggle = NonEmpty.tail $
+          NonEmpty.scanl (\t m -> maybe t (const (not t)) m) False testInput
   in case listToMaybe output of
         Just a -> a
         Nothing -> error "The returned list was empty"
