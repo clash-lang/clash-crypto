@@ -12,6 +12,7 @@ import Clash.Cores.UART (uart)
 import Domain (Dom48, Dom24)
 import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, unMod)
+import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -41,8 +42,12 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  result = fmap (bitCoerce . unMod) <$> (computeModuloPos @Q @IntegerSize @_ @Dom24 $
-   bitCoerce <$> mealy bufferStep (0, def) rxData)
+  toggleSwitch = isJust <$> dataLine
+  toggle = register False $ mux toggleSwitch (not <$> toggle) toggle
+  dataLine = fmap bitCoerce <$> mealy bufferStep (0, def) rxData
+  dataReg = register def $ mux (isJust <$> dataLine) (fromMaybe def <$> dataLine) dataReg
+  result = fmap (bitCoerce . unMod) <$> computeModuloPos @Q @IntegerSize @_ @Dom24
+    toggle dataReg
 
   bufferStep ::
     (Index ISizeDiv8, Vec ISizeDiv8 BV8) ->

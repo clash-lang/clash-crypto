@@ -19,15 +19,17 @@ import Hedgehog ((===), property, forAll, MonadTest)
 
 import qualified Hedgehog.Range as Range
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Data.Maybe (catMaybes, listToMaybe)
+import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
 import GHC.Stack (HasCallStack)
 
 
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Proxy
 import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
 import Data.Type.Equality (type (:~:)(Refl))
+import Debug.Trace (traceShowId)
 
 tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
@@ -56,7 +58,9 @@ testOutput n testInput modulus
           catMaybes
           $ sampleN @System (ceiling (fromIntegral (abs n) / fromIntegral modulus :: Double) + 100)
           $ withClockResetEnable clockGen resetGen enableGen
-          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT (fromList testInput)
+          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT
+            (traceShowId <$> fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)
+        listToggle = NonEmpty.tail $ NonEmpty.scanl (\t m -> maybe t (const (not t)) m) False testInput
   in case listToMaybe output of
         Just a -> a
         Nothing -> error "The returned list was empty"

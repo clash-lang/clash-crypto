@@ -87,7 +87,7 @@ main = do
             [
               testKaratsuba "Karatsuba" sem dev settings
             ] ,
-          testGroup "Clash.Crypto.ECDSA.Modulo" AllSucceed
+          testGroup "Clash.Crypto.ECDSA.Modulo"
             [
               testModulo "Modulo" sem dev settings
             ]
