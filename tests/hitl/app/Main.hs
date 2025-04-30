@@ -68,8 +68,8 @@ main = do
   sem <- newQSem 1
 
   run sem serialDev settings `catches`
-    [ Handler $ \(e :: ExitCode) -> exitWith e
-    , Handler $ \(e :: SomeException) -> error $ show e
+    [ Handler $ \(e :: ExitCode) → exitWith e
+    , Handler $ \(e :: SomeException) → error $ show e
     ]
  where
   run sem dev settings
@@ -90,10 +90,10 @@ main = do
         ]
 
   testKaratsuba ::
-    String ->
-    QSem ->
-    FilePath ->
-    SerialPortSettings ->
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
     TestTree
   testKaratsuba name sem dev settings
     = test name $ do
@@ -104,9 +104,9 @@ main = do
   testSHA ::
     forall alg.
     (KnownSHA alg, CryptoHash alg, Typeable alg) =>
-    QSem ->
-    FilePath ->
-    SerialPortSettings ->
+    QSem →
+    FilePath →
+    SerialPortSettings →
     TestTree
   testSHA sem dev settings
     | SHAFacts alg <- knownSHA @alg
@@ -116,8 +116,8 @@ main = do
         runHitltSHA @alg sem dev settings bs
 
   test ::
-    String ->
-    PropertyT IO () ->
+    String →
+    PropertyT IO () →
     TestTree
   test name p
     = localOption (HedgehogTestLimit (Just 1))
@@ -138,11 +138,11 @@ type HitlKaratsubaIntegerSize = 128
 type HitlKaratsubaWordNumber = HitlKaratsubaIntegerSize `Div` 4
 
 runHitltKaratsuba ∷
-  QSem ->
-  FilePath ->
-  SerialPortSettings ->
-  Unsigned HitlKaratsubaIntegerSize ->
-  Unsigned HitlKaratsubaIntegerSize ->
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned HitlKaratsubaIntegerSize →
+  Unsigned HitlKaratsubaIntegerSize →
   PropertyT IO ()
 runHitltKaratsuba sem dev settings x y =
   runHitlt @(HitlKaratsubaWordNumber) sem dev settings bs eq
@@ -154,10 +154,10 @@ runHitltKaratsuba sem dev settings x y =
 runHitltSHA ∷
   ∀ (alg :: SHA).
   (KnownSHA alg, CryptoHash alg) ⇒
-  QSem ->
-  FilePath ->
-  SerialPortSettings ->
-  ByteString ->
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
   PropertyT IO ()
 runHitltSHA sem dev settings input | SHAFacts alg <- knownSHA @alg =
  let
@@ -166,17 +166,17 @@ runHitltSHA sem dev settings input | SHAFacts alg <- knownSHA @alg =
  in runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
 runHitlt ∷ forall (messageSize :: Nat). KnownNat messageSize =>
-  QSem ->
-  FilePath ->
-  SerialPortSettings ->
-  ByteString ->
-  ByteString ->
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  ByteString →
   PropertyT IO ()
 runHitlt sem dev settings bs eq = do
   let resultSize =
         natToNum @messageSize
 
-      pr = concatMap (printf "%02x " :: Word8 -> String) . unpack
+      pr = concatMap (printf "%02x " :: Word8 → String) . unpack
 
       emptyBuffer serial = do
         xs <- hGetNonBlocking serial resultSize
@@ -193,7 +193,7 @@ runHitlt sem dev settings bs eq = do
 
   dutResponse <- liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
-    $ hWithSerial dev settings $ \serial -> do
+    $ hWithSerial dev settings $ \serial → do
         hSetBuffering serial NoBuffering
         -- ensure that the receive buffer is empty before we place
         -- the request
@@ -205,16 +205,16 @@ runHitlt sem dev settings bs eq = do
           >>= maybe (throw hitltTimeoutErr) return
   pr dutResponse === pr eq
 
-escapeAndTerminate :: ByteString -> ByteString
+escapeAndTerminate :: ByteString → ByteString
 escapeAndTerminate = terminate . escape
  where
   terminate = (`append` pack [0x00, 0x80])
   escape = BS.concatMap $ \case
-    0x00 -> pack [0x00, 0x00]
-    byte -> singleton byte
+    0x00 → pack [0x00, 0x00]
+    byte → singleton byte
 
 class CryptoHash (alg :: SHA) where
-  cryptoHash :: Proxy alg -> ByteString -> ByteString
+  cryptoHash :: Proxy alg → ByteString → ByteString
 
 instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
 instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash
@@ -224,22 +224,22 @@ instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
 instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 244
 instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
 
-parseCS ∷ String -> CommSpeed
+parseCS ∷ String → CommSpeed
 parseCS = \case
-  "110"    -> CS110
-  "300"    -> CS300
-  "600"    -> CS600
-  "1200"   -> CS1200
-  "2400"   -> CS2400
-  "4800"   -> CS4800
-  "9600"   -> CS9600
-  "19200"  -> CS19200
-  "38400"  -> CS38400
-  "57600"  -> CS57600
-  "115200" -> CS115200
-  str      -> case readMaybe str of
-    Nothing -> error $ "Invalid baud: " <> str
-    Just cs -> CS cs
+  "110"    → CS110
+  "300"    → CS300
+  "600"    → CS600
+  "1200"   → CS1200
+  "2400"   → CS2400
+  "4800"   → CS4800
+  "9600"   → CS9600
+  "19200"  → CS19200
+  "38400"  → CS38400
+  "57600"  → CS57600
+  "115200" → CS115200
+  str      → case readMaybe str of
+    Nothing → error $ "Invalid baud: " <> str
+    Just cs → CS cs
 
 newtype HitltTimeout = HitltTimeout String
 instance Show HitltTimeout where show (HitltTimeout msg) = msg
