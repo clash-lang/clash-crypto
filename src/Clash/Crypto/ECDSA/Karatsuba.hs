@@ -1,243 +1,185 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Clash.Crypto.ECDSA.Karatsuba where
+module Clash.Crypto.ECDSA.Karatsuba
+ (karatsuba, karatsubaSequentialGated) --, karatsubaSequentialSignedGated)
+where
 
 import Clash.Prelude hiding ((++))
 import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
-import Clash.Class.Counter (countSucc)
-import qualified Clash.Signal.Delayed.Bundle as DB
 import Unsafe.Coerce (unsafeCoerce)
+import Data.Maybe (isJust)
+import Data.Functor ((<&>))
+import Clash.Netlist.Util (orNothing)
 
 -- * Combinatorial implementations
 
--- TODO: Extend the split to any size. Not super useful though, unless it's for
--- genericity.
--- TODO: Make the 'depth' parameter automatically inferred through generation.
+-- | The number of bits of the low part.
+type Low  n = n `Div` 2
 
--- |A combinatorial implementation of the Karatsuba algorithm for multiplication.
--- It's not intended to be used as-is, because it gives rise to a circuit too big
--- to be synthesized and/or fast.
--- However, it supports recursion on the size of its arguments, dividing the length
--- by 2 each time it recurs.
-karatsuba :: forall stages len depth.
- (KnownNat depth, KnownNat len, KnownNat stages,
-  len `Mod` (2 ^ stages) ~ 0, stages <= depth) =>
-  Unsigned (len + depth) -> -- ^ x
-  Unsigned (len + depth) -> -- ^ y
-  Unsigned ((len + depth) * 2) -- ^ x * y
-karatsuba = karatsuba# @len @stages @depth (toUNat SNat)
+-- | The number of bits of the high part.
+type High n = n - n `Div` 2
 
-karatsuba# :: forall len stages depth.
- (KnownNat len, KnownNat stages, KnownNat depth,
-  len `Mod` (2 ^ stages) ~ 0, stages <= depth) =>
-  UNat stages ->
-  Unsigned (len + depth) ->
-  Unsigned (len + depth) ->
-  Unsigned ((len + depth) * 2)
-karatsuba# UZero x y = resize x * resize y
-karatsuba# (USucc stagesLeft) x y
- | Dict <- lemma_mod @len @stages
- , Dict <- unsafeCoerce (Dict :: Dict (0 ~ 0)) :: Dict (len `Mod` 2 ~ 0)
- , _ :: UNat n <- stagesLeft
- , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (n <= depth)
- , Dict <- lemma_mul_div @len @2 =
- let
-  -- All the subsequent carry bits will be in the high parts, and that's why we
-  -- have to truncate the low parts, and shift only by '@(Div len 2)'.
-  xLow, yLow :: Unsigned (Div len 2 + depth)
-  xHigh, yHigh :: Unsigned (Div len 2 + depth)
-  xLow  = getLowPart @len x
-  yLow  = getLowPart @len y
-  xHigh = getHighPart @len x
-  yHigh = getHighPart @len y
-  z0, z1, z2, z3 :: Unsigned (len + depth * 2)
-  z2 = karatsuba# @(Div len 2) stagesLeft xHigh yHigh
-  z0 = karatsuba# @(Div len 2) stagesLeft xLow yLow
-  z3 = karatsuba# @(Div len 2) stagesLeft (xHigh + xLow) (yHigh + yLow)
-  z1 = computeZ1 z3 z2 z0
- in
-  resize z0 +
-  shiftL (resize z1) (natToNum @(Div len 2)) +
-  shiftL (resize z2) (natToNum @len)
+lemmaLowIsLess :: forall s. SNat s -> Dict (Low s <= s)
+lemmaLowIsLess _ = unsafeCoerce (Dict :: Dict (0 <= 0))
 
--- -- * Streaming implementations
-
-karatsubaStreamingSigned :: forall len streamingStages combStages dom.
-  (KnownDomain dom, HiddenClockResetEnable dom, KnownNat len, KnownNat streamingStages,
-  KnownNat combStages, len `Mod` (2 ^ (combStages + streamingStages)) ~ 0) =>
-  Signal dom (Signed (len + 1)) ->
-  Signal dom (Signed (len + 1)) ->
-  Signal dom (Signed (len * 2 + 1))
-karatsubaStreamingSigned s1 s2 =
- addSign <$> bundle (toSignal $ antiDelay @(3 ^ streamingStages) SNat sign, res)
+-- | Combinational Karatsuba implementation that recurses as long as
+-- the size of at least one of the operands is larger than the given
+-- lower bound @k@. Not meant to be synthesized in the case of large
+-- numbers.
+karatsuba ::
+  forall regSize n m. (KnownNat n, KnownNat m) =>
+  SNat regSize ->
+  -- ^ The lower bound defining the base case at which standard
+  -- multiplication is used instead of another recursive call
+  Unsigned n -> Unsigned m -> Unsigned (n + m)
+karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
+  case compareSNat (SNat @(n + m)) regSize of
+    SNatLE -> extend x * extend y
+    SNatGT -> karatsubaInternal size
  where
-  addSign :: (Bit, Unsigned (len * 2)) -> Signed (len * 2 + 1)
-  addSign (s, v) = (if s == low then id else negate) $ bitCoerce $ resize v
-  res :: Signal dom (Unsigned (len * 2))
-  res =
-   karatsubaStreaming @len @streamingStages @combStages @(combStages + streamingStages)
-   (fmap signedToUnsigned s1) (fmap signedToUnsigned s2)
-  sign :: DSignal dom (3 ^ streamingStages) Bit
-  sign = delayedI low $ fromSignal $ (\(a,b) -> msb a `xor` msb b) <$> bundle (s1, s2)
+  size = SNat :: SNat (Max n m)
+
+  karatsubaInternal :: forall s. Low s <= s => SNat s -> Unsigned (n + m)
+  karatsubaInternal s@SNat = case compareSNat d4 s of
+    SNatGT -> extend x * extend y
+    SNatLE -> resize z0
+            + resize (extendRight @(Low s) z1)
+            + resize (extendRight @(Low s + Low s) z2)
+   where
+    xLow,  yLow  :: Unsigned (Low s)
+    xHigh, yHigh :: Unsigned (High s)
+    (xHigh, xLow) = bitCoerce $ resize x
+    (yHigh, yLow) = bitCoerce $ resize y
+
+    xSum, ySum :: Unsigned (High s + 1)
+    xSum = resize xHigh + resize xLow
+    ySum = resize yHigh + resize yLow
+
+    z0, z1, z2 :: Unsigned ((High s + 1) + (High s + 1))
+    z0 = resize $ karatsuba regSize xLow yLow
+    z2 = resize $ karatsuba regSize xHigh yHigh
+    z3 = karatsuba regSize xSum ySum
+    z1 = z3 - z2 - z0
+
+-- -- * Sequential implementations
 
 -- |A sequential implementation of the Karatsuba algorithm for multiplication.
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
--- subcircuits, which depths are configurable at type-level.
--- The circuit is usable each '3 ^ streamingStages' cycles, and is aligned
--- on '[1, 3 ^ streamingStages + 1, ...]'. Any values passed between these
--- two points in time will be discarded. All values produced between these
--- two points in time are unusable. 'combStages' gives the depth of the final
--- combinatorial circuit (the call to 'karatsuba#').
+-- subcircuits, which depths are configurable at type-level.  'regSize' gives
+-- the size of the multiplication units of the board, that will enable the
+-- algorithm to compute the appropriate depth.
+-- This algorithm uses two-step semantics with a toggle line that starts on
+-- `False`.
+--
 -- __Example:__
 -- @
--- karatsuba_streaming @256 @2 @2 @4
+-- karatsubaSequentialGated @3 @36 @256 @256
 -- @
 -- will produce a sequential circuit with latency '9 = 3 ^ 2' that is able
 -- to multiply two 256-bit unsigned numbers.
-karatsubaStreaming :: forall len streamingStages combStages depth dom.
- (KnownDomain dom, HiddenClockResetEnable dom, KnownNat combStages, KnownNat len,
-  KnownNat depth, KnownNat streamingStages,
-  len `Mod` (2 ^ (combStages + streamingStages)) ~ 0,
-  combStages + streamingStages <= depth) =>
-  Signal dom (Unsigned len) ->
-  Signal dom (Unsigned len) ->
-  Signal dom (Unsigned (len * 2))
-karatsubaStreaming s1 s2 =
- truncateB <$> karatsubaStreaming# @len @streamingStages @combStages @depth
+karatsubaSequentialGated :: forall streamingStages regSize n m dom s.
+ (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
+  KnownNat streamingStages, KnownNat m, KnownNat s, s ~ Max n m) =>
+  Signal dom Bool -> -- ^ Toggle line
+  Signal dom (Unsigned n) ->
+  Signal dom (Unsigned m) ->
+  -- ^ Value line that has to be maintained during the entire computation
+  Signal dom (Maybe (Unsigned (n + m)))
+karatsubaSequentialGated =
+ karatsubaSequentialGated# @streamingStages @regSize @n @m @dom @s
   (toUNat (SNat :: SNat streamingStages))
-  (fmap extend s1) (fmap extend s2)
 
-type KaratsubaCounter stages = (Index 3, Index (3 ^ (stages - 1)))
-
--- The `depth` type-level natural is needed for the carry. Without it, additions
--- can go awry. I chose to use 'depth' all throughout the circuit, but with
--- more clever type-level plays, it's possible to manage the depth
--- automatically.
-karatsubaStreaming# :: forall len streamingStages combStages depth dom.
- (KnownDomain dom, HiddenClockResetEnable dom, KnownNat combStages, KnownNat len,
-  KnownNat streamingStages, KnownNat depth,
-  len `Mod` (2 ^ (combStages + streamingStages)) ~ 0,
-  combStages + streamingStages <= depth) =>
+-- |The internal function called by `karatsubaSequentialGated`.
+karatsubaSequentialGated# :: forall streamingStages regSize n m dom s.
+ (KnownDomain dom, HiddenClockResetEnable dom, KnownNat regSize, KnownNat n,
+  KnownNat streamingStages, KnownNat m, KnownNat s, s ~ Max n m) =>
   UNat streamingStages ->
-  Signal dom (Unsigned (len + depth)) ->
-  Signal dom (Unsigned (len + depth)) ->
-  Signal dom (Unsigned ((len + depth) * 2))
-karatsubaStreaming# UZero s1 s2 = register 0 $
- uncurry (karatsuba# @len @combStages @depth (toUNat (SNat :: SNat combStages)))
-  <$> bundle (s1, s2)
-karatsubaStreaming# (USucc streamingStagesLeft) x y
- | Dict <- lemma_pow @(streamingStages - 1)
- , Dict <- lemma_mod @len @(combStages + streamingStages)
- , Dict <- unsafeCoerce (Dict :: Dict (0 ~ 0)) :: Dict (len `Mod` 2 ~ 0)
- , _ :: UNat n <- streamingStagesLeft
- , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (combStages + n <= depth)
- , Dict <- lemma_mul_div @len @2 =
+  Signal dom Bool -> -- ^ Toggle line
+  Signal dom (Unsigned n) ->
+  Signal dom (Unsigned m) ->
+  -- ^ Value line that has to be maintained during the entire computation
+  Signal dom (Maybe (Unsigned (n + m)))
+karatsubaSequentialGated# UZero toggle x y = register Nothing $
+ mux (toggle ./=. register False toggle)
+ (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
+karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
+ | _ :: UNat streamLeft <- streamingStagesLeft
+ , Dict <- lemma_pow @streamLeft
+ , Dict <- lemmaLowIsLess (SNat :: SNat s)
+ , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (Low s <= High s)
+ =
  let
-  xLow, yLow :: Signal dom (Unsigned (Div len 2 + depth))
-  xHigh, yHigh :: Signal dom (Unsigned (Div len 2 + depth))
-  xLow  = getLowPart @len <$> x
-  yLow  = getLowPart @len <$> y
-  xHigh = getHighPart @len <$> x
-  yHigh = getHighPart @len <$> y
-  counter :: Signal dom (KaratsubaCounter streamingStages)
-  counter = register (0,0) $ fmap countSucc counter
-  -- Register the new entries at the beginning of a cycle.
-  muxCounter a b = register (0,0) $ mux ((== (0,0)) <$> counter) a b
-  s1 = muxCounter (bundle (xHigh, yHigh)) s1
-  s2 = muxCounter (bundle (xLow, yLow)) s2
-  s3 = muxCounter (bundle (yHigh + yLow, xHigh + xLow)) s3
-  spec :: Signal dom (Unsigned (Div len 2 + depth), Unsigned (Div len 2 + depth))
-  spec = (\(a,b,c,(i,_)) -> head $ rotateLeft (a :> b :> c :> Nil) i) <$>
-   bundle (s1,s2,s3,counter)
-  output = uncurry (karatsubaStreaming# @_ @_ @combStages @depth streamingStagesLeft) $
-   unbundle spec
-  -- After one entire subcycle, we get the first result.
-  result1 = register 0 $ mux ((== (1,0)) <$> counter) output result1
-  result2 = register 0 $ mux ((== (2,0)) <$> counter) output result2
-  finalResult = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
-    bundle (result1, result2, output)
+  toggleSwitched = toggle ./=. register False toggle
+  -- 1. Separate the two numbers into a high part and a low part.
+  --    and compute the values that'll be given to downstream multiplications.
+  restructure a b =
+   let
+    xLow, yLow   :: Unsigned (Low s)
+    xHigh, yHigh :: Unsigned (High s)
+    (xHigh, xLow) = bitCoerce $ resize a
+    (yHigh, yLow) = bitCoerce $ resize b
+   in
+    bitCoerce
+     $  extend xHigh
+     :> extend yHigh
+     :> extend xLow
+     :> extend @_ @_ @(High s - Low s + 1) yLow
+     :> extend yHigh + extend yLow
+     :> extend xHigh + extend xLow
+     :> Nil
+  -- Collating these values into `inputVec` on which the algorithm will iterate.
+  collatingVector :: Signal dom (Vec 3 (BitVector (2 * (High s + 1))))
+  collatingVector = register def
+   -- Reset the vector on toggling
+   $ mux toggleSwitched (liftA2 restructure x y)
+    -- Don't update if already latched or if a new input just arrived
+    $ mux (register False toggleSwitched .||. latched) collatingVector
+     -- Insert the last output of Karatsuba in the vector when it's ready
+     $ (\c -> maybe c ((c <<+) . bitCoerce)) <$> collatingVector <*> output
+  -- 2. Collect the results from downstream multiplications.
+  sendNew, childrenToggle :: Signal dom Bool
+  sendNew = register False (isJust <$> output .||. toggleSwitched) .&&.
+            not <$> latched .&&. (/=2) <$> outputCounter
+  childrenToggle = register False $ childrenToggle ./=. sendNew
+  inputVector :: Signal dom (Vec 3 (Unsigned (High s + 1), Unsigned (High s + 1)))
+  inputVector = bitCoerce <$> collatingVector
+  output :: Signal dom (Maybe (Unsigned ((High s + 1) * 2)))
+  (nextX, nextY) = unbundle $ head <$> inputVector
+  output = karatsubaSequentialGated# @_ @regSize streamingStagesLeft
+   childrenToggle nextX nextY
+  -- 3. When we get three total results, compute the final result.
+  finalResult = register undefined $
+    fmap bitCoerce collatingVector <&> \(z2, z0, z3) ->
+      (z0 :: Unsigned ((High s + 1) * 2), computeZ1 z3 z2 z0, z2)
+  outputCounter :: Signal dom (Index 4)
+  outputCounter = mux toggleSwitched 0 $ register 0 $
+   mux (register False (isJust <$> output))
+    (satAdd SatBound 1 <$> outputCounter)
+    outputCounter
+  outputCondition = (==3) <$> outputCounter
+  -- Latch the value only once.
+  latched =
+   (not <$> toggleSwitched) .&&.
+   outputCondition .&&.
+   register False outputCondition
  in
-  (\(a, b, c) -> resize a +
-  shiftL (resize b) (natToNum @(Div len 2)) +
-  shiftL (resize c) (natToNum @len)) <$> finalResult
-
--- * Delayed implementations.
-
--- |This implementation is the same as the one above (or at least it should)
--- but it uses 'DSignal' instead of 'Signal' for easier tracking.
-karatsubaStreamingD :: forall len streamingStages combStages depth dom d.
- (KnownDomain dom, HiddenClockResetEnable dom, KnownNat combStages, KnownNat len,
-  KnownNat streamingStages, KnownNat depth,
-  len `Mod` (2 ^ (combStages + streamingStages)) ~ 0,
-  combStages + streamingStages <= depth) =>
-  UNat streamingStages ->
-  DSignal dom d (Unsigned (len + depth)) ->
-  DSignal dom d (Unsigned (len + depth)) ->
-  DSignal dom (d + 3 ^ streamingStages) (Unsigned ((len + depth) * 2))
-karatsubaStreamingD UZero s1 s2 =
- delayedI 0 $
-  uncurry (karatsuba# @len @combStages @depth (toUNat (SNat :: SNat combStages)))
-  <$> DB.bundle (s1, s2)
-karatsubaStreamingD (USucc streamingStagesLeft) x y
- | Dict <- lemma_pow @(streamingStages - 1)
- , Dict <- lemma_mod @len @(combStages + streamingStages)
- , Dict <- unsafeCoerce (Dict :: Dict (0 ~ 0)) :: Dict (len `Mod` 2 ~ 0)
- , Dict <- lemma_mul_div @len @2 =
- let
-  xLow, yLow :: DSignal dom d (Unsigned (Div len 2 + depth))
-  xHigh, yHigh :: DSignal dom d (Unsigned (Div len 2 + depth))
-  xLow  = getLowPart @len <$> x
-  yLow  = getLowPart @len <$> y
-  xHigh = getHighPart @len <$> x
-  yHigh = getHighPart @len <$> y
-  spec :: DSignal dom d (Unsigned (Div len 2 + depth), Unsigned (Div len 2 + depth))
-  counter :: DSignal dom (d + 1) (KaratsubaCounter streamingStages)
-  counter = delayedI (0,0) $ fmap countSucc counter
-  s1 = DB.bundle (xHigh, yHigh)
-  s2 = delayedI @(3 ^ (streamingStages - 1)) (0,0) $ fromSignal $
-   bundle (xLow, yLow)
-  s3 = delayedI @(2 * 3 ^ (streamingStages - 1)) (0,0) $ fromSignal $
-   bundle (yHigh + yLow, xHigh + xLow)
-  spec = (\(a,b,c,(i,_)) -> head $ rotateLeft (a :> b :> c :> Nil) i) <$>
-   DB.bundle (s1,s2,s3,counter)
-  o = uncurry (karatsubaStreamingD @_ @_ @combStages @depth streamingStagesLeft) $
-   DB.unbundle spec
-  result1 :: DSignal dom (2 * 3^(streamingStages - 1)) (Unsigned ((Div len 2 + depth) * 2))
-  result1 = delayedI 0 o
-  result2 :: DSignal dom (3 ^ streamingStages) (Unsigned ((Div len 2 + depth) * 2))
-  result2 = delayedI 0 result1
-  finalResult = (\(z2, z0, z3) -> (z0, computeZ1 z3 z2 z0, z2)) <$>
-     DB.bundle (delayedI @(2 * 3 ^ (streamingStages - 1)) 0 o,
-                delayedI @(3 ^ (streamingStages - 1)) 0 result1,
-                result2)
- in
-  (\(a, b, c) -> resize a +
-  shiftL (resize b) (natToNum @(Div len 2)) +
-  shiftL (resize c) (natToNum @len)) <$> finalResult
+   orNothing
+    <$> (outputCondition .&&. not <$> latched)
+    <*> (finalResult <&> \(a, b, c) ->
+           resize a +
+           resize (extendRight @(Low s) b) +
+           resize (extendRight @(Low s + Low s) c)
+        )
 
 -- * Helper functions.
-
-getLowPart :: forall len depth. (KnownNat len, KnownNat depth, len `Mod` 2 ~ 0) =>
-  Unsigned (len + depth) -> Unsigned (len `Div` 2 + depth)
-getLowPart
- | Dict <- lemma_mul_div @len @2 =
-  extend . truncateB @_ @(Div len 2) @(Div len 2 + depth)
-
-getHighPart :: forall len depth. (KnownNat len, KnownNat depth, len `Mod` 2 ~ 0) =>
-  Unsigned (len + depth) -> Unsigned (len `Div` 2 + depth)
-getHighPart = resize . (`shiftR` (natToNum @(Div len 2)))
 
 computeZ1 :: forall len. KnownNat len =>
   Unsigned len -> Unsigned len -> Unsigned len -> Unsigned len
 computeZ1 z3 z2 z0 = z3 - z2 - z0
 
-unsignedToSigned :: forall len . KnownNat len => Unsigned len -> Signed (len + 1)
-unsignedToSigned = bitCoerce . zeroExtend
-
-signedToUnsigned :: forall len . KnownNat len => Signed (len + 1) -> Unsigned len
-signedToUnsigned = bitCoerce . truncateB . abs
-
-
+extendRight :: forall b a. (KnownNat a, KnownNat b) =>
+ Unsigned a -> Unsigned (a + b)
+extendRight a = bitCoerce (a, 0 :: Unsigned b)

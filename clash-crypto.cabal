@@ -70,6 +70,7 @@ library
   exposed-modules:
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
+    Clash.Crypto.ECDSA.Utils
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -102,6 +103,7 @@ test-suite simulation
     , hedgehog >= 1.0 && < 1.5
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
+    , tasty-hunit
 
 library hitlt-shared
   import: common-options
@@ -127,6 +129,7 @@ library hitlt-instances
     , constraints
   exposed-modules:
     SHA
+    Karatsuba
 
 test-suite hitlt
   import: common-options
@@ -138,6 +141,7 @@ test-suite hitlt
     , bytestring
     , clash-crypto
     , clash-crypto:shake-rules
+    , clash-prelude-hedgehog
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
     , serialport >= 0.5.6
