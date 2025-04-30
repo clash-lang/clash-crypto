@@ -4,7 +4,7 @@ module Clash.Crypto.ECDSA.InverseModulo where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Modulo (ModSize, Mod (..), unMod)
-import Clash.Crypto.ECDSA.Utils (signedToUnsigned)
+import Clash.Crypto.ECDSA.Utils (signedToUnsigned, unsignedToSigned)
 import Data.Maybe (isJust, fromJust)
 
 -- * Working implementations
@@ -78,3 +78,23 @@ data BeaState (m :: Nat) =
  | BeaEnd (Signed (ModSize m * 2), Signed (ModSize m * 2), Signed (ModSize m * 2), Signed (ModSize m * 2))
  
  deriving (Generic, NFDataX, Show)
+
+-- Combinatorial variant useful for testing against
+
+-- Not synthesizeable.
+inverseModulo_ :: forall len.
+  KnownNat len => Unsigned len -> Unsigned len -> Maybe (Unsigned len)
+inverseModulo_ _ 0 = Just 0
+inverseModulo_ _ 1 = Just 1
+inverseModulo_ a z = fmap (signedToUnsigned . (`mod` unsignedToSigned a)) $
+  inverseModuloTmp (unsignedToSigned a) (unsignedToSigned z) 0 1
+
+inverseModuloTmp :: forall len. KnownNat len =>
+  Signed len -> Signed len -> Signed len -> Signed len -> Maybe (Signed len)
+-- Success
+inverseModuloTmp 1 0 y2 _ = Just y2
+inverseModuloTmp _ 0 _ _ = Nothing -- Failure of some kind
+inverseModuloTmp i j y2 y1 = inverseModuloTmp j reminder y1 y
+ where
+    (quotient, reminder) = quotRem i j
+    y = y2 - (y1 * quotient)

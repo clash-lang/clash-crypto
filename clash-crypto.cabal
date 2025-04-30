@@ -133,6 +133,7 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
     , constraints
   exposed-modules:
+    InverseModulo
     Karatsuba
     Modulo
     SHA

@@ -32,7 +32,7 @@ myProp = property $ do
   let f' = fromIntegral $ calcBea @MyMod (fromInteger f)
   (f' * f) `mod` (natToNum @MyMod) === 1
  where
-  generator mod = Gen.integral (Range.constantFrom (1) 1 (mod-1))
+  generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
 
   calcBea ::
     forall m.

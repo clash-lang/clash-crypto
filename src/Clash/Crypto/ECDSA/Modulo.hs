@@ -13,7 +13,7 @@ import Data.Coerce (coerce)
 
 -- * Useful types
 
-type ModSize n = CLog 2 (n + 1)
+type ModSize n = CLog 2 n
 
 newtype Mod (n :: Nat) = Mod (Wrapping (Index n))
  deriving (Show, Eq, Generic, Ord) deriving newtype NFDataX

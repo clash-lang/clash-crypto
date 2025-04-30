@@ -32,8 +32,8 @@ import Text.Read (readMaybe)
 import qualified Data.ByteString as BS (concatMap, null)
 import qualified System.Timeout  as TO (timeout)
 
-import qualified Hedgehog.Gen   as Gen (bytes)
-import qualified Hedgehog.Range as Range (linear)
+import qualified Hedgehog.Gen   as Gen (bytes, integral)
+import qualified Hedgehog.Range as Range (linear, constantFrom)
 
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 
@@ -52,6 +52,8 @@ import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
   )
+import Clash.Crypto.ECDSA.InverseModulo (inverseModulo_)
+import Data.Maybe (fromJust)
 
 main ∷ IO ()
 main = do
@@ -75,6 +77,7 @@ main = do
   run sem dev settings
     = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
+<<<<<<< HEAD
           testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
@@ -90,8 +93,25 @@ main = do
           testGroup "Clash.Crypto.ECDSA.Modulo"
             [
               testModulo "Modulo" sem dev settings
+            ] ,
+          testGroup "Clash.Crypto.ECDSA.InverseModulo"
+            [
+              testInverseModulo "InverseModulo" sem dev settings
             ]
         ]
+
+  testInverseModulo ::
+    String ->
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testInverseModulo name sem dev settings
+    = test name $ do
+        x <- forAll $ generator $ natToNum @Q
+        runHitltInverseModulo sem dev settings x
+    where
+      generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
 
   testModulo ::
     String →
@@ -151,6 +171,18 @@ main = do
 
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
+
+runHitltInverseModulo ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 256 →
+  PropertyT IO ()
+runHitltInverseModulo sem dev settings x =
+  runHitlt @(256 `Div` 8) sem dev settings bs eq
+ where
+  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
+  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ fromJust $ inverseModulo_ (natToNum @Q) x
 
 runHitltModulo ∷
   QSem →
