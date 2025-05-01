@@ -8,7 +8,7 @@ where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Utils
-import Clash.Num.Wrapping (Wrapping (fromWrapping), toWrapping)
+import Clash.Num.Wrapping (Wrapping (Wrapping))
 import Data.Coerce (coerce)
 
 -- * Useful types
@@ -26,10 +26,10 @@ deriving newtype instance (KnownNat n, 1 <= n) => Integral (Mod n)
 type Prime n = Mod n
 
 unMod :: Mod n -> Index n
-unMod = fromWrapping . coerce
+unMod = coerce
 
 createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
-createMod = coerce . toWrapping
+createMod = coerce
 
 -- |A streaming implementation of the modulo operation using long division
 -- in a binary base

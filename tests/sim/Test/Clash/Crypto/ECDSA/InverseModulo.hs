@@ -10,11 +10,10 @@ import qualified Data.List as List
 import Data.Maybe (catMaybes)
 import Clash.Crypto.ECDSA.InverseModulo (bea)
 import Clash.Crypto.ECDSA.Modulo
+import Clash.Hedgehog.Sized.Index (genIndex)
 
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
-
-type Modulo = Q
 
 tastyTests :: TestTree
 tastyTests = testGroup "InverseModulo"
@@ -23,16 +22,14 @@ tastyTests = testGroup "InverseModulo"
 testInverse = testProperty "functional equality" myProp
 
 -- Note: Modulus should always be prime for this algorithm to work.
-type MyMod = Q
-
 -- Given a modulus g, forall 0 < f < g, show `bea f` returns the inverse of f in g.
 myProp :: Property
 myProp = property $ do
-  f <- forAll (generator (natToNum @MyMod))
-  let f' = fromIntegral $ calcBea @MyMod (fromInteger f)
-  (f' * f) `mod` (natToNum @MyMod) === 1
+  f <- forAll $ generator maxBound
+  let f' = unMod $ calcBea @Q $ createMod f
+  ((Clash.Prelude.resize $ bitCoerce f') * (Clash.Prelude.resize $ bitCoerce f) :: Unsigned (ModSize Q * 2)) `mod` natToNum @Q === 1
  where
-  generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
+  generator m = genIndex (Range.constantFrom 1 1 (m-1))
 
   calcBea ::
     forall m.
@@ -42,7 +39,7 @@ myProp = property $ do
   calcBea input =
     List.head
      $ catMaybes
-     $ sampleN @System 4000
+     $ sampleN @System 10000000
      $ withClockResetEnable clockGen resetGen enableGen
      $ bea @m (beaInput input)
 
