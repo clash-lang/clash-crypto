@@ -1,3 +1,13 @@
+{-|
+Module      : Clash.Crypto.ECDSA.Modulo
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Types and algorithms for modulo integers.
+-}
+
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
@@ -6,8 +16,8 @@ module Clash.Crypto.ECDSA.Modulo
  (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize)
 where
 
-import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Utils
+import Clash.Prelude hiding (Mod)
 import Clash.Num.Wrapping (Wrapping (Wrapping))
 import Data.Coerce (coerce)
 

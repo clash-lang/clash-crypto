@@ -1,5 +1,5 @@
 {-|
-Module      : Test.Clash.Crypto.ECDSA.Modulo
+Module      : Test.Clash.Crypto.ECDSA.Karatsuba
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
@@ -9,16 +9,18 @@ Test suite for 'Clash.Crypto.ECDSA.Karatsuba'.
 -}
 
 module Test.Clash.Crypto.ECDSA.Karatsuba where
+
+import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaSequentialGated)
+import Clash.Prelude
+import Data.Maybe (catMaybes, listToMaybe)
+
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+import Hedgehog
 import Test.Tasty
 import Test.Tasty.Hedgehog
-import Clash.Prelude
-import Hedgehog
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import qualified Hedgehog.Range as Range
-import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaSequentialGated)
 
 import qualified Data.List as List
-import Data.Maybe (catMaybes, listToMaybe)
+import qualified Hedgehog.Range as Range
 
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Karatsuba"

@@ -1,17 +1,28 @@
+{-|
+Module      : Clash.Crypto.ECDSA.Karatsuba
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Implementation of big-number multiplication using Karatsuba's
+algorithm.
+-}
+
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
- (karatsuba, karatsubaSequentialGated) --, karatsubaSequentialSignedGated)
+ (karatsuba, karatsubaSequentialGated)
 where
 
-import Clash.Prelude hiding ((++))
-import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
-import Unsafe.Coerce (unsafeCoerce)
-import Data.Maybe (isJust)
-import Data.Functor ((<&>))
+import Clash.Prelude hiding ((++))
 import Clash.Netlist.Util (orNothing)
+import Data.Constraint (Dict (..))
+import Data.Functor ((<&>))
+import Data.Maybe (isJust)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- * Combinatorial implementations
 

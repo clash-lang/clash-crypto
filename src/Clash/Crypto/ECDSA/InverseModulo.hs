@@ -1,25 +1,39 @@
+{-|
+Module      : Clash.Crypto.ECDSA.InverseModulo
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Implementations of inverse modulo algorithms.
+-}
+
 module Clash.Crypto.ECDSA.InverseModulo (bea) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Crypto.ECDSA.Lemmas (lemma_modSize)
 import Clash.Crypto.ECDSA.Modulo (ModSize, Mod (..), unMod, createMod)
 import Clash.Crypto.ECDSA.Utils (signedToUnsigned, unsignedToSigned)
+import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
-import Unsafe.Coerce (unsafeCoerce)
 
 -- * Working implementations
 
 -- |A streaming implementation of the Binary Euclidean Algorithm.
 -- It computes an inverse modulo m.
+-- 
 -- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
-bea :: forall m dom. (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= m) =>
+bea :: forall m dom.
+ (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= m) =>
  Signal dom Bool -> -- ^ Toggle line
  Signal dom (Mod m) ->
  Signal dom (Maybe (Mod m))
 -- TODO: Make this into a lemma.
-bea toggle s | Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (1 <= ModSize m) =
+bea toggle s
+ | Dict <- lemma_modSize @m =
  let
   p = natToNum @m
-  (~~>) :: BeaState m -> Maybe (Mod m) -> (BeaState m, Maybe (Unsigned (ModSize m)))
+  (~~>) :: BeaState m -> Maybe (Mod m) ->
+           (BeaState m, Maybe (Unsigned (ModSize m)))
   _ ~~> Just a =
    (BeaRunning BeaStart
     (extend @_ @_ @(ModSize m - 1) $ unsignedToSigned $ bitCoerce $ unMod a)
