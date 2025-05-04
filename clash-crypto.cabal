@@ -105,6 +105,7 @@ test-suite simulation
     , constraints
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
+    , modular-arithmetic
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
     , tasty-hunit

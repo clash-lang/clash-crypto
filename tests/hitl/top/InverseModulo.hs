@@ -8,20 +8,13 @@ import Clash.Prelude hiding (Mod)
 
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Cores.UART (uart)
-import Clash.Crypto.Hash.SHA (SHA(..))
 
 import Domain (Dom48, Dom24)
 import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Modulo (Mod(..), ModSize)
 import Clash.Crypto.ECDSA.InverseModulo (bea)
 import Clash.Crypto.ECDSA.Modulo (unMod)
-
--- allows to select an SHA variant via a CPP define
-#ifndef HITLT_SHA
-type SHAX = SHA256
-#else
-type SHAX = HITLT_SHA
-#endif
+import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -48,8 +41,12 @@ top rx = tx
  where
   (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
 
-  s = fmap (Mod @Q) <$> bitCoerce <$> mealy bufferStep (0, def) rxData
-  result = fmap unMod <$> bea @Q @Dom24 s
+  toggleSwitch = isJust <$> dataLine
+  toggle = register False $ mux toggleSwitch (not <$> toggle) toggle
+  dataLine = fmap (Mod . bitCoerce) <$> mealy bufferStep (0, def) rxData
+  dataReg = register 0 $ mux (isJust <$> dataLine) (fromMaybe 0 <$> dataLine) dataReg
+  result = fmap (bitCoerce . unMod) <$> bea @Q @Dom24
+    toggle dataReg
 
   bufferStep ::
     (Index (IntegerSize `Div` 8), Vec (IntegerSize `Div` 8) (BitVector 8)) ->
