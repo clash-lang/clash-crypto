@@ -35,6 +35,8 @@ import qualified System.Timeout  as TO (timeout)
 import qualified Hedgehog.Gen   as Gen (bytes, integral)
 import qualified Hedgehog.Range as Range (linear, constantFrom)
 
+import qualified Data.Modular as Modular
+
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
@@ -52,8 +54,7 @@ import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
   )
-import Clash.Crypto.ECDSA.InverseModulo (inverseModulo_)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromMaybe)
 
 main ∷ IO ()
 main = do
@@ -77,7 +78,6 @@ main = do
   run sem dev settings
     = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
-<<<<<<< HEAD
           testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
@@ -182,7 +182,12 @@ runHitltInverseModulo sem dev settings x =
   runHitlt @(256 `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
-  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ fromJust $ inverseModulo_ (natToNum @Q) x
+  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) invMod
+  invMod :: Unsigned 256
+  invMod = fromInteger $ Modular.unMod $ fromMaybe moduloError $ Modular.inv $
+           Modular.toMod @Q $ toInteger x
+  moduloError =
+    error "Since the modulo of the field is prime, the inverse always exists."
 
 runHitltModulo ∷
   QSem →

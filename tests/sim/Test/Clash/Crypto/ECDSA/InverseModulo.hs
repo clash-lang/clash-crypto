@@ -13,7 +13,7 @@ module Test.Clash.Crypto.ECDSA.InverseModulo where
 import Clash.Crypto.ECDSA.InverseModulo (bea)
 import Clash.Crypto.ECDSA.Modulo
 import Clash.Prelude hiding (Mod)
-import Data.Maybe (catMaybes, listToMaybe, fromJust)
+import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Hedgehog
@@ -38,9 +38,11 @@ myProp = property $ do
   let f' = unMod $ calcBea @Q $ createMod f
   -- We can't use `Index` directly because the `inv` implementation makes it
   -- go out of bounds.
-  f' === fromInteger (Modular.unMod $ fromJust $ Modular.inv $
+  f' === fromInteger (Modular.unMod $ fromMaybe moduloError $ Modular.inv $
                       Modular.toMod @Q $ toInteger f)
  where
+  moduloError =
+    error "Since the modulo of the field is prime, the inverse always exists."
   calcBea ::
     forall m.
     (KnownNat m, 1 <= m) =>
