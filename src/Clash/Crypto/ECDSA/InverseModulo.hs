@@ -10,7 +10,7 @@ Implementations of inverse modulo algorithms.
 
 module Clash.Crypto.ECDSA.InverseModulo (bea) where
 
-import Clash.Crypto.ECDSA.Lemmas (lemma_modSize)
+import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo (ModSize, Mod (..), unMod, createMod)
 import Clash.Crypto.ECDSA.Utils (signedToUnsigned, unsignedToSigned)
 import Clash.Prelude hiding (Mod)
@@ -19,7 +19,7 @@ import Data.Constraint (Dict (Dict))
 -- * Working implementations
 
 -- |A streaming implementation of the Binary Euclidean Algorithm.
--- It computes an inverse modulo m.
+-- It computes the inverse of a positive integer modulo m.
 -- 
 -- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
 bea :: forall m dom.
@@ -27,12 +27,11 @@ bea :: forall m dom.
  Signal dom Bool -> -- ^ Toggle line
  Signal dom (Mod m) ->
  Signal dom (Maybe (Mod m))
--- TODO: Make this into a lemma.
-bea toggle s
- | Dict <- lemma_modSize @m =
+bea toggle s | Dict <- lemmaModSize @m =
  let
   p = natToNum @m
-  (~~>) :: BeaState m -> Maybe (Mod m) ->
+  (~~>) :: BeaState m ->
+           Maybe (Mod m) ->
            (BeaState m, Maybe (Unsigned (ModSize m)))
   _ ~~> Just a =
    (BeaRunning BeaStart
@@ -46,17 +45,11 @@ bea toggle s
      in (BeaRunning state u v x y, Nothing)
    -- Refactor these
     BeaUMod2 ->
-     if lsb u == low then
-      let u' = u `shiftR` 1
-          x' = (if lsb x == low then x else x + p) `shiftR` 1
-      in (BeaRunning BeaUMod2 u' v x' y, Nothing)
-     else (BeaRunning BeaVMod2 u v x y, Nothing)
+     let (state, u', x') = computeMod2 u x BeaUMod2 BeaVMod2
+     in (BeaRunning state u' v x' y, Nothing)
     BeaVMod2 ->
-     if lsb v == low then
-       let v' = v `shiftR` 1
-           y' = (if lsb y == low then y else y + p) `shiftR` 1
-       in (BeaRunning BeaVMod2 u v' x y', Nothing)
-     else (BeaRunning BeaCompare u v x y, Nothing)
+     let (state, v', y') = computeMod2 v y BeaVMod2 BeaCompare
+     in (BeaRunning state u v' x y', Nothing)
     BeaCompare ->
      if u >= v then
       let u' = u - v
@@ -67,16 +60,16 @@ bea toggle s
           y' = y - x
       in (BeaRunning BeaModV u v' x y', Nothing)
     BeaModU ->
-     let (state, r) = nextState u BeaModU BeaModX
+     let (state, r) = computeMod u BeaModU BeaModX
      in (BeaRunning state r v x y, Nothing)
     BeaModX ->
-     let (state, r) = nextState x BeaModX BeaStart
+     let (state, r) = computeMod x BeaModX BeaStart
      in (BeaRunning state u v r y, Nothing)
     BeaModV ->
-     let (state, r) = nextState v BeaModV BeaModY
+     let (state, r) = computeMod v BeaModV BeaModY
      in (BeaRunning state u r x y, Nothing)
     BeaModY ->
-     let (state, r) = nextState y BeaModY BeaStart
+     let (state, r) = computeMod y BeaModY BeaStart
      in (BeaRunning state u v x r, Nothing)
     BeaEnd ->
      let result  = if u == 1 then x else y
@@ -84,7 +77,13 @@ bea toggle s
           Just . truncateB @_ @_ @(ModSize m - 1) $ signedToUnsigned $
           if result < 0 then result + p else result
      in (BeaIdle, result')
-  nextState val state1 state2 = maybe (state2, val) (state1,) $
+  computeMod2 val1 val2 state1 state2 =
+   if lsb val1 == low then
+    let val1' = val1 `shiftR` 1
+        val2' = (if lsb val2 == low then val2 else val2 + p) `shiftR` 1
+    in (state1, val1', val2')
+   else (state2, val1, val2)
+  computeMod val state1 state2 = maybe (state2, val) (state1,) $
    if val <= natToNum @m then
     if val < 0 then Just $ val + natToNum @m else Nothing
    else Just $ val - natToNum @m

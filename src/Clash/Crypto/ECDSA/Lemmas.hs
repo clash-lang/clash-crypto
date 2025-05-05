@@ -10,15 +10,15 @@ Some useful lemmas used in clash-crypto.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Clash.Crypto.ECDSA.Lemmas where
+module Clash.Crypto.ECDSA.Lemmas (lemmaPow, lemmaModSize) where
 
 import Clash.Prelude
 import Data.Constraint (Dict (..))
 import Unsafe.Coerce (unsafeCoerce)
 import Clash.Crypto.ECDSA.Modulo (ModSize)
 
-lemma_pow :: forall n. Dict (1 <= 3 ^ n)
-lemma_pow = unsafeCoerce (Dict :: Dict (0 <= 0))
+lemmaPow :: forall n. Dict (1 <= 3 ^ n)
+lemmaPow = unsafeCoerce (Dict :: Dict (0 <= 0))
 
-lemma_modSize :: forall n. 1 <= n => Dict (1 <= ModSize n)
-lemma_modSize = unsafeCoerce (Dict :: Dict (0 <= 0))
+lemmaModSize :: forall n. 1 <= n => Dict (1 <= ModSize n)
+lemmaModSize = unsafeCoerce (Dict :: Dict (0 <= 0))
