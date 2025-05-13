@@ -1,17 +1,28 @@
+{-|
+Module      : Clash.Crypto.ECDSA.Karatsuba
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Implementation of big-number multiplication using Karatsuba's
+algorithm.
+-}
+
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
- (karatsuba, karatsubaSequentialGated) --, karatsubaSequentialSignedGated)
+ (karatsuba, karatsubaSequentialGated)
 where
 
-import Clash.Prelude hiding ((++))
-import Data.Constraint (Dict (..))
 import Clash.Crypto.ECDSA.Lemmas
-import Unsafe.Coerce (unsafeCoerce)
-import Data.Maybe (isJust)
-import Data.Functor ((<&>))
+import Clash.Prelude hiding ((++))
 import Clash.Netlist.Util (orNothing)
+import Data.Constraint (Dict (..))
+import Data.Functor ((<&>))
+import Data.Maybe (isJust)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- * Combinatorial implementations
 
@@ -20,9 +31,6 @@ type Low  n = n `Div` 2
 
 -- | The number of bits of the high part.
 type High n = n - n `Div` 2
-
-lemmaLowIsLess :: forall s. SNat s -> Dict (Low s <= s)
-lemmaLowIsLess _ = unsafeCoerce (Dict :: Dict (0 <= 0))
 
 -- | Combinational Karatsuba implementation that recurses as long as
 -- the size of at least one of the operands is larger than the given
@@ -34,7 +42,7 @@ karatsuba ::
   -- ^ The lower bound defining the base case at which standard
   -- multiplication is used instead of another recursive call
   Unsigned n -> Unsigned m -> Unsigned (n + m)
-karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess size =
+karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess @(Max n m) =
   case compareSNat (SNat @(n + m)) regSize of
     SNatLE -> extend x * extend y
     SNatGT -> karatsubaInternal size
@@ -107,9 +115,9 @@ karatsubaSequentialGated# UZero toggle x y = register Nothing $
  (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
 karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
  | _ :: UNat streamLeft <- streamingStagesLeft
- , Dict <- lemma_pow @streamLeft
- , Dict <- lemmaLowIsLess (SNat :: SNat s)
- , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (Low s <= High s)
+ , Dict <- lemmaPow @streamLeft
+ , Dict <- lemmaLowIsLess @s
+ , Dict <- lemmaLowIsLessThanHigh @s
  =
  let
   toggleSwitched = toggle ./=. register False toggle
@@ -183,3 +191,12 @@ computeZ1 z3 z2 z0 = z3 - z2 - z0
 extendRight :: forall b a. (KnownNat a, KnownNat b) =>
  Unsigned a -> Unsigned (a + b)
 extendRight a = bitCoerce (a, 0 :: Unsigned b)
+
+-- * Lemmas
+
+lemmaLowIsLess :: forall s. Dict (Low s <= s)
+lemmaLowIsLess = unsafeCoerce (Dict :: Dict (0 <= 0))
+
+lemmaLowIsLessThanHigh :: forall s. Dict (Low s <= High s)
+lemmaLowIsLessThanHigh = unsafeCoerce (Dict :: Dict (0 <= 0))
+

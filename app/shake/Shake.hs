@@ -108,6 +108,7 @@ shakeRules cfgs wanted = do
   forM_ [minBound :: SHA .. maxBound] $ \alg ->
     hitltRules "SHA" (show alg) [("HITLT_SHA", show alg)]
 
+  hitltRules "InverseModulo" "InverseModulo" []
   hitltRules "Karatsuba" "Karatsuba" []
   hitltRules "Modulo" "Modulo" []
 

@@ -12,22 +12,22 @@ Test suite for 'Clash.Crypto.ECDSA.Modulo'.
 
 module Test.Clash.Crypto.ECDSA.Modulo where
 
+import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
+import Clash.Prelude
+import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
+import Data.Proxy
+import Data.Type.Equality (type (:~:)(Refl))
+import GHC.Stack (HasCallStack)
+import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
+
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+import Hedgehog ((===), property, forAll, MonadTest)
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit), testProperty)
-import Clash.Prelude
-import Hedgehog ((===), property, forAll, MonadTest)
-
-import qualified Hedgehog.Range as Range
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
-import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
-import GHC.Stack (HasCallStack)
 
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Proxy
-import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
-import Data.Type.Equality (type (:~:)(Refl))
+import qualified Hedgehog.Range as Range
 
 tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"

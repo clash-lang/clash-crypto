@@ -68,6 +68,7 @@ library
     , clash-lib
     , constraints
   exposed-modules:
+    Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
     Clash.Crypto.ECDSA.Modulo
@@ -94,6 +95,7 @@ test-suite simulation
   main-is: Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
   build-depends:
@@ -103,6 +105,7 @@ test-suite simulation
     , constraints
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
+    , modular-arithmetic
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
     , tasty-hunit
@@ -131,6 +134,7 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
     , constraints
   exposed-modules:
+    InverseModulo
     Karatsuba
     Modulo
     SHA
@@ -148,6 +152,7 @@ test-suite hitlt
     , clash-prelude-hedgehog
     , cryptohash
     , hedgehog >= 1.0 && < 1.5
+    , modular-arithmetic
     , serialport >= 0.5.6
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5

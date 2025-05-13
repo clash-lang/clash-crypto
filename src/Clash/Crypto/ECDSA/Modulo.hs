@@ -1,3 +1,13 @@
+{-|
+Module      : Clash.Crypto.ECDSA.Modulo
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Types and algorithms for modulo integers.
+-}
+
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
@@ -6,14 +16,14 @@ module Clash.Crypto.ECDSA.Modulo
  (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize)
 where
 
-import Clash.Prelude hiding (Mod)
 import Clash.Crypto.ECDSA.Utils
-import Clash.Num.Wrapping (Wrapping (fromWrapping), toWrapping)
+import Clash.Prelude hiding (Mod)
+import Clash.Num.Wrapping (Wrapping (Wrapping))
 import Data.Coerce (coerce)
 
 -- * Useful types
 
-type ModSize n = CLog 2 (n + 1)
+type ModSize n = CLog 2 n
 
 newtype Mod (n :: Nat) = Mod (Wrapping (Index n))
  deriving (Show, Eq, Generic, Ord) deriving newtype NFDataX
@@ -26,10 +36,10 @@ deriving newtype instance (KnownNat n, 1 <= n) => Integral (Mod n)
 type Prime n = Mod n
 
 unMod :: Mod n -> Index n
-unMod = fromWrapping . coerce
+unMod = coerce
 
 createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
-createMod = coerce . toWrapping
+createMod = coerce
 
 -- |A streaming implementation of the modulo operation using long division
 -- in a binary base

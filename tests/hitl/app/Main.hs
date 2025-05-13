@@ -32,8 +32,10 @@ import Text.Read (readMaybe)
 import qualified Data.ByteString as BS (concatMap, null)
 import qualified System.Timeout  as TO (timeout)
 
-import qualified Hedgehog.Gen   as Gen (bytes)
-import qualified Hedgehog.Range as Range (linear)
+import qualified Hedgehog.Gen   as Gen (bytes, integral)
+import qualified Hedgehog.Range as Range (linear, constantFrom)
+
+import qualified Data.Modular as Modular
 
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 
@@ -52,6 +54,7 @@ import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
   )
+import Data.Maybe (fromMaybe)
 
 main ∷ IO ()
 main = do
@@ -90,8 +93,25 @@ main = do
           testGroup "Clash.Crypto.ECDSA.Modulo"
             [
               testModulo "Modulo" sem dev settings
+            ] ,
+          testGroup "Clash.Crypto.ECDSA.InverseModulo"
+            [
+              testInverseModulo "InverseModulo" sem dev settings
             ]
         ]
+
+  testInverseModulo ::
+    String ->
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testInverseModulo name sem dev settings
+    = test name $ do
+        x <- forAll $ generator $ natToNum @Q
+        runHitltInverseModulo sem dev settings x
+    where
+      generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
 
   testModulo ::
     String →
@@ -151,6 +171,23 @@ main = do
 
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
+
+runHitltInverseModulo ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 256 →
+  PropertyT IO ()
+runHitltInverseModulo sem dev settings x =
+  runHitlt @(256 `Div` 8) sem dev settings bs eq
+ where
+  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
+  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) invMod
+  invMod :: Unsigned 256
+  invMod = fromInteger $ Modular.unMod $ fromMaybe moduloError $ Modular.inv $
+           Modular.toMod @Q $ toInteger x
+  moduloError =
+    error "Since the modulo of the field is prime, the inverse always exists."
 
 runHitltModulo ∷
   QSem →
