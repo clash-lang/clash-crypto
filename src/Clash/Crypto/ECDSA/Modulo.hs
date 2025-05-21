@@ -70,39 +70,40 @@ computeModuloPos toggle value =
   Working (0, n) ~~> Nothing =
    (Finished, if n < m then Just n else Just $ n - m)
   Working (s, n) ~~> Nothing =
-   let shiftedm :: Unsigned len
-       shiftedm = m `shiftL` fromEnum s
+   let shiftedm = m `shiftL` fromEnum s
    in (Working (s - 1, if n < shiftedm then n else n - shiftedm), Nothing)
 
 -- |Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.
 -- Takes constant time, taking `maxShifts` cycles.
+-- That input will be constant for the max number of shifts.
 moduloShift :: forall m maxShifts dom.
  (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom,
   KnownNat maxShifts, 1 <= m) =>
  Signal dom Bool ->
- Signal dom (Mod m, Index maxShifts) ->
+ -- ^ Toggle signal
+ Signal dom (Mod m) ->
+ -- ^ Number to shift
+ Signal dom (Index maxShifts) ->
+ -- ^ Number of shifts, assumes stability of this value
  Signal dom (Maybe (Mod m))
-moduloShift toggle value = mealy (~~>) Finished valueM
+moduloShift toggle value shifts = mealy (~~>) Finished $ bundle (valueM, shifts)
  where
   toggleSwitched = toggle ./=. register False toggle
   valueM = orNothing <$> toggleSwitched <*> value
   (~~>) ::
-   ComputationState (Unsigned (ModSize m + 1), Index maxShifts, Index maxShifts) ->
-   Maybe (Mod m, Index maxShifts) ->
-   (ComputationState (Unsigned (ModSize m + 1), Index maxShifts, Index maxShifts),
-    Maybe (Mod m))
-  _ ~~> Just (n, 0) = (Finished, Just n)
-  _ ~~> Just (n, shifts) =
-   (Working ((extend . bitCoerce . unMod $ n) `shiftL` 1, maxBound, shifts - 1), Nothing)
-  Finished ~~> Nothing = (Finished, Nothing)
-  Working (n, 0, 0) ~~> Nothing =
-   (Finished, Just . Mod @m . bitCoerce $ truncateB res)
-   where res = if n < natToNum @m then n else n - natToNum @m
-  Working (n, m, shifts) ~~> Nothing =
-   if shifts == m then
-    let res = if n < natToNum @m then n else n - natToNum @m
-    in (Working (res `shiftL` 1, m - 1, shifts - 1), Nothing)
-   else
-    (Working (n, m - 1, shifts), Nothing)
-
+   ComputationState (Unsigned (ModSize m + 1), Index maxShifts) ->
+   (Maybe (Mod m), Index maxShifts) ->
+   (ComputationState (Unsigned (ModSize m + 1), Index maxShifts), Maybe (Mod m))
+  _ ~~> (Just n, _) = (Working (extend . bitCoerce $ n, maxBound), Nothing)
+  Finished ~~> (Nothing, _) = (Finished, Nothing)
+  Working (n, 0) ~~> (Nothing, _) = (Finished, Just . bitCoerce . truncateB $ n)
+  Working (n, shiftsRemaining) ~~> (Nothing, totalShifts) =
+   let
+    r = n `shiftL` 1
+    res
+      | totalShifts < shiftsRemaining = n
+      | r < natToNum @m = r
+      | otherwise = r - natToNum @m
+   in
+    (Working (res, shiftsRemaining - 1), Nothing)

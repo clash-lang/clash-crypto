@@ -10,7 +10,6 @@ Implementations of inverse modulo algorithms.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
  (bea, divSteps, fastGcdSequential, Precomp)
@@ -126,7 +125,7 @@ type Iterations (d :: Nat) =
 
 -- |Precomputed value used by FastGCD.
 type Precomp (f :: Nat) =
- P.Mod ((Div (f + 1) 2) ^ (Iterations (ModSize f) - 1)) f
+ P.Mod (Div (f + 1) 2 ^ (Iterations (ModSize f) - 1)) f
 
 type MulRegisterSize = 36
 type GCDStreamingStages = 3
@@ -180,7 +179,7 @@ divSteps toggle value = mealy (~~>) Finished valueM
 fastGcdSequential :: forall m dom.
  (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
  Signal dom Bool -> -- ^ Toggle signal
- Signal dom (Mod m) ->
+ Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
 fastGcdSequential toggle s
  | Dict <- lemmaModSize @m
@@ -194,22 +193,18 @@ fastGcdSequential toggle s
     (if signum fu < 0 then negate val else val, maxBound - n - 1)
    -- 1. Compute divSteps.
    divResult = divSteps @m toggle $ bitCoerce <$> s
-   (divFrac, divShifts) = unbundle $ F.unzip <$> fmap divTransform <$> divResult
+   (divFrac, divShifts) = unbundle $ F.unzip . fmap divTransform <$> divResult
    -- Keeping the shift in memory as we'll use it later on.
    shifts = mux (isJust <$> divShifts) (fromMaybe 0 <$> divShifts) $
     register 0 shifts
    -- 2. Compute the modulo of the outputted value.
-   modFraction = fromMaybe 0 <$>
-    (fmap (\(v,sign) -> if sign == high then negate v else v)
-    <$> (liftA2 (,) <$> tmpMod <*> fuSign))
+   modFraction =
+    liftA2 (\sign -> if sign == high then negate else id) <$> fuSign <*> tmpMod
    tmpMod = computeModuloPos @m toggleModulo $
-     register 0 $ fromMaybe 0 . fmap signedToUnsigned <$> divFrac
+     register 0 $ maybe 0 signedToUnsigned <$> divFrac
    moduloShiftedFraction :: Signal dom (Maybe (Unsigned (ModSize m)))
-   -- TODO: Rewrite in a cleaner manner.
    moduloShiftedFraction = fmap (bitCoerce . unMod) <$>
-    (moduloShift @m toggleShift $ (,) <$>
-     (register 0 modFraction) <*>
-     shifts)
+    moduloShift @m toggleShift (register 0 (fromMaybe 0 <$> modFraction)) shifts
    fuSign :: Signal dom (Maybe Bit)
    fuSign = register Nothing $ mux (isJust <$> divFrac) (fmap msb <$> divFrac) fuSign
    -- Toggles, since they all use registers, the input also need to be delayed.
