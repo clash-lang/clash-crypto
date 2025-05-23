@@ -10,7 +10,7 @@ Test suite for 'Clash.Crypto.ECDSA.InverseModulo'.
 
 module Test.Clash.Crypto.ECDSA.InverseModulo (tastyTests) where
 
-import Clash.Crypto.ECDSA.InverseModulo (bea, fastGcdSequential)
+import Clash.Crypto.ECDSA.InverseModulo (bea, fastGcdSequential, fltCtmi)
 import Clash.Crypto.ECDSA.Modulo
 import Clash.Prelude hiding (Mod)
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
@@ -31,7 +31,10 @@ tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
   [ localOption (HedgehogTestLimit (Just 1000)) $
       testProperty "Functional equality of BEA" $ invModuloProperty bea,
-      testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential]
+    localOption (HedgehogTestLimit (Just 100)) $
+      testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
+    localOption (HedgehogTestLimit (Just 10)) $
+      testProperty "Functional equality of FLT-CTMI" $ invModuloProperty fltCtmi]
 
 type InvModuloComponent m dom =
  HiddenClockResetEnable dom =>

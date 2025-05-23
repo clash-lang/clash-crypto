@@ -12,7 +12,7 @@ Implementations of inverse modulo algorithms.
 {-# LANGUAGE RecordWildCards #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
- (bea, divSteps, fastGcdSequential, Precomp)
+ (bea, divSteps, fastGcdSequential, fltCtmi, Precomp)
 where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
@@ -28,6 +28,8 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Data.Functor as F
 import Data.Maybe (isJust, fromMaybe)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
+import Clash.Netlist.Util (orNothing)
+import Clash.Debug (traceShowId)
 
 -- * Binary Euclidean Algorithm
 
@@ -218,6 +220,61 @@ fastGcdSequential toggle s
     toggleKaratsuba (fromMaybe 0 <$> register Nothing moduloShiftedFraction) precomp
   in
    computeModuloPos @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
+
+type FLTIterations m = ModSize (m - 2)
+
+data FLTState t =
+ FLTWaiting  |
+ FLTSquare t |
+ FLTMul t
+ deriving (Generic, NFDataX, Show)
+
+type FLTMode = Bool -- Square or Mul
+
+fltCtmi :: forall m dom.
+ (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Mod m) -> -- ^ Number to invert
+ Signal dom (Maybe (Mod m))
+fltCtmi toggle value
+ | Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (1 <= FLTIterations m)
+ , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (3 <= m)
+ =
+ let
+  toggleSwitched = toggle ./=. register False toggle
+  k :: Vec (ModSize (m - 2)) Bit
+  k = reverse $ bv2v (natToNum @(m - 2) :: BitVector (ModSize (m - 2)))
+  toggleModulo = register False $ (isJust <$> karatsubaMul) ./=. toggleModulo
+  toggleMul = register False $ restart ./=. toggleMul
+  karatsubaMul =
+   karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize @(ModSize m) @(ModSize m)
+   toggleMul (bitCoerce <$> c) $ bitCoerce <$> mux switch value c
+  moduloMul = computeModuloPos @m toggleModulo $ register 0 $ fromMaybe 0 <$> karatsubaMul
+  c = register 0 $ mux (isJust <$> moduloMul) (fromMaybe 0 <$> moduloMul) $
+   mux toggleSwitched value c
+  (switch, restart, end) = unbundle $ mealy (~~>) FLTWaiting $ bundle (toggleSwitched, isJust <$> moduloMul)
+  (~~>) :: FLTState (Index (FLTIterations m)) ->
+   (Bool, Bool) -> -- (restart, got mul result)
+   -- TODO: Rewrite to a cleaner state.
+   (FLTState (Index (FLTIterations m)), (FLTMode, Bool, Bool)) -- (iterations, square/mul, restart, end)
+  _ ~~> (True, _) = (FLTSquare $ maxBound, (False, True, False))
+  FLTWaiting ~~> _ = (FLTWaiting, (False, False, False))
+  FLTSquare 0 ~~> _ = (FLTWaiting, (False, False, True))
+  FLTSquare remaining ~~> (_, True) = 
+   -- Check the i-th bit of k
+   if bitToBool $ k !! (remaining - 1) then
+    (FLTMul remaining, (True, True, False))
+   else
+    (FLTSquare $ remaining - 1, (False, True, False))
+  FLTMul remaining ~~> (_, True) =
+    (FLTSquare $ remaining - 1, (False, True, False))
+  -- Waiting for a result.
+  FLTSquare remaining ~~> _ =
+   (FLTSquare remaining, (False, False, False))
+  FLTMul remaining ~~> _ =
+    (FLTMul remaining, (True, False, False))
+ in orNothing <$> end <*> c
+  
 
 -- * Lemmas
 

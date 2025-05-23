@@ -101,6 +101,7 @@ main = do
             [
               testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
+            , testInverseModulo "FltCtmi" sem dev settings
             ]
         ]
 

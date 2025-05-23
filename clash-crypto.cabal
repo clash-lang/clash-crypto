@@ -140,6 +140,7 @@ library hitlt-instances
   exposed-modules:
     BEA
     FastGCD
+    FltCtmi
     Karatsuba
     Modulo
     SHA
