@@ -57,7 +57,7 @@
             # Otherwise fails on `template-haskell < 2.22`.
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             circuit-notation = prev.callCabal2nix "circuit-notation" circuitNotationSrc { };
-            clash-crypto = dontCheck (final.callCabal2nix "clash-crypto" ./. { }); 
+            clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
           };
           myHsPkgs = pkgs.haskell.packages.ghc910.extend overlay;
       in
@@ -78,6 +78,6 @@
             export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
           '';
         };
-        packages.default = myHsPkgs.clash-crypto;
+        packages.default = dontCheck myHsPkgs.clash-crypto;
       });
 }
