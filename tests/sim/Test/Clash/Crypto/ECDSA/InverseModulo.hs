@@ -29,7 +29,7 @@ import qualified Data.Modular as Modular
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
 
-deriveSictPrecomp @115792089210356248762697446949407573530086143415290314195533631308867097853951
+deriveSictPrecomp @Q
 
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"

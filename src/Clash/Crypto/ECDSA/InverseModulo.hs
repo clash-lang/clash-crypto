@@ -193,7 +193,6 @@ fastGcdSequential :: forall m dom.
 fastGcdSequential toggle s
  | Dict <- lemmaModSize @m
  , Dict <- lemmaIterations @(ModSize m)
- , Dict <- lemmaGeneralizedIterations @(ModSize m)
  = let
    -- Precomputed value for the algorithm.
    precomp :: Signal dom (Unsigned (ModSize m))
@@ -241,13 +240,11 @@ type FLTMode = Bool -- Square or Mul
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi :: forall m dom.
- (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
+ (KnownNat m, 3 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
 fltCtmi toggle value
- | Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (1 <= FLTIterations m)
- , Dict <- unsafeCoerce (Dict :: Dict (0 <= 0)) :: Dict (3 <= m)
  =
  let
   toggleSwitched = toggle ./=. register False toggle
@@ -255,8 +252,7 @@ fltCtmi toggle value
   k = reverse $ bv2v (natToNum @(m - 2) :: BitVector (ModSize (m - 2)))
   toggleModulo = register False $ (isJust <$> karatsubaMul) ./=. toggleModulo
   toggleMul = register False $ restart ./=. toggleMul
-  karatsubaMul =
-   karatsubaSequentialGated
+  karatsubaMul = karatsubaSequentialGated
    @GCDStreamingStages @MulRegisterSize @(ModSize m) @(ModSize m)
    toggleMul (bitCoerce <$> c) $ bitCoerce <$> mux switch value c
   moduloMul =
@@ -348,9 +344,6 @@ sictMiSequential :: forall m dom.
  Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
 sictMiSequential toggle s
- | Dict <- lemmaModSize @m
- , Dict <- lemmaIterations @(ModSize m)
- , Dict <- lemmaGeneralizedIterations @(ModSize m)
  = let
    -- Precomputed value for the algorithm.
    precomp :: Signal dom (Unsigned (ModSize m))
@@ -371,6 +364,3 @@ sictMiSequential toggle s
 
 lemmaIterations :: forall d. (KnownNat d, 1 <= d) => Dict (1 <= Iterations d)
 lemmaIterations = unsafeCoerce (Dict :: Dict (0 <= 0))
-
-lemmaGeneralizedIterations :: forall d. (KnownNat d, 1 <= d) => Dict (d <= Iterations d)
-lemmaGeneralizedIterations = unsafeCoerce (Dict :: Dict (0 <= 0))
