@@ -37,6 +37,7 @@
       in
       {
         devShells.default = myHsPkgs.shellFor {
+          name = "ghc910";
           packages = p: [ p.clash-crypto ];
           inputsFrom = [
             clash-compiler.packages.${system}.clash-lib.env
@@ -49,6 +50,10 @@
             (with myHsPkgs; [ cabal-install ])
             ++ [ecpprog.defaultPackage.${system}]
           ;
+          shellHook = ''
+            SHAKEPATH=`cabal list-bin clash-crypto:shake`
+            export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
+          '';
         };
         default = myHsPkgs.clash-crypto;
       });
