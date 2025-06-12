@@ -199,7 +199,10 @@ library shake-rules
   exposed-modules:
     Shake
   other-modules:
+    Development.Shake.Clash
+    Development.Shake.Clash.Formal
     Development.Shake.Config.Extra
+    Development.Shake.Yosys
 
 executable shake
   import: shake-options
@@ -207,4 +210,8 @@ executable shake
   main-is: Main.hs
   other-modules:
     Shake
+    Development.Shake.Clash
+    Development.Shake.Clash.Formal
     Development.Shake.Config.Extra
+    Development.Shake.Command.Extra
+    Development.Shake.Yosys

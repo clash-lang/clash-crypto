@@ -4,7 +4,6 @@ module Development.Shake.Config.Extra
   , usingConfigFiles
   , getConfig
   , getConfigFile
-  , getProjectRootDir
   ) where
 
 import Control.Applicative ((<|>))
@@ -16,9 +15,6 @@ import Development.Shake
 import Development.Shake.Classes (Typeable, Hashable, Binary, NFData)
 import Development.Shake.Config (readConfigFile, readConfigFileWithEnv)
 
-import System.Directory (doesFileExist, getCurrentDirectory)
-import System.FilePath ((</>), isDrive, takeDirectory)
-
 import qualified Data.HashMap.Strict as HashMap (lookup)
 
 newtype Config = Config String
@@ -28,7 +24,6 @@ newtype ConfigFile = ConfigFile String
 
 type instance RuleResult Config = Maybe String
 type instance RuleResult ConfigFile = Maybe String
-
 
 -- | An extension of 'Development.Shake.Command.usingConfigFile',
 -- which supports more than a single configuration file. If a key is
@@ -61,17 +56,3 @@ getConfig = askOracle . Config
 
 getConfigFile :: String -> Action (Maybe String)
 getConfigFile = askOracle . ConfigFile
-
--- | Starts searching for the @cabal.project@ file in the current
--- working directory and traverses up the directory tree until it
--- finds it. Just returns the absolute path to the directory of the
--- file or nothing, if it cannot find @cabal.project@ anywhere.
-getProjectRootDir :: IO (Maybe FilePath)
-getProjectRootDir = getCurrentDirectory >>= findFile
- where
-  findFile path
-    | isDrive path = return Nothing
-    | otherwise    = doesFileExist (path </> projectFilename)
-        >>= \case True -> return $ Just path
-                  _    -> findFile $ takeDirectory path
-  projectFilename = "cabal.project"
