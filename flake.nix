@@ -14,25 +14,15 @@
             rev = "ce42a5afebb55d2e2e84be7f5386d69c343e3942";
             sha256 = "sha256-oBG8DylFwzUu212AiNOg2x+D1jmI2hAvMJQT0F8wWlE=";
           };
-          clashProtocolsSrc = pkgs.fetchFromGitHub {
-            owner = "clash-lang";
-            repo = "clash-protocols";
-            rev = "ba433847cfa2d7d5d241f123520a104ddfc6d72c";
-            sha256 = "sha256-qqR4kZ1OwTcx/XnPJf3k1RupehYakks5Lcw2uR1ejmU=";
-          };
           clashCompilerSrc = pkgs.fetchFromGitHub {
             owner = "clash-lang";
             repo = "clash-compiler";
-            rev = "462de2c8ae81eb525ad0df04a69ac73384baa309";
-            sha256 = "sha256-P/7iDg+35Bz4KwyixcAgPpmx71TfpommpuvOiyZ3T9Q=";
+            rev = "7bf85bfbdb6561c068f99ec5f346d1b5092a011b";
+            sha256 = "sha256-uiXDG8S5eJrQvwetU0YlAKu1C5RDFoW/3/j77nM0lYw=";
           };
 
           inherit (pkgs.haskell.lib) dontCheck doJailbreak markUnbroken;
           overlay = final: prev: {
-            clash-protocols = doJailbreak (prev.callCabal2nix "clash-protocols"
-              (clashProtocolsSrc + "/clash-protocols") { });
-            clash-protocols-base = prev.callCabal2nix "clash-protocols-base"
-              (clashProtocolsSrc + "/clash-protocols-base") { };
             clash-prelude = prev.callCabal2nix "clash-prelude"
               (clashCompilerSrc + "/clash-prelude") { };
             clash-prelude-hedgehog = prev.callCabal2nix "clash-prelude-hedgehog"
