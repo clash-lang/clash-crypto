@@ -104,7 +104,7 @@ test-suite simulation
     , clash-prelude-hedgehog
     , constraints
     , cryptohash
-    , hedgehog >= 1.0 && < 1.5
+    , hedgehog >= 1.0
     , modular-arithmetic
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
@@ -151,7 +151,7 @@ test-suite hitlt
     , clash-crypto:shake-rules
     , clash-prelude-hedgehog
     , cryptohash
-    , hedgehog >= 1.0 && < 1.5
+    , hedgehog >= 1.0
     , modular-arithmetic
     , serialport >= 0.5.6
     , tasty >= 1.5
