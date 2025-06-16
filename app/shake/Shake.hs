@@ -284,6 +284,7 @@ hitltRules group component defines = do
         ("-DHITLT_BAUD=" <> serialSpeed)
         ((\(x,y) -> "-D" <> x <> "=" <> y) <$> defines)
         "--verilog"
+        "-fclash-clear"
         "-fclash-spec-limit=100"
         "-fclash-inline-limit=100"
         "-fconstraint-solver-iterations=20"
