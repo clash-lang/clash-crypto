@@ -122,6 +122,7 @@ library hitlt-shared
     , string-interpolate
     , text
   exposed-modules:
+    Clash.Cores.UART
     Domain
     Pll
 
@@ -129,7 +130,6 @@ library hitlt-instances
   import: common-options
   hs-source-dirs: tests/hitl/top
   build-depends:
-    , clash-cores
     , clash-crypto
     , clash-crypto:hitlt-shared
     , constraints

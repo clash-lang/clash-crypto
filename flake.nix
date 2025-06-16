@@ -17,7 +17,6 @@
           };
           inherit (pkgs.haskell.lib) dontCheck doJailbreak markUnbroken;
           overlay = final: prev: {
-            clash-cores = clash-compiler.packages.${system}.clash-cores;
             clash-prelude = clash-compiler.packages.${system}.clash-prelude;
             clash-prelude-hedgehog = clash-compiler.packages.${system}.clash-prelude-hedgehog;
             clash-lib = clash-compiler.packages.${system}.clash-lib;
