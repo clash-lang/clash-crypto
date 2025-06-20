@@ -50,6 +50,7 @@ import Clash.Prelude (type Div, type (*), natToNum, Unsigned, bitCoerce, Vec, to
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..)
   )
+import Clash.Crypto.Hitlt.Shared (Q)
 import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
@@ -168,9 +169,6 @@ main = do
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
-
--- TODO: Once all PRs are merged, move this to one place.
-type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
 
 runHitltInverseModulo ∷
   QSem →

@@ -15,7 +15,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Clash.Cores.UART
+module Clash.Cores.Uart
   ( BaudGenerator
   , ValidBaud
   , baudGenerator

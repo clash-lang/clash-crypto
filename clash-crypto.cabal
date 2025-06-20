@@ -116,6 +116,7 @@ library hitlt-shared
   hs-source-dirs: tests/hitl/lib
   build-depends:
     , clash-lib
+    , constraints
     , infinite-list
     , mtl
     , pretty-show
@@ -124,7 +125,9 @@ library hitlt-shared
   exposed-modules:
     Clash.Cores.LatticeSemi.ECP5.Domain
     Clash.Cores.LatticeSemi.ECP5.Pll
-    Clash.Cores.UART
+    Clash.Cores.Uart
+    Clash.Crypto.Hitlt.Shared
+    Clash.Crypto.Hitlt.Uart
 
 library hitlt-instances
   import: common-options
@@ -148,6 +151,7 @@ test-suite hitlt
   build-depends:
     , bytestring
     , clash-crypto
+    , clash-crypto:hitlt-shared
     , clash-crypto:shake-rules
     , clash-prelude-hedgehog
     , cryptohash

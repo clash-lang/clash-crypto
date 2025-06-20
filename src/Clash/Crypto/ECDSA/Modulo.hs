@@ -32,6 +32,8 @@ deriving newtype instance (KnownNat n, 1 <= n) => Num (Mod n)
 deriving newtype instance (KnownNat n, 1 <= n) => Enum (Mod n)
 deriving newtype instance (KnownNat n, 1 <= n) => Real (Mod n)
 deriving newtype instance (KnownNat n, 1 <= n) => Integral (Mod n)
+deriving newtype instance (KnownNat n, 1 <= n) => Bits (Mod n)
+deriving newtype instance (KnownNat n, 1 <= n) => BitPack (Mod n)
 
 type Prime n = Mod n
 
