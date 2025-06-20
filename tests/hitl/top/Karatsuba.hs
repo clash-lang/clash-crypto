@@ -2,16 +2,18 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 
-module Karatsuba where
+module Karatsuba (topEntity) where
 
 import Clash.Prelude
 
 import Clash.Annotations.TH (makeTopEntity)
+
+import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Cores.UART (uart)
 
-import Domain (Dom48, Dom24)
-import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
+
 import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define
@@ -49,7 +51,7 @@ top rx = tx
   (x,y) = unbundle dataReg
   result =
    karatsubaSequentialGated @3 @36 @IntegerSize @IntegerSize @Dom24 toggle x y
-  
+
   bufferStep ::
     (Index ISizeDiv4, Vec ISizeDiv4 BV8) ->
     Maybe BV8 ->

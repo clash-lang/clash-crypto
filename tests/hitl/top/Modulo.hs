@@ -7,11 +7,13 @@ module Modulo (topEntity) where
 import Clash.Prelude
 
 import Clash.Annotations.TH (makeTopEntity)
+
+import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Cores.UART (uart)
 
-import Domain (Dom48, Dom24)
-import Pll (orangePll24)
 import Clash.Crypto.ECDSA.Modulo (computeModuloPos, unMod)
+
 import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define

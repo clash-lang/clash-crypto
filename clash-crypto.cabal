@@ -122,9 +122,9 @@ library hitlt-shared
     , string-interpolate
     , text
   exposed-modules:
+    Clash.Cores.LatticeSemi.ECP5.Domain
+    Clash.Cores.LatticeSemi.ECP5.Pll
     Clash.Cores.UART
-    Domain
-    Pll
 
 library hitlt-instances
   import: common-options

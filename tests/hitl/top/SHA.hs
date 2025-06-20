@@ -2,16 +2,17 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 
-module SHA where
+module SHA (topEntity) where
 
 import Clash.Prelude
 
 import Clash.Annotations.TH (makeTopEntity)
-import Clash.Cores.UART (uart)
-import Clash.Crypto.Hash.SHA (MessageDigestSize, SHA(..), sha)
 
-import Domain (Dom48, Dom24)
-import Pll (orangePll24)
+import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Clash.Cores.UART (uart)
+
+import Clash.Crypto.Hash.SHA (MessageDigestSize, SHA(..), sha)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
