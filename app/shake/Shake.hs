@@ -251,7 +251,7 @@ hitltRules group component defines = do
       projectClash <- ?getCabalBinPath "clash"
       cabalFile    <- ?getSources "clash-crypto.cabal"
       libSources   <- ?getSources "src"
-      hitltSources <- ?getSources "tests/hitl"
+      hitltSources <- ?getSources "tests/hitl/lib"
       let inp = "tests" </> "hitl" </> "top" </> group <.> "hs"
 
       need $ [ projectShake, projectClash, inp ]
