@@ -31,8 +31,6 @@ module Development.Shake.Clash.Formal
     , ecppackFlags
     , ecpprogBin
     , ecpprogFlags
-    , dfuSuffixBin
-    , dfuSuffixFlags
     )
   , synthConfig
   -- * Actions and Rules
@@ -247,26 +245,22 @@ data SynthConfig m =
   , ecppackFlags :: m [String]
   , ecpprogBin :: m CmdArgument
   , ecpprogFlags :: m [String]
-  , dfuSuffixBin :: m CmdArgument
-  , dfuSuffixFlags :: m [String]
   }
 
 synthConfig :: SynthConfig Action
 synthConfig =
   SynthConfig
   { clashBin        = getCabalBinPath "clash"
-  , clashFlags      = words    <$> getConfigOrElse ""            "CLASH_FLAGS"
-  , yosysBin        = argument <$> getConfigOrElse "yosys"       "YOSYS"
-  , yosysFlags      = words    <$> getConfigOrElse ""            "YOSYS_FLAGS"
-  , yosysSynthFlags = words    <$> getConfigOrElse ""            "YOSYS_SYNTH_FLAGS"
-  , nextpnrBin      = argument <$> getConfigOrElse "nextpnr"     "PNR"
-  , nextpnrFlags    = words    <$> getConfigOrElse ""            "PNR_FLAGS"
-  , ecppackBin      = argument <$> getConfigOrElse "ecppack"     "PACK"
-  , ecppackFlags    = words    <$> getConfigOrElse "--freq 38.8" "PACK_FLAGS"
-  , ecpprogBin      = argument <$> getConfigOrElse "ecpprog"     "PROG"
-  , ecpprogFlags    = words    <$> getConfigOrElse ""            "PROG_FLAGS"
-  , dfuSuffixBin    = argument <$> getConfigOrElse "dfu-suffix"  "DFUSUFFIX"
-  , dfuSuffixFlags  = words    <$> getConfigOrElse ""            "DFUSUFFIX_FLAGS"
+  , clashFlags      = words    <$> getConfigOrElse ""             "CLASH_FLAGS"
+  , yosysBin        = argument <$> getConfigOrElse "yosys"        "YOSYS"
+  , yosysFlags      = words    <$> getConfigOrElse ""             "YOSYS_FLAGS"
+  , yosysSynthFlags = words    <$> getConfigOrElse ""             "YOSYS_SYNTH_FLAGS"
+  , nextpnrBin      = argument <$> getConfigOrElse "nextpnr-ecp5" "PNR"
+  , nextpnrFlags    = words    <$> getConfigOrElse ""             "PNR_FLAGS"
+  , ecppackBin      = argument <$> getConfigOrElse "ecppack"      "PACK"
+  , ecppackFlags    = words    <$> getConfigOrElse "--freq 38.8"  "PACK_FLAGS"
+  , ecpprogBin      = argument <$> getConfigOrElse "ecpprog"      "PROG"
+  , ecpprogFlags    = words    <$> getConfigOrElse ""             "PROG_FLAGS"
   }
 
 endsWith :: Eq a => [a] -> [a] -> Bool
@@ -323,22 +317,6 @@ synthRules environment mod top = do
   sub "hdl"       ~> need [ ?buildDir </> "02-hdl"       </> top <.> "v"      ]
 
   withoutTargets $ do
-    ?buildDir </> "04-bitstream" </> top <.> "dfu" %> \out -> do
-      ?before
-      let inp = out -<.> "bit"
-      need [ inp ]
-      copyFileChanged inp out
-
-      let ?bin = ?config.dfuSuffixBin
-          ?flags = ?config.dfuSuffixFlags
-
-      undefined {- TODO -}
-      -- cmd_ bin
-      --   flags
-      --   "-v 1209"
-      --   "-p 5af0"
-      --   "-a" out
-
     ?buildDir </> "04-bitstream" </> top <.> "bit" %> \out -> do
       ?before
       let inp = out -<.> "config"
