@@ -1,19 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Clash.Crypto.Hitlt.Uart
-  ( Byte
-  , ByteSize
-  , bulkRead
+  ( bulkRead
   , withUartRequestResponseHandler
   ) where
 
 import Clash.Prelude
 import Clash.Cores.Uart (ValidBaud, uart)
+import Clash.Crypto.Hitlt.Shared (Byte, ByteSize, isReadyIndicator)
 
 import Data.Constraint (Dict(..))
 import Unsafe.Coerce (unsafeCoerce)
-
-type Byte = BitVector 8
-type ByteSize a = BitSize a `Div` BitSize Byte
 
 -- | Exends a circuit receiving a byte stream and computing a response
 -- with a UART interface providing the input stream and passing back the
@@ -49,7 +45,9 @@ withUartRequestResponseHandler clk rst baud requestResponseHandler rx
 
       txReq = mealyB
         (~~>)
-        (undefined, 0 ∷ Index (ByteSize a + 1))
+        -- send an 'isReadyIndicator' byte once after leaving the
+        -- reset state to signal the host that the device is ready now
+        (repeat isReadyIndicator, 1 ∷ Index (ByteSize a + 1))
         (result, ack)
        where
         -- wait for the response from the crypto core

@@ -7,6 +7,7 @@ import Control.Exception
   ( SomeException, Exception, Handler(..)
   , catches, throw, bracket_
   )
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString
   ( ByteString
@@ -15,6 +16,7 @@ import Data.ByteString
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
+import GHC.IO.Handle (Handle)
 import Hedgehog (PropertyT, (===), property, forAll)
 import System.Exit (ExitCode, exitWith)
 import System.Environment (setEnv, withArgs)
@@ -29,7 +31,7 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
-import qualified Data.ByteString as BS (concatMap, null)
+import qualified Data.ByteString as BS (concatMap, null, head)
 import qualified System.Timeout  as TO (timeout)
 
 import qualified Hedgehog.Gen   as Gen (bytes, integral)
@@ -50,7 +52,7 @@ import Clash.Prelude (type Div, type (*), natToNum, Unsigned, bitCoerce, Vec, to
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..)
   )
-import Clash.Crypto.Hitlt.Shared (Q)
+import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
@@ -59,7 +61,7 @@ import Data.Maybe (fromMaybe)
 
 main ∷ IO ()
 main = do
-  lkup <- configLookup
+  lkup ← configLookup
 
   let serialDev = lkup "HITLT_SERIAL_DEV"
       serialSpeed = lkup "SERIAL_SPEED"
@@ -69,11 +71,11 @@ main = do
   -- executation at this points
   setEnv "TASTY_NUM_THREADS" "1"
 
-  sem <- newQSem 1
+  sem ← newQSem 1
 
   run sem serialDev settings `catches`
-    [ Handler $ \(e :: ExitCode) → exitWith e
-    , Handler $ \(e :: SomeException) → error $ show e
+    [ Handler $ \(e ∷ ExitCode) → exitWith e
+    , Handler $ \(e ∷ SomeException) → error $ show e
     ]
  where
   run sem dev settings
@@ -101,61 +103,64 @@ main = do
             ]
         ]
 
-  testInverseModulo ::
-    String ->
+  testInverseModulo ∷
+    String →
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
   testInverseModulo name sem dev settings
-    = test name $ do
-        x <- forAll $ generator $ natToNum @Q
+    = test sem dev settings name $ do
+        x ← forAll $ generator $ natToNum @Q
         runHitltInverseModulo sem dev settings x
     where
       generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
 
-  testModulo ::
+  testModulo ∷
     String →
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
   testModulo name sem dev settings
-    = test name $ do
-        x <- forAll $ genUnsigned $ Range.linear minBound maxBound
+    = test sem dev settings name $ do
+        x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltModulo sem dev settings x
 
-  testKaratsuba ::
+  testKaratsuba ∷
     String →
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
   testKaratsuba name sem dev settings
-    = test name $ do
-        x <- forAll $ genUnsigned $ Range.linear minBound maxBound
-        y <- forAll $ genUnsigned $ Range.linear minBound maxBound
+    = test sem dev settings name $ do
+        x ← forAll $ genUnsigned $ Range.linear minBound maxBound
+        y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
 
-  testSHA ::
-    forall alg.
-    (KnownSHA alg, CryptoHash alg, Typeable alg) =>
+  testSHA ∷
+    ∀ alg.
+    (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
   testSHA sem dev settings
-    | SHAFacts alg <- knownSHA @alg
-    , name <- dropWhile (== '\'') $ show $ typeRep alg
-    = test name $ do
+    | SHAFacts alg ← knownSHA @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
         runHitltSHA @alg sem dev settings bs
 
-  test ::
+  test ∷
+    QSem →
+    FilePath →
+    SerialPortSettings →
     String →
     PropertyT IO () →
     TestTree
-  test name p
+  test sem dev settings name p
     = localOption (HedgehogTestLimit (Just 1))
     $ sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
@@ -163,7 +168,7 @@ main = do
             $ liftIO $ shake [name <> ":bitstream"]
         , localOption (HedgehogTestLimit (Just 1))
             $ testProperty "write bitstream" $ property
-            $ liftIO $ shake [name <> ":upload"]
+            $ liftIO $ upload shake sem dev settings name
         , localOption (HedgehogTestLimit (Just 100))
             $ testProperty "run HITLT" $ property p
         ]
@@ -181,7 +186,7 @@ runHitltInverseModulo sem dev settings x =
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
   eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) invMod
-  invMod :: Unsigned 256
+  invMod ∷ Unsigned 256
   invMod = fromInteger $ Modular.unMod $ fromMaybe moduloError $ Modular.inv $
            Modular.toMod @Q $ toInteger x
   moduloError =
@@ -217,20 +222,43 @@ runHitltKaratsuba sem dev settings x y =
    resize @_ @_ @(2 * HitlKaratsubaIntegerSize) x * resize y
 
 runHitltSHA ∷
-  ∀ (alg :: SHA).
+  ∀ (alg ∷ SHA).
   (KnownSHA alg, CryptoHash alg) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   ByteString →
   PropertyT IO ()
-runHitltSHA sem dev settings input | SHAFacts alg <- knownSHA @alg =
+runHitltSHA sem dev settings input | SHAFacts alg ← knownSHA @alg =
  let
   bs = escapeAndTerminate input
   eq = cryptoHash alg input
  in runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
-runHitlt ∷ forall (messageSize :: Nat). KnownNat messageSize =>
+upload ∷
+  ([String] → IO ()) →
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  String →
+  IO()
+upload shake sem dev settings name
+  = bracket_ (waitQSem sem) (signalQSem sem)
+  $ hWithSerial dev settings $ \serial → do
+      hSetBuffering serial NoBuffering
+      -- upload the bitstream
+      shake [name <> ":upload"]
+      -- wait for the device ready indicator byte once
+      TO.timeout hitltTimeoutTime (waitForReadyByte serial)
+        >>= maybe (throw hitltTimeoutErr) return
+ where
+  waitForReadyByte serial = do
+    xs ← hGet serial 1
+    unless (not (BS.null xs) && BS.head xs == bitCoerce isReadyIndicator)
+      $ waitForReadyByte serial
+
+runHitlt ∷
+  ∀ (messageSize ∷ Nat). KnownNat messageSize ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -238,40 +266,43 @@ runHitlt ∷ forall (messageSize :: Nat). KnownNat messageSize =>
   ByteString →
   PropertyT IO ()
 runHitlt sem dev settings bs eq = do
-  let resultSize =
-        natToNum @messageSize
+  let pr = concatMap (printf "%02x " ∷ Word8 → String) . unpack
 
-      pr = concatMap (printf "%02x " :: Word8 → String) . unpack
-
-      emptyBuffer serial = do
-        xs <- hGetNonBlocking serial resultSize
-        if BS.null xs
-          then return ()
-          else emptyBuffer serial
-
-      -- timeout in microseconds
-      hitltTimeoutTime = 1_000_000 :: Int
-
-      hitltTimeoutErr = HitltTimeout
-        $ "Serial Timout: no resonse received witin "
-             <> show hitltTimeoutTime <> " seconds"
-
-  dutResponse <- liftIO
+  dutResponse ← liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
     $ hWithSerial dev settings $ \serial → do
         hSetBuffering serial NoBuffering
         -- ensure that the receive buffer is empty before we place
         -- the request
-        emptyBuffer serial
+        emptyBuffer @messageSize serial
         -- send the request
         hPut serial bs
         -- wait for the response
-        TO.timeout hitltTimeoutTime (hGet serial resultSize)
+        TO.timeout hitltTimeoutTime (hGet serial $ natToNum @messageSize)
           >>= maybe (throw hitltTimeoutErr) return
+
   pr dutResponse === pr eq
 
+emptyBuffer ∷
+  ∀ (messageSize ∷ Nat). KnownNat messageSize ⇒
+  Handle →
+  IO ()
+emptyBuffer serial = do
+  xs ← hGetNonBlocking serial $ natToNum @messageSize
+  unless (BS.null xs) $ emptyBuffer @messageSize serial
+
+-- | Serial timeout in microseconds
+hitltTimeoutTime ∷ Int
+hitltTimeoutTime = 1_000_000
+
+-- | Serial timeout error
+hitltTimeoutErr ∷ HitltTimeout
+hitltTimeoutErr = HitltTimeout
+  $ "Serial Timout: no resonse received witin "
+       <> show hitltTimeoutTime <> " microseconds"
+
 -- Useful for variable-length data.
-escapeAndTerminate :: ByteString → ByteString
+escapeAndTerminate ∷ ByteString → ByteString
 escapeAndTerminate = terminate . escape
  where
   terminate = (`append` pack [0x00, 0x80])
@@ -279,8 +310,8 @@ escapeAndTerminate = terminate . escape
     0x00 → pack [0x00, 0x00]
     byte → singleton byte
 
-class CryptoHash (alg :: SHA) where
-  cryptoHash :: Proxy alg → ByteString → ByteString
+class CryptoHash (alg ∷ SHA) where
+  cryptoHash ∷ Proxy alg → ByteString → ByteString
 
 instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
 instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash

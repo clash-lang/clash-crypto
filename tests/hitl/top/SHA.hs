@@ -8,7 +8,8 @@ import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hitlt.Uart (Byte, withUartRequestResponseHandler)
+import Clash.Crypto.Hitlt.Shared (Byte)
+import Clash.Crypto.Hitlt.Uart (withUartRequestResponseHandler)
 
 import Clash.Crypto.Hash.SHA (SHA(..), sha)
 
