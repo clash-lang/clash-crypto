@@ -68,6 +68,7 @@ library
     , clash-lib
     , constraints
   exposed-modules:
+    Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
@@ -137,7 +138,8 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
     , constraints
   exposed-modules:
-    InverseModulo
+    BEA
+    FastGCD
     Karatsuba
     Modulo
     SHA

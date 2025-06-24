@@ -99,7 +99,8 @@ main = do
             ] ,
           testGroup "Clash.Crypto.ECDSA.InverseModulo"
             [
-              testInverseModulo "InverseModulo" sem dev settings
+              testInverseModulo "BEA" sem dev settings
+            , testInverseModulo "FastGCD" sem dev settings
             ]
         ]
 

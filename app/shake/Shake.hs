@@ -108,7 +108,8 @@ shakeRules cfgs wanted = do
   forM_ [minBound :: SHA .. maxBound] $ \alg ->
     hitltRules "SHA" (show alg) [("HITLT_SHA", show alg)]
 
-  hitltRules "InverseModulo" "InverseModulo" []
+  hitltRules "BEA" "BEA" []
+  hitltRules "FastGCD" "FastGCD" []
   hitltRules "Karatsuba" "Karatsuba" []
   hitltRules "Modulo" "Modulo" []
 
@@ -283,8 +284,10 @@ hitltRules group component defines = do
         ("-DHITLT_BAUD=" <> serialSpeed)
         ((\(x,y) -> "-D" <> x <> "=" <> y) <$> defines)
         "--verilog"
+        "-fclash-clear"
         "-fclash-spec-limit=100"
         "-fclash-inline-limit=100"
+        "-fconstraint-solver-iterations=20"
         "-outputdir" (bdir </> "01-clash")
         inp
 

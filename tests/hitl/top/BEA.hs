@@ -1,7 +1,7 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
-module InverseModulo (topEntity) where
+module BEA (topEntity) where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)

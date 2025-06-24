@@ -17,3 +17,9 @@ createDomain vSystem
   { vName="Dom24"
   , vPeriod = hzToPeriod 24_000_000
   }
+
+-- | 24 MHz clock
+createDomain vSystem
+  { vName="Dom12"
+  , vPeriod = hzToPeriod 12_000_000
+  }
