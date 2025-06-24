@@ -1,7 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Domain where
+module Clash.Cores.LatticeSemi.ECP5.Domain where
 
 import Clash.Prelude
 

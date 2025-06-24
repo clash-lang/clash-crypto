@@ -1,11 +1,11 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PostfixOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Pll where
+module Clash.Cores.LatticeSemi.ECP5.Pll where
 
 import Prelude
 
-import Domain
+import Clash.Cores.LatticeSemi.ECP5.Domain
 
 import Clash.Annotations.Primitive (Primitive(..), HDL(..), hasBlackBox)
 import Clash.Backend (Backend)

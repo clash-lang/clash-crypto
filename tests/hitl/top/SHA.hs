@@ -1,17 +1,17 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
-
-module SHA where
+module SHA (topEntity) where
 
 import Clash.Prelude
-
 import Clash.Annotations.TH (makeTopEntity)
-import Clash.Cores.UART (uart)
-import Clash.Crypto.Hash.SHA (MessageDigestSize, SHA(..), sha)
 
-import Domain (Dom48, Dom24)
-import Pll (orangePll24)
+import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Clash.Crypto.Hitlt.Shared (Byte)
+import Clash.Crypto.Hitlt.Uart (withUartRequestResponseHandler)
+
+import Clash.Crypto.Hash.SHA (SHA(..), sha)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
@@ -31,38 +31,9 @@ topEntity ∷
   "CLK" ::: Clock Dom48 →
   "PMOD1_6" ::: Signal Dom24 Bit →
   "PMOD1_5" ::: Signal Dom24 Bit
-topEntity (orangePll24 → (clk24, rst24)) =
-  withClockResetEnable clk24 rst24 enableGen top
-
-top ∷
-  HiddenClockResetEnable Dom24 ⇒
-  Signal Dom24 Bit → Signal Dom24 Bit
-top rx = tx
- where
-  (rxData, tx, ack) = uart (SNat @BAUD) rx txReq
-
-  hash = sha @SHAX $ descape rxData
-
-  txReq = mealyB (~~>)
-    (def, 0 ∷ Index (MessageDigestSize SHAX `Div` 8 + 1))
-    (fmap toVec8 <$> hash, ack)
-
-  -- wait for the response from the crypto core
-  s@(_, 0) ~~> (Nothing, _) = (s, Nothing)
-  -- response received, start sending bytes
-  (_, 0)   ~~> (Just h,  _) = ((h, maxBound), Just $ head h)
-  -- wait for the UART ack of the byte previously sent
-  s@(h, _) ~~> (_,   False) = (s, Just $ head h)
-  -- UART ack received
-  (h, n)   ~~> (_,    True) = ((h << d1, n - 1), Just $ head h)
-
-  toVec8 ∷
-    BitVector (MessageDigestSize SHAX) →
-    Vec (MessageDigestSize SHAX `Div` 8) (BitVector 8)
-  toVec8 = bitCoerce
-
-  v << n
-    = fst $ shiftOutFrom0 n v
+topEntity (orangePll24 → (clk, rst))
+  = withUartRequestResponseHandler clk rst (SNat @BAUD)
+  $ sha @SHAX . descape
 
 -- | We use `0x00` as an escape symbol to mark the end of the input
 --
@@ -77,8 +48,8 @@ top rx = tx
 -- > 0x00 0b10000000   marks the previous byte to be the last byte
 descape ∷
   HiddenClockResetEnable dom ⇒
-  Signal dom (Maybe (BitVector 8)) →
-  Signal dom (Maybe (BitVector 8, Maybe (Index 9)))
+  Signal dom (Maybe Byte) →
+  Signal dom (Maybe (Byte, Maybe (Index 9)))
 descape = mealy (~~>) False
  where
   esc   ~~> Nothing   = (esc, Nothing)

@@ -91,7 +91,7 @@ shakeRules cfgs wanted = do
 
   getCabalBinPath <- fmap (. AppName) $ addOracle $ \(AppName name) -> do
     cabal <- getCabal
-    out <- quietly $ cmd cabal "list-bin" (pkgName <> ":" <> name)
+    out <- quietly $ cmd cabal "--verbose=0" "list-bin" (pkgName <> ":" <> name)
     return $ makeRelative ?aprPath $ takeWhile (not . isSpace) $ fromStdout out
   let ?getCabalBinPath = getCabalBinPath
 
@@ -99,7 +99,7 @@ shakeRules cfgs wanted = do
     $ addOracle $ \(CabalSDistSources prefix) -> do
       cabal <- getCabal
       allSources <- quietly $ lines . fromStdout
-        <$> cmd cabal "sdist" "--list-only" :: Action [String]
+        <$> cmd cabal "--verbose=0" "sdist" "--list-only" :: Action [String]
       return $ drop 2 <$> filter (startsWith ("./" <> prefix)) allSources
   let ?getSources = getSources
 
@@ -123,7 +123,7 @@ shakeRules cfgs wanted = do
       appPath <- getCabalBinPath "clash"
       unless (appPath == out) $ fail "internal error: invalid need"
       cabal <- getCabal
-      quietly $ cmd_ cabal "build" (pkgName <> ":" <> "clash")
+      quietly $ cmd_ cabal "--verbose=0" "build" (pkgName <> ":" <> "clash")
 
     when ?withBinary
       $ "" <//> "shake" </> "build" </> "shake" </> "shake" %> \out -> do
@@ -134,7 +134,7 @@ shakeRules cfgs wanted = do
         unless (shakePath == out) $ fail "internal error: invalid need"
         cabal <- getCabal
         Stdout msg <- quietly
-          $ cmd cabal "build" (pkgName <> ":shake") "--dry-run"
+          $ cmd cabal "--verbose=0" "build" (pkgName <> ":shake") "--dry-run"
         unless (startsWith "Up to date" msg) $ liftIO $ do
           putStr msg
           throw ShakeOutOfDate
@@ -251,7 +251,7 @@ hitltRules group component defines = do
       projectClash <- ?getCabalBinPath "clash"
       cabalFile    <- ?getSources "clash-crypto.cabal"
       libSources   <- ?getSources "src"
-      hitltSources <- ?getSources "tests/hitl"
+      hitltSources <- ?getSources "tests/hitl/lib"
       let inp = "tests" </> "hitl" </> "top" </> group <.> "hs"
 
       need $ [ projectShake, projectClash, inp ]
@@ -260,7 +260,7 @@ hitltRules group component defines = do
       putInfo "Generating HDL with clash ..."
 
       cabal <- ?getCabal
-      cmd_ cabal "build" (pkgName <> ":hitlt-instances")
+      cmd_ cabal "--verbose=0" "build" (pkgName <> ":hitlt-instances")
       liftIO $ createDirectoryIfMissing True
         $ bdir </> "01-clash"
 
