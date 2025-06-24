@@ -31,18 +31,12 @@ instance Resize (HWFraction denMax) where
   truncateB (HWFraction n s) = HWFraction n (truncateB s)
 
 instance (KnownNat denMax, KnownNat len) => Num (HWFraction denMax len) where
-  (+) :: HWFraction denMax len -> HWFraction denMax len -> HWFraction denMax len
   (HWFraction n s) + (HWFraction m t) =
    if n >= m -- First number has a bigger denominator
     then HWFraction n (s + shiftL t (fromEnum $ n - m))
     else HWFraction m (t + shiftL s (fromEnum $ m - n))
-  (*) :: HWFraction denMax len -> HWFraction denMax len -> HWFraction denMax len
   (HWFraction n s) * (HWFraction m t) = HWFraction (n + m) (s * t)
-  abs :: HWFraction denMax len -> HWFraction denMax len
   abs (HWFraction n s) = HWFraction n (abs s)
-  signum :: HWFraction denMax len -> HWFraction denMax len
   signum (HWFraction _ s) = HWFraction 0 (signum s)
-  fromInteger :: Integer -> HWFraction denMax len
   fromInteger = HWFraction 0 . fromInteger
-  negate :: HWFraction denMax len -> HWFraction denMax len
   negate (HWFraction n s) = HWFraction n (negate s)

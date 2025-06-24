@@ -11,9 +11,8 @@ import Clash.Cores.UART (uart)
 
 import Domain (Dom48, Dom12)
 import Pll (orangePll12)
-import Clash.Crypto.ECDSA.Modulo (Mod(..), ModSize)
+import Clash.Crypto.ECDSA.Modulo (ModSize)
 import Clash.Crypto.ECDSA.InverseModulo (fastGcdSequential)
-import Clash.Crypto.ECDSA.Modulo (unMod)
 import Data.Maybe (isJust, fromMaybe)
 
 -- allows to select the UART baud via a CPP define
@@ -43,9 +42,9 @@ top rx = tx
 
   toggleSwitch = isJust <$> dataLine
   toggle = register False $ mux toggleSwitch (not <$> toggle) toggle
-  dataLine = fmap (Mod . bitCoerce) <$> mealy bufferStep (0, def) rxData
+  dataLine = fmap bitCoerce <$> mealy bufferStep (0, def) rxData
   dataReg = register 0 $ mux (isJust <$> dataLine) (fromMaybe 0 <$> dataLine) dataReg
-  result = register Nothing $ fmap (bitCoerce . unMod) <$> fastGcdSequential @Q @Dom12
+  result = register Nothing $ fmap bitCoerce <$> fastGcdSequential @Q @Dom12
     toggle dataReg
 
   bufferStep ::

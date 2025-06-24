@@ -17,7 +17,7 @@ where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo
- (ModSize, Mod (..), unMod, createMod, moduloShift, computeModuloPos)
+ (ModSize, Mod (..), moduloShift, computeModuloPos)
 import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
@@ -48,7 +48,7 @@ bea toggle s | Dict <- lemmaModSize @m =
            (BeaState m, Maybe (Unsigned (ModSize m)))
   _ ~~> Just a =
    (BeaRunning BeaStart
-    (extend @_ @_ @(ModSize m - 1) $ unsignedToSigned $ bitCoerce $ unMod a)
+    (extend @_ @_ @(ModSize m - 1) . unsignedToSigned . bitCoerce $ a)
     (natToNum @m) 1 0, Nothing)
   BeaIdle ~~> Nothing = (BeaIdle, Nothing)
   BeaRunning mode u v x y ~~> Nothing =
@@ -103,7 +103,7 @@ bea toggle s | Dict <- lemmaModSize @m =
   toggleSwitched = toggle ./=. register False toggle
   valueM = mux toggleSwitched (Just <$> s) (pure Nothing)
  in
-  fmap (createMod . bitCoerce) <$> mealy (~~>) BeaIdle valueM
+  fmap bitCoerce <$> mealy (~~>) BeaIdle valueM
 
 type BeaData m = Signed (ModSize m * 2)
 
@@ -203,7 +203,7 @@ fastGcdSequential toggle s
    tmpMod = computeModuloPos @m toggleModulo $
      register 0 $ maybe 0 signedToUnsigned <$> divFrac
    moduloShiftedFraction :: Signal dom (Maybe (Unsigned (ModSize m)))
-   moduloShiftedFraction = fmap (bitCoerce . unMod) <$>
+   moduloShiftedFraction = fmap bitCoerce <$>
     moduloShift @m toggleShift (register 0 (fromMaybe 0 <$> modFraction)) shifts
    fuSign :: Signal dom (Maybe Bit)
    fuSign = register Nothing $ mux (isJust <$> divFrac) (fmap msb <$> divFrac) fuSign
