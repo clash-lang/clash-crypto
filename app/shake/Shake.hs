@@ -113,6 +113,7 @@ shakeRules cfgs wanted = do
   hitltRules "FltCtmi" "FltCtmi" []
   hitltRules "Karatsuba" "Karatsuba" []
   hitltRules "Modulo" "Modulo" []
+  hitltRules "SictMi" "SictMi" []
 
   -- project apps
 

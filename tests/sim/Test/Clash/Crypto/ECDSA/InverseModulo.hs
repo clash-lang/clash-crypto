@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 {-|
 Module      : Test.Clash.Crypto.ECDSA.InverseModulo
 Copyright   : Copyright © 2025 QBayLogic B.V.
@@ -10,7 +11,8 @@ Test suite for 'Clash.Crypto.ECDSA.InverseModulo'.
 
 module Test.Clash.Crypto.ECDSA.InverseModulo (tastyTests) where
 
-import Clash.Crypto.ECDSA.InverseModulo (bea, fastGcdSequential, fltCtmi)
+import Clash.Crypto.ECDSA.InverseModulo
+  (bea, fastGcdSequential, fltCtmi, sictMiSequential, deriveSictPrecomp)
 import Clash.Crypto.ECDSA.Modulo
 import Clash.Prelude hiding (Mod)
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
@@ -27,6 +29,8 @@ import qualified Data.Modular as Modular
 -- TODO: Once all PRs are merged, move this to one place.
 type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
 
+deriveSictPrecomp @115792089210356248762697446949407573530086143415290314195533631308867097853951
+
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
   [ localOption (HedgehogTestLimit (Just 1000)) $
@@ -34,7 +38,9 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
     localOption (HedgehogTestLimit (Just 100)) $
       testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
     localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Functional equality of FLT-CTMI" $ invModuloProperty fltCtmi]
+      testProperty "Functional equality of FLT-CTMI" $ invModuloProperty fltCtmi,
+    localOption (HedgehogTestLimit (Just 100)) $
+      testProperty "Functional equality of SICT-MI" $ invModuloProperty sictMiSequential]
 
 type InvModuloComponent m dom =
  HiddenClockResetEnable dom =>
