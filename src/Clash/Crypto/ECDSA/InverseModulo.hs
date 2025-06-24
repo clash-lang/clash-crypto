@@ -20,7 +20,7 @@ where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo
- (ModSize, Mod (..), unMod, createMod, moduloShift, computeModuloPos, computeModulo)
+ (ModSize, Mod (..), moduloShift, computeModuloPos, computeModulo)
 import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
