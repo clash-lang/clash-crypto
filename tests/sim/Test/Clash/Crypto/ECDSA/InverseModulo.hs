@@ -10,7 +10,7 @@ Test suite for 'Clash.Crypto.ECDSA.InverseModulo'.
 
 module Test.Clash.Crypto.ECDSA.InverseModulo where
 
-import Clash.Crypto.ECDSA.InverseModulo (bea)
+import Clash.Crypto.ECDSA.InverseModulo (bea, fastGcdSequential)
 import Clash.Crypto.ECDSA.Modulo
 import Clash.Prelude hiding (Mod)
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
@@ -52,7 +52,8 @@ myProp = property $ do
     let r = catMaybes $
             sampleN @System 10000000 $
             withClockResetEnable clockGen resetGen enableGen $
-            bea @m (fromList toggleInput) (fromList $ List.repeat input)
+            -- bea @m (fromList toggleInput) (fromList $ List.repeat input)
+            fastGcdSequential @m (fromList toggleInput) (fromList $ List.repeat input)
     in case listToMaybe r of
      Just a  -> a
      Nothing -> error "The returned list was empty"

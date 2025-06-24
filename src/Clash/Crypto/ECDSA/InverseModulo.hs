@@ -8,15 +8,27 @@ Portability : POSIX
 Implementations of inverse modulo algorithms.
 -}
 
-module Clash.Crypto.ECDSA.InverseModulo (bea) where
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
+module Clash.Crypto.ECDSA.InverseModulo
+ (bea, divSteps, fastGcdSequential, Precomp)
+where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
-import Clash.Crypto.ECDSA.Modulo (ModSize, Mod (..), unMod, createMod)
+import Clash.Crypto.ECDSA.Modulo
+ (ModSize, Mod (..), unMod, createMod, moduloShift, computeModuloPos)
 import Clash.Crypto.ECDSA.Utils (signedToUnsigned, unsignedToSigned)
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
+import qualified GHC.TypeLits as P
+import Data.Type.Bool (If)
+import Clash.Crypto.ECDSA.Fraction (HWFraction (HWFraction), shiftRFraction)
+import Unsafe.Coerce (unsafeCoerce)
+import qualified Data.Functor as F
+import Data.Maybe (isJust, fromMaybe)
+import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
 
--- * Working implementations
+-- * Binary Euclidean Algorithm
 
 -- |A streaming implementation of the Binary Euclidean Algorithm.
 -- It computes the inverse of a positive integer modulo m.
@@ -103,3 +115,121 @@ data BeaState (m :: Nat)
   = BeaIdle
   | BeaRunning BeaMode (BeaData m) (BeaData m) (BeaData m) (BeaData m)
   deriving (Generic, NFDataX, Show)
+
+-- * FastGCD
+
+-- |Number of iterations for FastGCD based on the bitlength.
+type Iterations (d :: Nat) =
+ If (d <=? 45) (Div (49 * d + 80) 17) (Div (49 * d + 57) 17)
+
+-- |Precomputed value used by FastGCD.
+type Precomp (f :: Nat) =
+ P.Mod ((Div (f + 1) 2) ^ (Iterations (ModSize f) - 1)) f
+
+type MulRegisterSize = 36
+type GCDStreamingStages = 3
+
+type DenMax m = Iterations (ModSize m) + 1
+
+data FGCDComputationState t =
+ Finished     |
+ Start t      |
+ Step t
+ deriving (Generic, NFDataX, Show)
+
+type FastGCDState m len =
+ FGCDComputationState (Index (len + 1), Signed (ModSize len + 1), Signed (len + 1),
+  Signed (len + 1), HWFraction (DenMax m) len, HWFraction (DenMax m) len)
+
+-- |A sequential implementation of the divSteps2 function described in
+-- Bernstein/Yang's paper Fast constant-time gcd computation and modular
+-- inversion.
+divSteps :: forall m len dom.
+ (HiddenClockResetEnable dom, KnownNat m, KnownDomain dom, 1 <= m,
+  KnownNat len, len ~ Iterations (ModSize m), 1 <= len) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Unsigned (ModSize m)) ->
+ Signal dom (Maybe (Signed (len + 1), HWFraction (DenMax m) len))
+divSteps toggle value = mealy (~~>) Finished valueM
+  where
+   toggleSwitched = toggle ./=. register False toggle
+   valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+   (~~>) :: FastGCDState m len ->
+    Maybe (Unsigned (ModSize m)) ->
+    (FastGCDState m len, Maybe (Signed (len + 1), HWFraction (DenMax m) len))
+   Finished ~~> Nothing = (Finished, Nothing)
+   Finished ~~> Just g  =
+    (Start (maxBound, 1,
+     unsignedToSigned $ natToNum @m,
+     unsignedToSigned $ resize g, 0, 1), Nothing)
+   Start (0, _, f, _, v, _) ~~> _ = (Finished, Just (f, v))
+   Start (left, delta, f, g, v, r) ~~> _ =
+    if mask0 then
+     (Step (left, delta, f, g, v, r), Nothing)
+    else
+     (Step (left, negate delta, g, negate f, r, negate v), Nothing)
+    where mask0 = (delta <= 0) || (g .&. 1 == 0)
+   Step (left, delta, f, g, v, r) ~~> _ =
+     (Start (left - 1, delta + 1, f, g'', v, r''), Nothing)
+     where
+      (g', r') = if g0 then (g + f, r + v) else (g, r)
+      g'' = shiftR g' 1
+      r'' = shiftRFraction r'
+      g0 = bitToBool $ lsb g .&. 1
+
+-- |A sequential implementation for FastGCD. It shouldn't be used directly,
+-- because better resource usage could be achieved by sharing subcomponents.
+fastGcdSequential :: forall m dom.
+ (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Mod m) ->
+ Signal dom (Maybe (Mod m))
+fastGcdSequential toggle s
+ | Dict <- lemmaModSize @m
+ , Dict <- lemmaIterations @(ModSize m)
+ , Dict <- lemmaGeneralizedIterations @(ModSize m)
+ = let
+   -- Precomputed value for the algorithm.
+   precomp :: Signal dom (Unsigned (ModSize m))
+   precomp = pure $ natToNum @(Precomp m)
+   divTransform (fu, HWFraction n val) =
+    (if signum fu < 0 then negate val else val, maxBound - n - 1)
+   -- 1. Compute divSteps.
+   divResult = divSteps @m toggle $ bitCoerce . unMod <$> s
+   (divFrac, divShifts) = unbundle $ F.unzip <$> fmap divTransform <$> divResult
+   -- Keeping the shift in memory as we'll use it later on.
+   shifts = mux (isJust <$> divShifts) (fromMaybe 0 <$> divShifts) $
+    register 0 shifts
+   -- 2. Compute the modulo of the outputted value.
+   modFraction = fromMaybe 0 <$>
+    (fmap (\(v,sign) -> if sign == high then negate v else v)
+    <$> (liftA2 (,) <$> tmpMod <*> fuSign))
+   tmpMod = computeModuloPos @m toggleModulo $
+     register 0 $ fromMaybe 0 . fmap signedToUnsigned <$> divFrac
+   moduloShiftedFraction :: Signal dom (Maybe (Unsigned (ModSize m)))
+   -- TODO: Rewrite in a cleaner manner.
+   moduloShiftedFraction = fmap (bitCoerce . unMod) <$>
+    (moduloShift @m toggleShift $ (,) <$>
+     (register 0 modFraction) <*>
+     shifts)
+   fuSign :: Signal dom (Maybe Bit)
+   fuSign = register Nothing $ mux (isJust <$> divFrac) (fmap msb <$> divFrac) fuSign
+   -- Toggles, since they all use registers, the input also need to be delayed.
+   toggleKaratsuba, toggleLastMod, toggleModulo :: Signal dom Bool
+   toggleModulo = register False $ (isJust <$> divFrac) ./=. toggleModulo
+   toggleShift = register False $ (isJust <$> tmpMod) ./=. toggleShift
+   toggleKaratsuba =
+    register False $ (isJust <$> moduloShiftedFraction) ./=. toggleKaratsuba
+   toggleLastMod = register False $ (isJust <$> karatsubaRes) ./=. toggleLastMod
+   karatsubaRes = karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+    toggleKaratsuba (fromMaybe 0 <$> register Nothing moduloShiftedFraction) precomp
+  in
+   computeModuloPos @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
+
+-- * Lemmas
+
+lemmaIterations :: forall d. (KnownNat d, 1 <= d) => Dict (1 <= Iterations d)
+lemmaIterations = unsafeCoerce (Dict :: Dict (0 <= 0))
+
+lemmaGeneralizedIterations :: forall d. (KnownNat d, 1 <= d) => Dict (d <= Iterations d)
+lemmaGeneralizedIterations = unsafeCoerce (Dict :: Dict (0 <= 0))

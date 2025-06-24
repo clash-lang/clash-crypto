@@ -13,7 +13,7 @@ Types and algorithms for modulo integers.
 {-# LANGUAGE DerivingVia #-}
 
 module Clash.Crypto.ECDSA.Modulo
- (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize)
+ (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize, moduloShift)
 where
 
 import Clash.Crypto.ECDSA.Utils
@@ -56,7 +56,7 @@ computeModuloPos toggle value =
  fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle
-  valueM = mux toggleSwitched (Just . resize <$> value) (pure Nothing)
+  valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
   m :: Unsigned len
   m = natToNum @m
   maxShifts :: Index (shifts + 1)
@@ -72,3 +72,36 @@ computeModuloPos toggle value =
    let shiftedm :: Unsigned len
        shiftedm = m `shiftL` fromEnum s
    in (Working (s - 1, if n < shiftedm then n else n - shiftedm), Nothing)
+
+-- |Shifts a number to the left and computes the modulo as it shifts it.
+-- Used by FastGCD.
+-- Takes constant time, taking `maxShifts` cycles.
+moduloShift :: forall m maxShifts dom.
+ (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom,
+  KnownNat maxShifts, 1 <= m) =>
+ Signal dom Bool ->
+ Signal dom (Mod m, Index maxShifts) ->
+ Signal dom (Maybe (Mod m))
+moduloShift toggle value = mealy (~~>) Finished valueM
+ where
+  toggleSwitched = toggle ./=. register False toggle
+  valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+  (~~>) ::
+   ComputationState (Unsigned (ModSize m + 1), Index maxShifts, Index maxShifts) ->
+   Maybe (Mod m, Index maxShifts) ->
+   (ComputationState (Unsigned (ModSize m + 1), Index maxShifts, Index maxShifts),
+    Maybe (Mod m))
+  _ ~~> Just (n, 0) = (Finished, Just n)
+  _ ~~> Just (n, shifts) =
+   (Working ((extend . bitCoerce . unMod $ n) `shiftL` 1, maxBound, shifts - 1), Nothing)
+  Finished ~~> Nothing = (Finished, Nothing)
+  Working (n, 0, 0) ~~> Nothing =
+   (Finished, Just . Mod @m . bitCoerce $ truncateB res)
+   where res = if n < natToNum @m then n else n - natToNum @m
+  Working (n, m, shifts) ~~> Nothing =
+   if shifts == m then
+    let res = if n < natToNum @m then n else n - natToNum @m
+    in (Working (res `shiftL` 1, m - 1, shifts - 1), Nothing)
+   else
+    (Working (n, m - 1, shifts), Nothing)
+
