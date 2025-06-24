@@ -31,7 +31,7 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
-import qualified Data.ByteString as BS (concatMap, null, head)
+import qualified Data.ByteString as BS (concatMap, null, uncons)
 import qualified System.Timeout  as TO (timeout)
 
 import qualified Hedgehog.Gen   as Gen (bytes, integral)
@@ -254,7 +254,7 @@ upload shake sem dev settings name
  where
   waitForReadyByte serial = do
     xs ← hGet serial 1
-    unless (not (BS.null xs) && BS.head xs == bitCoerce isReadyIndicator)
+    unless (maybe False ((== bitCoerce isReadyIndicator) . fst) $ BS.uncons xs)
       $ waitForReadyByte serial
 
 runHitlt ∷
