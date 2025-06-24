@@ -18,6 +18,7 @@ common common-options
     DerivingStrategies
     LambdaCase
     NoStarIsType
+    OverloadedRecordDot
     TypeFamilies
     UnicodeSyntax
     ViewPatterns
@@ -86,6 +87,7 @@ library
     Clash.Crypto.Hash.SHA.Streaming
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
+    Clash.Crypto.Hash.HMAC
     Clash.Signal.Delayed.Extra
     Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
@@ -99,6 +101,7 @@ test-suite simulation
   main-is: Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.Hash.HMAC
     Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
@@ -110,10 +113,12 @@ test-suite simulation
     , cryptohash
     , hedgehog >= 1.0
     , modular-arithmetic
+    , SHA
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
     , tasty-hunit
     , typelits-witnesses
+    , utf8-string
 
 library hitlt-shared
   import: common-options
