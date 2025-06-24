@@ -20,6 +20,7 @@ import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Clash.Num.Wrapping (Wrapping (Wrapping))
 import Data.Coerce (coerce)
+import Clash.Netlist.Util (orNothing)
 
 -- * Useful types
 
@@ -56,7 +57,7 @@ computeModuloPos toggle value =
  fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle
-  valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+  valueM = orNothing <$> toggleSwitched <*> value
   m :: Unsigned len
   m = natToNum @m
   maxShifts :: Index (shifts + 1)
@@ -85,7 +86,7 @@ moduloShift :: forall m maxShifts dom.
 moduloShift toggle value = mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle
-  valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+  valueM = orNothing <$> toggleSwitched <*> value
   (~~>) ::
    ComputationState (Unsigned (ModSize m + 1), Index maxShifts, Index maxShifts) ->
    Maybe (Mod m, Index maxShifts) ->

@@ -9,6 +9,8 @@ Implementations of inverse modulo algorithms.
 -}
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
  (bea, divSteps, fastGcdSequential, Precomp)
@@ -17,7 +19,7 @@ where
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo
  (ModSize, Mod (..), unMod, createMod, moduloShift, computeModuloPos)
-import Clash.Crypto.ECDSA.Utils (signedToUnsigned, unsignedToSigned)
+import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
 import qualified GHC.TypeLits as P
@@ -131,15 +133,16 @@ type GCDStreamingStages = 3
 
 type DenMax m = Iterations (ModSize m) + 1
 
-data FGCDComputationState t =
- Finished     |
- Start t      |
- Step t
- deriving (Generic, NFDataX, Show)
+data FastGCDRecord m len = FastGCD
+ { remaining :: Index (len + 1)
+ , delta     :: Signed (ModSize len + 1)
+ , f         :: Signed (len + 1)
+ , g         :: Signed (len + 1)
+ , v         :: HWFraction (DenMax m) len
+ , r         :: HWFraction (DenMax m) len
+ } deriving (Generic, NFDataX)
 
-type FastGCDState m len =
- FGCDComputationState (Index (len + 1), Signed (ModSize len + 1), Signed (len + 1),
-  Signed (len + 1), HWFraction (DenMax m) len, HWFraction (DenMax m) len)
+type FastGCDState m len = ComputationState (FastGCDRecord m len)
 
 -- |A sequential implementation of the divSteps2 function described in
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
@@ -154,28 +157,23 @@ divSteps toggle value = mealy (~~>) Finished valueM
   where
    toggleSwitched = toggle ./=. register False toggle
    valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+   shuffle state@(FastGCD {..}) =
+     if (delta <= 0) || (not . bitToBool . lsb $ g)
+     then state
+     else state { delta = negate delta, f = g, g = negate f, v = r, r = negate v }
+   shifter state@(FastGCD {..}) =
+    let
+     (g1, r1) = if bitToBool . lsb $ g then (g + f, r + v) else (g, r)
+    in state { remaining = remaining - 1, delta = delta + 1
+             , g = shiftR g1 1, r = shiftRFraction r1 }
    (~~>) :: FastGCDState m len ->
     Maybe (Unsigned (ModSize m)) ->
     (FastGCDState m len, Maybe (Signed (len + 1), HWFraction (DenMax m) len))
    Finished ~~> Nothing = (Finished, Nothing)
    Finished ~~> Just g  =
-    (Start (maxBound, 1,
-     unsignedToSigned $ natToNum @m,
-     unsignedToSigned $ resize g, 0, 1), Nothing)
-   Start (0, _, f, _, v, _) ~~> _ = (Finished, Just (f, v))
-   Start (left, delta, f, g, v, r) ~~> _ =
-    if mask0 then
-     (Step (left, delta, f, g, v, r), Nothing)
-    else
-     (Step (left, negate delta, g, negate f, r, negate v), Nothing)
-    where mask0 = (delta <= 0) || (g .&. 1 == 0)
-   Step (left, delta, f, g, v, r) ~~> _ =
-     (Start (left - 1, delta + 1, f, g'', v, r''), Nothing)
-     where
-      (g', r') = if g0 then (g + f, r + v) else (g, r)
-      g'' = shiftR g' 1
-      r'' = shiftRFraction r'
-      g0 = bitToBool $ lsb g .&. 1
+    (Working $ FastGCD maxBound 1 (natToNum @m) (unsignedToSigned . resize $ g) 0 1, Nothing)
+   Working (FastGCD { remaining = 0, .. }) ~~> _ = (Finished, Just (f, v))
+   Working state ~~> _ = (Working . shifter . shuffle $ state, Nothing)
 
 -- |A sequential implementation for FastGCD. It shouldn't be used directly,
 -- because better resource usage could be achieved by sharing subcomponents.
@@ -195,7 +193,7 @@ fastGcdSequential toggle s
    divTransform (fu, HWFraction n val) =
     (if signum fu < 0 then negate val else val, maxBound - n - 1)
    -- 1. Compute divSteps.
-   divResult = divSteps @m toggle $ bitCoerce . unMod <$> s
+   divResult = divSteps @m toggle $ bitCoerce <$> s
    (divFrac, divShifts) = unbundle $ F.unzip <$> fmap divTransform <$> divResult
    -- Keeping the shift in memory as we'll use it later on.
    shifts = mux (isJust <$> divShifts) (fromMaybe 0 <$> divShifts) $
