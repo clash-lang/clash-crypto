@@ -23,6 +23,7 @@ import Data.Constraint (Dict (..))
 import Data.Functor ((<&>))
 import Data.Maybe (isJust)
 import Unsafe.Coerce (unsafeCoerce)
+import GHC.TypeNats.Proof
 
 -- * Combinatorial implementations
 
@@ -115,7 +116,7 @@ karatsubaSequentialGated# UZero toggle x y = register Nothing $
  (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
 karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
  | _ :: UNat streamLeft <- streamingStagesLeft
- , Dict <- lemmaPow @streamLeft
+ , Rewrite <- using @(LemmaPow streamLeft)
  , Dict <- lemmaLowIsLess @s
  , Dict <- lemmaLowIsLessThanHigh @s
  =

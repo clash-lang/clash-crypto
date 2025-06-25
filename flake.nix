@@ -4,8 +4,9 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
+    ghc-typelits-proof-assist.url = "github:clash-lang/ghc-typelits-proof-assist";
   };
-  outputs = { self, nixpkgs, flake-utils, ecpprog, ... }:
+  outputs = { self, nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = nixpkgs.legacyPackages.${system};
           serialportSrc = pkgs.fetchFromGitHub {
@@ -31,9 +32,9 @@
               (clashCompilerSrc + "/clash-lib") { };
             clash-ghc = prev.callCabal2nix "clash-ghc"
               (clashCompilerSrc + "/clash-ghc") { };
-            # Otherwise fails on `template-haskell < 2.22`.
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
+            prototype-ghc-prover = doJailbreak (dontCheck (prev.callCabal2nix "prototype-ghc-prover" ghc-typelits-proof-assist.outPath { }));
           };
           myHsPkgs = pkgs.haskell.packages.ghc910.extend overlay;
       in
