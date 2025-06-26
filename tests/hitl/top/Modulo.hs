@@ -11,7 +11,7 @@ import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
-import Clash.Crypto.ECDSA.Modulo (computeModuloPos)
+import Clash.Crypto.ECDSA.Modulo (computeModuloUnsigned)
 
 import Data.Maybe (isJust)
 
@@ -34,6 +34,6 @@ topEntity (orangePll24 → (clk, rst))
         toggle = register False $ toggle ./=. (isJust <$> request)
         x = regMaybe def request
       in
-        computeModuloPos @Q @256 toggle x
+        computeModuloUnsigned @Q @256 toggle x
 
 makeTopEntity 'topEntity

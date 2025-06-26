@@ -70,7 +70,7 @@ library
     , template-haskell
   exposed-modules:
     Clash.Crypto.ECDSA.Fraction
-    Clash.Crypto.ECDSA.Internal.InverseModulo
+    Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas

@@ -1,12 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Clash.Crypto.ECDSA.Internal.InverseModulo where
+module Clash.Crypto.ECDSA.InverseModulo.Internal where
 
 import GHC.TypeLits.KnownNat (KnownNat3 (natSing3), SNatKn (SNatKn), nameToSymbol)
 import qualified Language.Haskell.TH as TH
 import Clash.Prelude
 import Clash.Crypto.ECDSA.Modulo (ModSize)
+
+-- This is a workaround using TH for type-level computations. Implementing
+-- this computation as a type family works in simulation but not in synthesis.
 
 type SictIterations m = 2 * ModSize m
 type SictPrecompTyp m = ModInverse 2 m (m - SictIterations m - 1)

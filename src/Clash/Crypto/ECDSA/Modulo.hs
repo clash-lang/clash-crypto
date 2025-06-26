@@ -13,7 +13,8 @@ Types and algorithms for modulo integers.
 {-# LANGUAGE DerivingVia #-}
 
 module Clash.Crypto.ECDSA.Modulo
- (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize, moduloShift, computeModulo)
+ (Mod(..), computeModuloUnsigned, Prime, unMod, createMod, ModSize,
+  moduloShift, computeModuloSigned)
 where
 
 import Clash.Crypto.ECDSA.Utils
@@ -45,15 +46,15 @@ createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
 createMod = coerce
 
 -- |A streaming implementation of the modulo operation using long division
--- in a binary base
+-- in a binary base. Works on unsigned values.
 -- This implementation is constant-time, as it runs in `shifts` operations.
-computeModuloPos :: forall m len shifts dom.
+computeModuloUnsigned :: forall m len shifts dom.
  (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
   HiddenClockResetEnable dom, shifts ~ len - ModSize m, KnownNat shifts) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Unsigned len) ->
  Signal dom (Maybe (Mod m))
-computeModuloPos toggle value =
+computeModuloUnsigned toggle value =
  fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle
@@ -74,15 +75,15 @@ computeModuloPos toggle value =
    in (Working (s - 1, if n < shiftedm then n else n - shiftedm), Nothing)
 
 -- |A streaming implementation of the modulo operation using long division
--- in a binary base
+-- in a binary base. Works on signed values.
 -- This implementation is constant-time, as it runs in `shifts` operations.
-computeModulo :: forall m len shifts dom.
+computeModuloSigned :: forall m len shifts dom.
  (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
   HiddenClockResetEnable dom, shifts ~ len - ModSize m, KnownNat shifts) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Signed (len + 1)) ->
  Signal dom (Maybe (Mod m))
-computeModulo toggle value =
+computeModuloSigned toggle value =
  fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle

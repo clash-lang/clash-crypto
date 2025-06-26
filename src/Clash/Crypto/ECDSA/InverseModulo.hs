@@ -9,18 +9,20 @@ Implementations of inverse modulo algorithms.
 -}
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE RecordWildCards, DuplicateRecordFields #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
- (bea, divSteps, fastGcdSequential, fltCtmi, Precomp, sictMiLoop, sictMiSequential, deriveSictPrecomp)
+ (bea, divSteps, fastGcdSequential, fltCtmi, Precomp, sictMiSequential,
+  deriveSictPrecomp)
 where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo
- (ModSize, Mod (..), moduloShift, computeModuloPos, computeModulo)
+ (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
 import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
@@ -32,7 +34,8 @@ import qualified Data.Functor as F
 import Data.Maybe (isJust, fromMaybe)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
 import Clash.Netlist.Util (orNothing)
-import Clash.Crypto.ECDSA.Internal.InverseModulo
+import Clash.Crypto.ECDSA.InverseModulo.Internal
+import Control.Monad (guard)
 
 -- * Binary Euclidean Algorithm
 
@@ -208,7 +211,7 @@ fastGcdSequential toggle s
    -- 2. Compute the modulo of the outputted value.
    modFraction =
     liftA2 (\sign -> if sign == high then negate else id) <$> fuSign <*> tmpMod
-   tmpMod = computeModuloPos @m toggleModulo $
+   tmpMod = computeModuloUnsigned @m toggleModulo $
      register 0 $ maybe 0 signedToUnsigned <$> divFrac
    moduloShiftedFraction :: Signal dom (Maybe (Unsigned (ModSize m)))
    moduloShiftedFraction = fmap bitCoerce <$>
@@ -225,7 +228,7 @@ fastGcdSequential toggle s
    karatsubaRes = karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     toggleKaratsuba (fromMaybe 0 <$> register Nothing moduloShiftedFraction) precomp
   in
-   computeModuloPos @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
+   computeModuloUnsigned @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
 
 type FLTIterations m = ModSize (m - 2)
 
@@ -256,9 +259,12 @@ fltCtmi toggle value
    @GCDStreamingStages @MulRegisterSize @(ModSize m) @(ModSize m)
    toggleMul (bitCoerce <$> c) $ bitCoerce <$> mux switch value c
   moduloMul =
-   computeModuloPos @m toggleModulo $ register 0 $ fromMaybe 0 <$> karatsubaMul
-  c = register 0 $ mux (isJust <$> moduloMul) (fromMaybe 0 <$> moduloMul) $
-   mux toggleSwitched value c
+   computeModuloUnsigned @m toggleModulo $ register 0 $ fromMaybe 0 <$> karatsubaMul
+  c = regMaybe 0
+   $ (\m t v -> m <|> (guard t >> pure v))
+       <$> moduloMul
+       <*> toggleSwitched
+       <*> value
   (switch, restart, end) =
    unbundle $ mealy (~~>) FLTWaiting $
    bundle (toggleSwitched, isJust <$> moduloMul)
@@ -307,7 +313,7 @@ sictMiLoop :: forall m dom.
 sictMiLoop toggle value = mealy (~~>) Finished valueM
   where
    toggleSwitched = toggle ./=. register False toggle
-   valueM = mux toggleSwitched (Just <$> value) (pure Nothing)
+   valueM = orNothing <$> toggleSwitched <*> value
    firstOp s z x y = (if s `xor` z then x else 0) + (if s && z then y else negate y)
    secondOp s z x y = (if s then x else 0) +
     if z then (if s then negate y else y) else (if s then 0 else y `shiftL` 1)
@@ -349,7 +355,7 @@ sictMiSequential toggle s
    precomp :: Signal dom (Unsigned (ModSize m))
    precomp = pure $ getSictPrecomp @m
    divResult = sictMiLoop @m toggle $ bitCoerce <$> s
-   modResult = computeModulo @m @(SictIterations m * 2) toggleModulo $ fromMaybe 0 <$> register Nothing divResult
+   modResult = computeModuloSigned @m @(SictIterations m * 2) toggleModulo $ fromMaybe 0 <$> register Nothing divResult
    -- Toggles, since they all use registers, the input also need to be delayed.
    toggleKaratsuba, toggleLastMod, toggleModulo :: Signal dom Bool
    toggleModulo = register False $ (isJust <$> divResult) ./=. toggleModulo
@@ -359,7 +365,7 @@ sictMiSequential toggle s
    karatsubaRes = karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     toggleKaratsuba (bitCoerce . fromMaybe 0 <$> register Nothing modResult) precomp
   in
-   computeModuloPos @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
+   computeModuloUnsigned @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
 -- * Lemmas
 
 lemmaIterations :: forall d. (KnownNat d, 1 <= d) => Dict (1 <= Iterations d)
