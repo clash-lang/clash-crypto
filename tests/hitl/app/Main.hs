@@ -101,6 +101,11 @@ main = do
             [
               testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
+            , testInverseModulo "FltCtmi" sem dev settings
+            -- We don't enable the SictMi test because yosys can't synthesize it.
+            -- It might be related to the following issue:
+            -- https://github.com/YosysHQ/nextpnr/issues/208
+            -- , testInverseModulo "SictMi" sem dev settings
             ]
         ]
 

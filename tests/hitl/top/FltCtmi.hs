@@ -1,7 +1,8 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
-module Modulo (topEntity) where
+
+module FltCtmi where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
@@ -11,7 +12,7 @@ import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
-import Clash.Crypto.ECDSA.Modulo (computeModuloUnsigned)
+import Clash.Crypto.ECDSA.InverseModulo (fltCtmi)
 
 import Data.Maybe (isJust)
 
@@ -32,8 +33,8 @@ topEntity (orangePll24 → (clk, rst))
       let
         -- switch the toggle when a new value is received
         toggle = register False $ toggle ./=. (isJust <$> request)
-        x = regMaybe def request
+        x = regMaybe 0 request
       in
-        computeModuloUnsigned @Q @256 toggle x
+        fltCtmi @Q toggle x
 
 makeTopEntity 'topEntity

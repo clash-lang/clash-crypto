@@ -10,14 +10,19 @@ Implementations of inverse modulo algorithms.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
- (bea, divSteps, fastGcdSequential, Precomp)
+ (bea, divSteps, fastGcdSequential, fltCtmi, Precomp, sictMiSequential,
+  deriveSictPrecomp)
 where
 
 import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
 import Clash.Crypto.ECDSA.Modulo
- (ModSize, Mod (..), moduloShift, computeModuloPos)
+ (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
 import Clash.Crypto.ECDSA.Utils
 import Clash.Prelude hiding (Mod)
 import Data.Constraint (Dict (Dict))
@@ -28,6 +33,9 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Data.Functor as F
 import Data.Maybe (isJust, fromMaybe)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
+import Clash.Netlist.Util (orNothing)
+import Clash.Crypto.ECDSA.InverseModulo.Internal
+import Control.Monad (guard)
 
 -- * Binary Euclidean Algorithm
 
@@ -123,35 +131,37 @@ data BeaState (m :: Nat)
 type Iterations (d :: Nat) =
  If (d <=? 45) (Div (49 * d + 80) 17) (Div (49 * d + 57) 17)
 
+type FastGCDIterations d = Iterations (ModSize d)
+
 -- |Precomputed value used by FastGCD.
 type Precomp (f :: Nat) =
- P.Mod (Div (f + 1) 2 ^ (Iterations (ModSize f) - 1)) f
+ P.Mod (Div (f + 1) 2 ^ (FastGCDIterations f - 1)) f
 
 type MulRegisterSize = 36
 type GCDStreamingStages = 3
 
 type DenMax m = Iterations (ModSize m) + 1
 
-data FastGCDRecord m len = FastGCD
- { remaining :: Index (len + 1)
- , delta     :: Signed (ModSize len + 1)
- , f         :: Signed (len + 1)
- , g         :: Signed (len + 1)
- , v         :: HWFraction (DenMax m) len
- , r         :: HWFraction (DenMax m) len
+data FastGCDRecord m = FastGCD
+ { remaining :: Index (FastGCDIterations m + 1)
+ , delta     :: Signed (ModSize (Iterations (ModSize m)) + 1)
+ , f         :: Signed (Iterations (ModSize m) + 1)
+ , g         :: Signed (Iterations (ModSize m) + 1)
+ , v         :: HWFraction (DenMax m) (Iterations (ModSize m))
+ , r         :: HWFraction (DenMax m) (Iterations (ModSize m))
  } deriving (Generic, NFDataX)
 
-type FastGCDState m len = ComputationState (FastGCDRecord m len)
+type FastGCDState m = ComputationState (FastGCDRecord m)
 
 -- |A sequential implementation of the divSteps2 function described in
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
 -- inversion.
-divSteps :: forall m len dom.
- (HiddenClockResetEnable dom, KnownNat m, KnownDomain dom, 1 <= m,
-  KnownNat len, len ~ Iterations (ModSize m), 1 <= len) =>
+divSteps :: forall m dom.
+ (HiddenClockResetEnable dom, KnownNat m, KnownDomain dom, 1 <= m, 1 <= FastGCDIterations m,
+  ModSize m <= FastGCDIterations m) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Unsigned (ModSize m)) ->
- Signal dom (Maybe (Signed (len + 1), HWFraction (DenMax m) len))
+ Signal dom (Maybe (Signed (DenMax m), HWFraction (DenMax m) (FastGCDIterations m)))
 divSteps toggle value = mealy (~~>) Finished valueM
   where
    toggleSwitched = toggle ./=. register False toggle
@@ -165,26 +175,27 @@ divSteps toggle value = mealy (~~>) Finished valueM
      (g1, r1) = if bitToBool . lsb $ g then (g + f, r + v) else (g, r)
     in state { remaining = remaining - 1, delta = delta + 1
              , g = shiftR g1 1, r = shiftRFraction r1 }
-   (~~>) :: FastGCDState m len ->
+   (~~>) :: FastGCDState m ->
     Maybe (Unsigned (ModSize m)) ->
-    (FastGCDState m len, Maybe (Signed (len + 1), HWFraction (DenMax m) len))
+    (FastGCDState m, Maybe (Signed (DenMax m), HWFraction (DenMax m) (FastGCDIterations m)))
    Finished ~~> Nothing = (Finished, Nothing)
    Finished ~~> Just g  =
-    (Working $ FastGCD maxBound 1 (natToNum @m) (unsignedToSigned . resize $ g) 0 1, Nothing)
+    (Working $ FastGCD maxBound 1 (natToNum @m) (unsignedToSigned . resize $ g) 0 1,
+     Nothing)
    Working (FastGCD { remaining = 0, .. }) ~~> _ = (Finished, Just (f, v))
    Working state ~~> _ = (Working . shifter . shuffle $ state, Nothing)
 
 -- |A sequential implementation for FastGCD. It shouldn't be used directly,
 -- because better resource usage could be achieved by sharing subcomponents.
 fastGcdSequential :: forall m dom.
- (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
+ (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= Iterations m,
+  ModSize m <= FastGCDIterations m) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
 fastGcdSequential toggle s
  | Dict <- lemmaModSize @m
  , Dict <- lemmaIterations @(ModSize m)
- , Dict <- lemmaGeneralizedIterations @(ModSize m)
  = let
    -- Precomputed value for the algorithm.
    precomp :: Signal dom (Unsigned (ModSize m))
@@ -200,7 +211,7 @@ fastGcdSequential toggle s
    -- 2. Compute the modulo of the outputted value.
    modFraction =
     liftA2 (\sign -> if sign == high then negate else id) <$> fuSign <*> tmpMod
-   tmpMod = computeModuloPos @m toggleModulo $
+   tmpMod = computeModuloUnsigned @m toggleModulo $
      register 0 $ maybe 0 signedToUnsigned <$> divFrac
    moduloShiftedFraction :: Signal dom (Maybe (Unsigned (ModSize m)))
    moduloShiftedFraction = fmap bitCoerce <$>
@@ -217,12 +228,145 @@ fastGcdSequential toggle s
    karatsubaRes = karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     toggleKaratsuba (fromMaybe 0 <$> register Nothing moduloShiftedFraction) precomp
   in
-   computeModuloPos @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
+   computeModuloUnsigned @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
 
+type FLTIterations m = ModSize (m - 2)
+
+data FLTState t =
+ FLTWaiting  |
+ FLTSquare t |
+ FLTMul t
+ deriving (Generic, NFDataX, Show)
+
+type FLTMode = Bool -- Square or Mul
+
+-- | A working implementation of Inverse Modulo based on Fermat's Little
+-- Theorem. Fine up to 256 bits, and only works with prime moduli.
+fltCtmi :: forall m dom.
+ (KnownNat m, 3 <= m, KnownDomain dom, HiddenClockResetEnable dom) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Mod m) -> -- ^ Number to invert
+ Signal dom (Maybe (Mod m))
+fltCtmi toggle value
+ =
+ let
+  toggleSwitched = toggle ./=. register False toggle
+  k :: Vec (ModSize (m - 2)) Bit
+  k = reverse $ bv2v (natToNum @(m - 2) :: BitVector (ModSize (m - 2)))
+  toggleModulo = register False $ (isJust <$> karatsubaMul) ./=. toggleModulo
+  toggleMul = register False $ restart ./=. toggleMul
+  karatsubaMul = karatsubaSequentialGated
+   @GCDStreamingStages @MulRegisterSize @(ModSize m) @(ModSize m)
+   toggleMul (bitCoerce <$> c) $ bitCoerce <$> mux switch value c
+  moduloMul =
+   computeModuloUnsigned @m toggleModulo $ register 0 $ fromMaybe 0 <$> karatsubaMul
+  c = regMaybe 0
+   $ (\m t v -> m <|> (guard t >> pure v))
+       <$> moduloMul
+       <*> toggleSwitched
+       <*> value
+  (switch, restart, end) =
+   unbundle $ mealy (~~>) FLTWaiting $
+   bundle (toggleSwitched, isJust <$> moduloMul)
+  (~~>) :: FLTState (Index (FLTIterations m)) ->
+   (Bool, Bool) -> -- (restart, got mul result)
+   (FLTState (Index (FLTIterations m)), (FLTMode, Bool, Bool))
+   -- (iterations, square/mul, restart, end)
+  _ ~~> (True, _) = (FLTSquare maxBound, (False, True, False))
+  FLTWaiting ~~> _ = (FLTWaiting, (False, False, False))
+  FLTSquare 0 ~~> _ = (FLTWaiting, (False, False, True))
+  FLTSquare remaining ~~> (_, True) = 
+   -- Check the i-th bit of k
+   if bitToBool $ k !! (remaining - 1) then
+    (FLTMul remaining, (True, True, False))
+   else
+    (FLTSquare $ remaining - 1, (False, True, False))
+  FLTMul remaining ~~> (_, True) =
+    (FLTSquare $ remaining - 1, (False, True, False))
+  -- Waiting for a result.
+  FLTSquare remaining ~~> _ =
+   (FLTSquare remaining, (False, False, False))
+  FLTMul remaining ~~> _ =
+    (FLTMul remaining, (True, False, False))
+ in orNothing <$> end <*> c
+
+-- * SictMi
+
+-- This algorithm comes from Jin and Miyaji's paper Short-Iteration
+-- Constant-Time GCD and Modular inversion.
+
+data SictMiRecord m = SictMi
+ { remaining :: Index (SictIterations m + 1)
+ , u         :: Signed (ModSize m + 1)
+ , v         :: Signed (ModSize m + 1)
+ , q         :: Signed (SictIterations m * 2 + 1)
+ , r         :: Signed (SictIterations m * 2 + 1)
+ } deriving (Generic, NFDataX, Show)
+
+type SictMiState m = ComputationState (SictMiRecord m)
+
+sictMiLoop :: forall m dom.
+ (HiddenClockResetEnable dom, KnownNat m, KnownDomain dom, 1 <= m) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Unsigned (ModSize m)) ->
+ Signal dom (Maybe (Signed (SictIterations m * 2 + 1)))
+sictMiLoop toggle value = mealy (~~>) Finished valueM
+  where
+   toggleSwitched = toggle ./=. register False toggle
+   valueM = orNothing <$> toggleSwitched <*> value
+   firstOp s z x y = (if s `xor` z then x else 0) + (if s && z then y else negate y)
+   secondOp s z x y = (if s then x else 0) +
+    if z then (if s then negate y else y) else (if s then 0 else y `shiftL` 1)
+   initialize input = SictMi maxBound input (natToNum @m) 0 1
+   mainCalc (SictMi {..}) =
+    let
+     s  = bitToBool . lsb $ u
+     z  = bitToBool . lsb $ v
+     t1 = firstOp s z v u
+     t2 = secondOp s z v u `shiftR` 1
+     t3 = firstOp s z q r `shiftL` 1
+     t4 = secondOp s z q r
+    in (remaining, t1, t2, t3, t4)
+   shuffle (remaining, t1, t2, t3, t4) =
+    let
+     s      = t2 >= t1
+     (v, u) = if s then (t2, t1) else (t1, t2)
+     (q, r) = if s then (t4, t3) else (t3, t4)
+    in SictMi (remaining - 1) u v q r
+   (~~>) :: SictMiState m ->
+    Maybe (Unsigned (ModSize m)) ->
+    (SictMiState m, Maybe (Signed (SictIterations m * 2 + 1)))
+   Finished ~~> Nothing = (Finished, Nothing)
+   Finished ~~> Just g  =
+    (Working $ initialize $ resize $ unsignedToSigned g,
+     Nothing)
+   Working (SictMi { remaining = 0, .. }) ~~> _ = (Finished, Just q)
+   Working state ~~> _ = (Working . shuffle . mainCalc $ state, Nothing)
+
+sictMiSequential :: forall m dom.
+ (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom, SictPrecompKnownNat m,
+  1 <= m - 2 * ModSize m, 2 * ModSize m <= m, 1 <= 2 * ModSize m * (m - 1)) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Mod m) -> -- ^ Number to invert
+ Signal dom (Maybe (Mod m))
+sictMiSequential toggle s
+ = let
+   -- Precomputed value for the algorithm.
+   precomp :: Signal dom (Unsigned (ModSize m))
+   precomp = pure $ getSictPrecomp @m
+   divResult = sictMiLoop @m toggle $ bitCoerce <$> s
+   modResult = computeModuloSigned @m @(SictIterations m * 2) toggleModulo $ fromMaybe 0 <$> register Nothing divResult
+   -- Toggles, since they all use registers, the input also need to be delayed.
+   toggleKaratsuba, toggleLastMod, toggleModulo :: Signal dom Bool
+   toggleModulo = register False $ (isJust <$> divResult) ./=. toggleModulo
+   toggleKaratsuba =
+    register False $ (isJust <$> modResult) ./=. toggleKaratsuba
+   toggleLastMod = register False $ (isJust <$> karatsubaRes) ./=. toggleLastMod
+   karatsubaRes = karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+    toggleKaratsuba (bitCoerce . fromMaybe 0 <$> register Nothing modResult) precomp
+  in
+   computeModuloUnsigned @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
 -- * Lemmas
 
 lemmaIterations :: forall d. (KnownNat d, 1 <= d) => Dict (1 <= Iterations d)
 lemmaIterations = unsafeCoerce (Dict :: Dict (0 <= 0))
-
-lemmaGeneralizedIterations :: forall d. (KnownNat d, 1 <= d) => Dict (d <= Iterations d)
-lemmaGeneralizedIterations = unsafeCoerce (Dict :: Dict (0 <= 0))

@@ -13,7 +13,8 @@ Types and algorithms for modulo integers.
 {-# LANGUAGE DerivingVia #-}
 
 module Clash.Crypto.ECDSA.Modulo
- (Mod(..), computeModuloPos, Prime, unMod, createMod, ModSize, moduloShift)
+ (Mod(..), computeModuloUnsigned, Prime, unMod, createMod, ModSize,
+  moduloShift, computeModuloSigned)
 where
 
 import Clash.Crypto.ECDSA.Utils
@@ -45,15 +46,15 @@ createMod :: forall n. (KnownNat n, 1 <= n) => Index n -> Mod n
 createMod = coerce
 
 -- |A streaming implementation of the modulo operation using long division
--- in a binary base
+-- in a binary base. Works on unsigned values.
 -- This implementation is constant-time, as it runs in `shifts` operations.
-computeModuloPos :: forall m len shifts dom.
+computeModuloUnsigned :: forall m len shifts dom.
  (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
   HiddenClockResetEnable dom, shifts ~ len - ModSize m, KnownNat shifts) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Unsigned len) ->
  Signal dom (Maybe (Mod m))
-computeModuloPos toggle value =
+computeModuloUnsigned toggle value =
  fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
  where
   toggleSwitched = toggle ./=. register False toggle
@@ -72,6 +73,37 @@ computeModuloPos toggle value =
   Working (s, n) ~~> Nothing =
    let shiftedm = m `shiftL` fromEnum s
    in (Working (s - 1, if n < shiftedm then n else n - shiftedm), Nothing)
+
+-- |A streaming implementation of the modulo operation using long division
+-- in a binary base. Works on signed values.
+-- This implementation is constant-time, as it runs in `shifts` operations.
+computeModuloSigned :: forall m len shifts dom.
+ (ModSize m <= len, 1 <= m, KnownNat m, KnownNat len, KnownDomain dom,
+  HiddenClockResetEnable dom, shifts ~ len - ModSize m, KnownNat shifts) =>
+ Signal dom Bool -> -- ^ Toggle signal
+ Signal dom (Signed (len + 1)) ->
+ Signal dom (Maybe (Mod m))
+computeModuloSigned toggle value =
+ fmap (Mod @m . bitCoerce . resize) <$> mealy (~~>) Finished valueM
+ where
+  toggleSwitched = toggle ./=. register False toggle
+  valueM = orNothing <$> toggleSwitched <*> value
+  m :: Signed (len + 1)
+  m = natToNum @m
+  (~~>) :: ComputationState (Bool, Index (shifts + 1), Signed (len + 1)) ->
+   Maybe (Signed (len + 1)) ->
+   (ComputationState (Bool, Index (shifts + 1), Signed (len + 1)), Maybe (Unsigned len))
+  _ ~~> Just n = (Working (False, maxBound, n), Nothing)
+  Finished ~~> Nothing = (Finished, Nothing)
+  -- First state.
+  Working (False, s, n) ~~> Nothing =
+   let shiftedm = m `shiftL` fromEnum s
+   in (Working (True, s, if n < 0 then n + shiftedm else n), Nothing)
+  Working (True, 0, n) ~~> Nothing =
+   (Finished, Just $ signedToUnsigned $ if n < m then n else n - m)
+  Working (True, s, n) ~~> Nothing =
+   let shiftedm = m `shiftL` fromEnum s
+   in (Working (True, s - 1, if n < shiftedm then n else n - shiftedm), Nothing)
 
 -- |Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.

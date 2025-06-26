@@ -67,8 +67,10 @@ library
   build-depends:
     , clash-lib
     , constraints
+    , template-haskell
   exposed-modules:
     Clash.Crypto.ECDSA.Fraction
+    Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Lemmas
@@ -140,8 +142,10 @@ library hitlt-instances
   exposed-modules:
     BEA
     FastGCD
+    FltCtmi
     Karatsuba
     Modulo
+    SictMi
     SHA
 
 test-suite hitlt

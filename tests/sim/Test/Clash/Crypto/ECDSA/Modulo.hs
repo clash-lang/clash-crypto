@@ -12,7 +12,7 @@ Test suite for 'Clash.Crypto.ECDSA.Modulo'.
 
 module Test.Clash.Crypto.ECDSA.Modulo where
 
-import Clash.Crypto.ECDSA.Modulo (computeModuloPos, ModSize, unMod)
+import Clash.Crypto.ECDSA.Modulo (computeModuloUnsigned, ModSize, unMod)
 import Clash.Prelude
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import Data.Proxy
@@ -56,7 +56,7 @@ testOutput n testInput modulus
           catMaybes
           $ sampleN @System (fromEnum (n `div` modulus) + 100)
           $ withClockResetEnable clockGen resetGen enableGen
-          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloPos @modT
+          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloUnsigned @modT
             (fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)
         listToggle = NonEmpty.tail $
           NonEmpty.scanl (\t m -> maybe t (const (not t)) m) False testInput
