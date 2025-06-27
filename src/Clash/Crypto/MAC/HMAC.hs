@@ -3,9 +3,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Clash.Crypto.Hash.HMAC
+module Clash.Crypto.MAC.HMAC
   ( hmacWrapper
   , HmacInput (..)
+  , SuitableDivisorForHMAC
+  , WellDefinedAlg
   ) where
 
 import Clash.Prelude
@@ -14,6 +16,7 @@ import Clash.Crypto.Hash.SHA
 import Numeric (showHex)
 
 -- Constraint alias for any hashing `alg` used by HMAC
+-- (required until I switch to let and pattern guards for knownSHA)
 type WellDefinedAlg alg =
   ( KnownNat (MessageDigestSize alg)
   , KnownNat (BlockSize alg)
@@ -24,12 +27,13 @@ type WellDefinedAlg alg =
 -- Given an n (the number of bits in each HmacInput payload), constrain n
 -- such that we can guarantee n will work with our HMAC implementation.
 type SuitableDivisorForHMAC n alg =
-  ( -- For a given positive n
-    KnownNat n, 1 <= n
+  ( -- For a given n
+    KnownNat n
+  , -- `n` has to be between `1` and `min (BlockSize alg, MessageDigestSize alg)`
+    -- inclusive
+    1 <= n, n <= BlockSize alg, n <= MessageDigestSize alg
   , -- Ensure n can evenly divide `BlockSize alg`
-    n <= BlockSize alg, Mod (BlockSize alg) n ~ 0, 1 <= Div (BlockSize alg) n
-  , -- Ensure n is smaller than MessageDigestSize
-    1 <= Div (MessageDigestSize alg) n
+    Mod (BlockSize alg) n ~ 0
   )
 
 -- | A wrapper (for convenience) around `hmac` which couples it with the
@@ -74,16 +78,11 @@ outerPadByte = 0x5c
 -- is too large. The key sender is required to handle that (if applicable). If a key is
 -- too big, the circuit will throw a simulation Error.
 hmac ::
-  forall n alg dom
-         m blockIter digestIter.
+  forall n alg dom m.
   -- Function constraints
   ( SuitableDivisorForHMAC n alg, KnownNat m, m*8 ~ n
   , WellDefinedAlg alg
   , HiddenClockResetEnable dom
-  ) =>
-  -- Helper types
-  ( KnownNat blockIter, blockIter ~ (Div (BlockSize alg) n) - 1
-  , KnownNat digestIter, digestIter ~ (Div (MessageDigestSize alg) n) - 1
   ) =>
   -- | Input
   Signal dom (Maybe (HmacInput n)) ->
@@ -105,9 +104,9 @@ hmac inputS shaS = mealyB step initState (inputS, shaS)
     }
 
   step ::
-    (HmacState alg) ->
+    (HmacState alg n) ->
     (Maybe (HmacInput n), Maybe (BitVector (MessageDigestSize alg))) ->
-    (HmacState alg, ( Maybe (ShaInput n)
+    (HmacState alg n, ( Maybe (ShaInput n)
                     , Maybe (BitVector (MessageDigestSize alg))
                     , Bool
                     )
@@ -115,10 +114,9 @@ hmac inputS shaS = mealyB step initState (inputS, shaS)
   step state (maybeInput, maybeSha) = case (state, maybeInput, maybeSha) of
     (ReadKey _ _, Nothing, _) -> (state, noOut)
     (ReadKey hmacInfo cnt, Just (HmacKey keyData), _)
-      | cnt < numIter -> (ReadKey newInfo (cnt+1), shaOut innerKeyData)
+      | cnt < maxBound -> (ReadKey newInfo (cnt+1), shaOut innerKeyData)
       | otherwise -> errorX ("Did not terminate HMAC key, but key size limit reached.")
      where
-      numIter = natToNum @blockIter
       newInfo = hmacInfo {key = shiftLeftOr hmacInfo.key keyData}
 
       -- xor the key with inner padding
@@ -126,18 +124,16 @@ hmac inputS shaS = mealyB step initState (inputS, shaS)
       innerKeyData = keyData `xor` pack (repeat innerPadByte)
 
     (ReadKey hmacInfo cnt, Just (HmacKeyEnd keyData), _)
-      | cnt == numIter -> (ReadMsg newInfo, shaOut innerKeyData)
+      | cnt == maxBound -> (ReadMsg newInfo, shaOut innerKeyData)
       | otherwise -> (SendKeyInnerPad newInfo (cnt+1), shaOutBusy innerKeyData)
      where
-      numIter = natToNum @blockIter
       newInfo = hmacInfo {key = shiftLeftOr hmacInfo.key keyData}
       innerKeyData = keyData `xor` pack (repeat innerPadByte)
 
     (SendKeyInnerPad hmacInfo cnt, _, _)
-      | cnt <= numIter -> (SendKeyInnerPad newInfo (cnt+1), shaOutBusy paddingOut)
+      | cnt < maxBound -> (SendKeyInnerPad newInfo (cnt+1), shaOutBusy paddingOut)
       | otherwise -> (ReadMsg hmacInfo, noOutBusy)
      where
-      numIter = natToNum @blockIter
       newInfo = hmacInfo {key = shiftLeftOr hmacInfo.key padding}
 
       padding :: BitVector n
@@ -162,19 +158,20 @@ hmac inputS shaS = mealyB step initState (inputS, shaS)
       newInfo = info {innerHash = innerMsg}
 
     (SendKeyOuter info cnt, _, _)
-      | cnt < numIter -> (SendKeyOuter newInfo (cnt+1), shaOutBusy outerKeyChunk)
+      -- Note: it's `maxBound-1` because if this predicate fails, we still send out a
+      -- byte in `otherwise`. It could be changed to not send out a byte and then
+      -- the predicate could be just `cnt < maxBound`.
+      | cnt < maxBound-1 -> (SendKeyOuter newInfo (cnt+1), shaOutBusy outerKeyChunk)
       | otherwise -> (SendMsgOuter newInfo 0, shaOutBusy outerKeyChunk)
      where
-      numIter = natToNum @blockIter
       newKey = info.key `rotateL` (natToNum @n)
       outerKeyChunk = (resize newKey) `xor` pack (repeat outerPadByte)
       newInfo = info {key = newKey}
 
     (SendMsgOuter info cnt, _, _)
-      | cnt < numIter -> (SendMsgOuter newInfo (cnt+1), shaOutBusy outerMsgChunk)
+      | cnt < maxBound-1 -> (SendMsgOuter newInfo (cnt+1), shaOutBusy outerMsgChunk)
       | otherwise -> (SendMsgOuterBugFix newInfo, shaOutBusy outerMsgChunk)
      where
-      numIter = natToNum @digestIter
       newHash = info.innerHash `rotateL` (natToNum @n)
       outerMsgChunk = (resize newHash)
       newInfo = info {innerHash = newHash}
@@ -245,18 +242,20 @@ instance ( KnownNat (BlockSize alg)
       <> showHex h ""
       <> "}"
 
-data HmacState alg
+type NumBlockIter alg n = (BlockSize alg `Div` n)+1
+type NumMsgDigestIter alg n = (MessageDigestSize alg `Div` n)+1
+data HmacState alg n
   -- | Read key in
-  = ReadKey (HmacInfo alg) (Index ((BlockSize alg)+1))
-  | SendKeyInnerPad (HmacInfo alg) (Index ((BlockSize alg)+1))
+  = ReadKey (HmacInfo alg) (Index (NumBlockIter alg n))
+  | SendKeyInnerPad (HmacInfo alg) (Index (NumBlockIter alg n))
   -- | Read msg in
   | ReadMsg (HmacInfo alg)
   | SendMsgInnerBugFix (HmacInfo alg)
   -- Receive inner hash
   | ReceiveMsgInner (HmacInfo alg)
   -- Computer outer hash
-  | SendKeyOuter (HmacInfo alg) (Index ((BlockSize alg)+1))
-  | SendMsgOuter (HmacInfo alg) (Index ((MessageDigestSize alg)+1))
+  | SendKeyOuter (HmacInfo alg) (Index (NumBlockIter alg n))
+  | SendMsgOuter (HmacInfo alg) (Index (NumMsgDigestIter alg n))
   | SendMsgOuterBugFix (HmacInfo alg)
   -- Receive outer hash
   | ReceiveMsgOuter (HmacInfo alg)
@@ -264,11 +263,11 @@ data HmacState alg
 
 deriving instance ( KnownNat (MessageDigestSize alg)
                   , KnownNat (BlockSize alg)
-                  ) => Show (HmacState alg)
+                  ) => Show (HmacState alg n)
 deriving instance ( KnownNat (MessageDigestSize alg)
                   , KnownNat (BlockSize alg)
-                  ) => NFDataX (HmacState alg)
+                  ) => NFDataX (HmacState alg n)
 deriving instance ( KnownNat (MessageDigestSize alg)
                   , KnownNat (BlockSize alg)
-                  ) => Eq (HmacState alg)
+                  ) => Eq (HmacState alg n)
 

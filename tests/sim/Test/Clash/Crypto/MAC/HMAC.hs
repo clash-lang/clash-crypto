@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Test.Clash.Crypto.Hash.HMAC where
+{-# LANGUAGE MagicHash #-}
+module Test.Clash.Crypto.MAC.HMAC where
 
 import Clash.Prelude
 import Data.Maybe
@@ -8,8 +9,10 @@ import qualified Data.List as List
 import Test.Tasty
 import Test.Tasty.Hedgehog
 
-import Clash.Crypto.Hash.HMAC
+import Clash.Crypto.MAC.HMAC
 import Clash.Crypto.Hash.SHA
+
+import Test.Clash.Crypto.Hash.SHA
 
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -17,13 +20,14 @@ import qualified Hedgehog.Range as Range
 import qualified Clash.Hedgehog.Sized.BitVector as Gen (genDefinedBitVector)
 
 -- Reference implementation
-import qualified Data.Digest.Pure.SHA as OfficialSHA
-import qualified Data.ByteString.Lazy.UTF8 as BLU
+import qualified Crypto.MAC.HMAC as Spec
+import qualified Crypto.Hash.SHA256 as Spec
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 
-type KeySize = 256
+type KeySize alg = BlockSize alg
 type HmacChunkSize = 8
-type NumChunks = Div KeySize HmacChunkSize
+type NumChunks alg = Div (KeySize alg) HmacChunkSize
 
 -- Test parameters
 numTestCycles, maxMsgSizeForTesting :: Int
@@ -32,27 +36,43 @@ maxMsgSizeForTesting = 499
 
 tastyTests :: TestTree
 tastyTests =
-  testGroup
-    "HmacTests"
-    [ testProperty "testHmacHedgehog" testHmacHedgehog
+  testGroup "Test.Clash.Crypto.MAC.HMAC"
+    [ testProperty "Test against reference implementation" testHmacHedgehog
     ]
 
+type Alg = SHA224
 testHmacHedgehog :: Property
 testHmacHedgehog =
   property $ do
     testKey <- forAll
-      $ Gen.list (Range.constant 1 (natToNum @NumChunks)) Gen.genDefinedBitVector
+      $ Gen.list (Range.constant 1 (natToNum @(NumChunks Alg))) Gen.genDefinedBitVector
     testMsg <- forAll
       $ Gen.list (Range.constant 1 maxMsgSizeForTesting) Gen.genDefinedBitVector
     let testInput = (testKey, testMsg)
-    Hedgehog.assert (hmacImpl testInput == hmacRefImpl testInput)
+    (hmacImpl @Alg testInput === hmacRefImpl @Alg testInput)
 
 
-hmacImpl :: ([BitVector 8], [BitVector 8]) -> [Integer]
-hmacImpl (keyData, msgData) = myOutputClean
+hmacImpl ::
+  forall (alg :: SHA) dom.
+  KnownSHA alg =>
+  WellDefinedAlg alg =>
+  SuitableDivisorForHMAC HmacChunkSize alg =>
+  MessageDigestSize alg `Div` 8 * 8 ~ MessageDigestSize alg =>
+  ([BitVector 8], [BitVector 8]) ->
+  BS.ByteString
+hmacImpl (keyData, msgData)
+  | SHAFacts alg <- knownSHA @alg
+  = myOutputFinal
  where
-  myOutputClean :: [Integer]
-  myOutputClean = fmap fromIntegral $ catMaybes myOutput
+  myOutputFinal = BS.pack $ toList $ unpack <$> myOutputClean
+
+  myOutputClean :: Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
+  myOutputClean =
+    unconcatBitVector#
+      $ maybe 0 fst
+      $ List.uncons
+      $ catMaybes myOutput
+
   myOutput =
     sampleN @System numTestCycles
       $ dut
@@ -60,8 +80,15 @@ hmacImpl (keyData, msgData) = myOutputClean
 
   dut input = output
    where
-    (fifoOut, _) = unbundle $ fifo @512 input request
-    (output, request) = hmacWrapper @HmacChunkSize @SHA256 $ register Nothing $ fifoOut
+    (fifoOut, _) =
+      unbundle
+        $ withClockResetEnable clockGen resetGen enableGen
+        $ fifo @512 @_ @System input request
+    (output, request) =
+      withClockResetEnable clockGen resetGen enableGen
+        $ hmacWrapper @HmacChunkSize @alg
+        $ register Nothing
+        $ fifoOut
 
 
   hmacTestInput :: [Maybe (HmacInput HmacChunkSize)]
@@ -91,15 +118,20 @@ hmacImpl (keyData, msgData) = myOutputClean
                         )
 
 
-hmacRefImpl :: ([BitVector 8], [BitVector 8]) -> [Integer]
-hmacRefImpl (keyData, msgData) = referenceOutput
- where
-  key, msg :: BLU.ByteString
-  key = BL.pack $ List.map bitCoerce keyData
-  msg = BL.pack $ List.map bitCoerce msgData
+hmacRefImpl ::
+  forall (alg :: SHA).
+  (KnownSHA alg, CryptoHash alg) =>
+  ([BitVector 8], [BitVector 8]) ->
+  BS.ByteString
+hmacRefImpl (keyData, msgData)
+  | SHAFacts alg <- knownSHA @alg
+  = let
+    key = BS.pack $ List.map bitCoerce keyData
+    msg = BS.pack $ List.map bitCoerce msgData
 
-  referenceOutput :: [Integer]
-  referenceOutput = [OfficialSHA.integerDigest $ OfficialSHA.hmacSha256 key msg]
+    referenceOutput :: BS.ByteString
+    referenceOutput = Spec.hmac (cryptoHash alg) (natToNum @(BlockSize alg `Div` 8)) key msg
+  in referenceOutput
 
 
 -- Here, we just define a FIFO to use in our tests to only send in data
