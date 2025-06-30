@@ -9,8 +9,8 @@ import qualified Test.Clash.Crypto.ECDSA.InverseModulo as InverseModulo
 
 main ∷ IO ()
 main = defaultMain $ testGroup "clash-crypto simulation tests"
-  [ -- SHA.tastyTests,
-    HMAC.tastyTests
+  [ SHA.tastyTests
+  , HMAC.tastyTests
   , InverseModulo.tastyTests
   , Karatsuba.tastyTests
   , Modulo.tastyTests

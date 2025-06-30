@@ -102,6 +102,7 @@ hmacRefImpl (keyData, msgData)
     msg = BS.pack $ List.map bitCoerce msgData
 
     referenceOutput :: BS.ByteString
-    referenceOutput = Spec.hmac (cryptoHash alg) (natToNum @(BlockSize alg `Div` 8)) key msg
+    referenceOutput =
+      Spec.hmac (cryptoHash alg) (natToNum @(BlockSize alg `Div` 8)) key msg
   in referenceOutput
 
