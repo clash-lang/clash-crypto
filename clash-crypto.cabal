@@ -68,7 +68,7 @@ library
     , clash-lib
     , constraints
     , template-haskell
-    , prototype-ghc-prover
+    , ghc-typelits-proof-assist
   exposed-modules:
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal

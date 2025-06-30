@@ -4,7 +4,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
-    ghc-typelits-proof-assist.url = "github:clash-lang/ghc-typelits-proof-assist";
+    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
   };
   outputs = { self, nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -34,7 +34,7 @@
               (clashCompilerSrc + "/clash-ghc") { };
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
-            prototype-ghc-prover = doJailbreak (dontCheck (prev.callCabal2nix "prototype-ghc-prover" ghc-typelits-proof-assist.outPath { }));
+            ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };
           myHsPkgs = pkgs.haskell.packages.ghc910.extend overlay;
       in

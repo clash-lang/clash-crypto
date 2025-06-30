@@ -60,11 +60,11 @@
         "systems": "systems_3"
       },
       "locked": {
-        "lastModified": 1726560853,
-        "narHash": "sha256-X6rJYSESBVr3hBoH0WbKE5KvhPU5bloyZ2L4K60/fPQ=",
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "c1dfcf08411b08f6b8615f7d8971a2bfa81d5e8a",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
         "type": "github"
       },
       "original": {
@@ -79,17 +79,18 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1747751798,
-        "narHash": "sha256-ifc5F5UsTrkkS3FPlCXcU55jXu3NCLkPfUmkKC83LUE=",
-        "owner": "clash-lang",
-        "repo": "ghc-typelits-proof-assist",
-        "rev": "63ee6ade5f962bff3717a692c81b1eb59f1517cd",
-        "type": "github"
+        "lastModified": 1749544109,
+        "narHash": "sha256-zyqdK9UPNLa5yCWRJ0Y37/w8rfuj9ZJB7+plN9/vK+Q=",
+        "ref": "main",
+        "rev": "57567b0ac4eed12d410cb9f789fc83f289e5c4c7",
+        "revCount": 8,
+        "type": "git",
+        "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       },
       "original": {
-        "owner": "clash-lang",
-        "repo": "ghc-typelits-proof-assist",
-        "type": "github"
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       }
     },
     "nixpkgs": {
@@ -110,11 +111,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1727140925,
-        "narHash": "sha256-ZHSasdLwEEjSOD/WTW1o7dr3/EjuYsdwYB4NSgICZ2I=",
+        "lastModified": 1743814133,
+        "narHash": "sha256-drDyYyUmjeYGiHmwB9eOPTQRjmrq3Yz26knwmMPLZFk=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "189e5f171b163feb7791a9118afa778d9a1db81f",
+        "rev": "250b695f41e0e2f5afbf15c6b12480de1fe0001b",
         "type": "github"
       },
       "original": {
