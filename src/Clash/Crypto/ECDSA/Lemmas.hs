@@ -13,7 +13,7 @@ Some useful lemmas used in clash-crypto.
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -fplugin=GHC.TypeNats.Proof.Plugin #-}
 
-module Clash.Crypto.ECDSA.Lemmas (lemmaModSize, LemmaPow) where
+module Clash.Crypto.ECDSA.Lemmas (lemmaModSize, LemmaLowIsLess) where
 
 import Clash.Prelude
 import Data.Constraint (Dict (..))
@@ -24,27 +24,19 @@ import GHC.TypeNats.Proof (QED)
 lemmaModSize :: forall n. 1 <= n => Dict (1 <= ModSize n)
 lemmaModSize = unsafeCoerce (Dict :: Dict (0 <= 0))
 
-instance (LemmaPow n)
-class (1 <= 3 ^ n) => LemmaPow n
-
+instance (LemmaLowIsLess n)
+class (n `Div` 2 <= n) => LemmaLowIsLess n
 
 {-/ Preamble (Coq):
 Require Import Nat.
 Require Import Arith Lia.
 /-}
 
-{-/ Proof (Coq): LemmaPow
- intros n.
- induction n.
- trivial.
- rewrite Nat.pow_succ_r.
- rewrite <- (Nat.mul_1_l) at 1.
- apply (Nat.mul_le_mono).
- rewrite <- Nat.add_1_r at 2.
- apply Nat.le_1_succ.
- apply IHn.
- apply (Nat.le_0_l n).
+{-/ Proof (Coq): LemmaLowIsLess
+  intro n.
+  rewrite <- Nat.div2_div.
+  apply Nat.le_div2_diag_l.
 /-}
 
-instance LemmaPow n => QED (LemmaPow n)
+instance LemmaLowIsLess n => QED (LemmaLowIsLess n)
 

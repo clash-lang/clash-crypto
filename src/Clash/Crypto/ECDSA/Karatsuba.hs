@@ -43,7 +43,7 @@ karatsuba ::
   -- ^ The lower bound defining the base case at which standard
   -- multiplication is used instead of another recursive call
   Unsigned n -> Unsigned m -> Unsigned (n + m)
-karatsuba regSize@SNat x y | Dict <- lemmaLowIsLess @(Max n m) =
+karatsuba regSize@SNat x y | Rewrite <- using @(LemmaLowIsLess (Max n m)) =
   case compareSNat (SNat @(n + m)) regSize of
     SNatLE -> extend x * extend y
     SNatGT -> karatsubaInternal size
@@ -116,8 +116,7 @@ karatsubaSequentialGated# UZero toggle x y = register Nothing $
  (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
 karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
  | _ :: UNat streamLeft <- streamingStagesLeft
- , Rewrite <- using @(LemmaPow streamLeft)
- , Dict <- lemmaLowIsLess @s
+ , Rewrite <- using @(LemmaLowIsLess s)
  , Dict <- lemmaLowIsLessThanHigh @s
  =
  let
@@ -194,9 +193,6 @@ extendRight :: forall b a. (KnownNat a, KnownNat b) =>
 extendRight a = bitCoerce (a, 0 :: Unsigned b)
 
 -- * Lemmas
-
-lemmaLowIsLess :: forall s. Dict (Low s <= s)
-lemmaLowIsLess = unsafeCoerce (Dict :: Dict (0 <= 0))
 
 lemmaLowIsLessThanHigh :: forall s. Dict (Low s <= High s)
 lemmaLowIsLessThanHigh = unsafeCoerce (Dict :: Dict (0 <= 0))
