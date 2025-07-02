@@ -18,7 +18,6 @@ common common-options
     DerivingStrategies
     LambdaCase
     NoStarIsType
-    OverloadedRecordDot
     TypeFamilies
     UnicodeSyntax
     ViewPatterns
@@ -147,6 +146,7 @@ library hitlt-instances
     BEA
     FastGCD
     FltCtmi
+    HMAC
     Karatsuba
     Modulo
     SictMi

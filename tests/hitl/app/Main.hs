@@ -13,6 +13,7 @@ import Data.ByteString
   ( ByteString
   , append, hGet, hGetNonBlocking, hPut, pack, unpack, singleton
   )
+import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
@@ -26,20 +27,19 @@ import System.Hardware.Serialport
   )
 import System.IO (BufferMode(..), hSetBuffering)
 import Test.Tasty
- (TestTree, DependencyType(..), defaultMain, localOption, sequentialTestGroup, testGroup)
+  ( TestTree, DependencyType(..)
+  , defaultMain, localOption, sequentialTestGroup, testGroup
+  )
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
-import qualified Data.ByteString as BS (concatMap, null, uncons)
+import qualified Data.ByteString as BS
+  (concatMap, empty, null, uncons, pack, length, replicate)
+import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
-
-import qualified Hedgehog.Gen   as Gen (bytes, integral)
-import qualified Hedgehog.Range as Range (linear, constantFrom)
-
-import qualified Data.Modular as Modular
-
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+import qualified Hedgehog.Gen    as Gen (bytes, integral)
+import qualified Hedgehog.Range  as Range (linear, constantFrom)
 
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
 import qualified Crypto.Hash.SHA224  as SHA224 (hash)
@@ -47,17 +47,22 @@ import qualified Crypto.Hash.SHA256  as SHA256 (hash)
 import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
+import qualified Crypto.MAC.HMAC     as HMAC (hmac)
 
-import Clash.Prelude (type Div, type (*), natToNum, Unsigned, bitCoerce, Vec, toList, resize, Nat, KnownNat)
+import Clash.Prelude
+  ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
+  , toList, resize,  bitCoerce, natToNum
+  )
 import Clash.Crypto.Hash.SHA
-  ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..)
+  ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+
 import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
   )
-import Data.Maybe (fromMaybe)
 
 main ∷ IO ()
 main = do
@@ -88,6 +93,9 @@ main = do
               testSHA @SHA1   sem dev settings
             , testSHA @SHA224 sem dev settings
             , testSHA @SHA256 sem dev settings
+            ] ,
+          testGroup "Clash.Crypto.Hash.HMAC"
+            [ testHMACSHA @SHA256 sem dev settings
             ] ,
           testGroup "Clash.Crypto.ECDSA.Karatsuba"
             [
@@ -158,6 +166,22 @@ main = do
     = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
         runHitltSHA @alg sem dev settings bs
+
+  testHMACSHA ∷
+    ∀ alg.
+    (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testHMACSHA sem dev settings
+    | SHAFacts alg ← knownSHA @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings ("HMAC" <> name) $ do
+        let n = natToNum @(BlockSize alg `Div` 8)
+        key ← forAll $ Gen.bytes $ Range.linear 1 n
+        msg ← forAll $ Gen.bytes $ Range.linear 1 499
+        runHitltHMACSHA @alg sem dev settings key msg
 
   test ∷
     QSem →
@@ -241,6 +265,32 @@ runHitltSHA sem dev settings input | SHAFacts alg ← knownSHA @alg =
   eq = cryptoHash alg input
  in runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
+runHitltHMACSHA ∷
+  ∀ (alg ∷ SHA).
+  (KnownSHA alg, CryptoHash alg) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  ByteString →
+  PropertyT IO ()
+runHitltHMACSHA sem dev settings key msg
+  | SHAFacts alg ← knownSHA @alg
+  = let
+      n = natToNum @(BlockSize alg `Div` 8)
+      bs = raiseIsKey
+        <> escape key
+        <> lowerIsKey
+        <> escape (BS.replicate (n - BS.length key) 0xFF)
+        <> escape msg
+        <> raiseIsKey
+      eq = HMAC.hmac (cryptoHash alg) n key msg
+    in
+      runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
+ where
+  raiseIsKey = BS.pack [ 0x00, maxBound ]
+  lowerIsKey = BS.pack [ 0x00, 1 ]
+
 upload ∷
   ([String] → IO ()) →
   QSem →
@@ -256,7 +306,7 @@ upload shake sem dev settings name
       shake [name <> ":upload"]
       -- wait for the device ready indicator byte once
       TO.timeout hitltTimeoutTime (waitForReadyByte serial)
-        >>= maybe (throw hitltTimeoutErr) return
+        >>= maybe (throw $ hitltTimeoutErr 1 BS.empty) return
  where
   waitForReadyByte serial = do
     xs ← hGet serial 1
@@ -284,8 +334,11 @@ runHitlt sem dev settings bs eq = do
         -- send the request
         hPut serial bs
         -- wait for the response
-        TO.timeout hitltTimeoutTime (hGet serial $ natToNum @messageSize)
-          >>= maybe (throw hitltTimeoutErr) return
+        let msgSize =  natToNum @messageSize
+        TO.timeout hitltTimeoutTime (hGet serial msgSize) >>= \case
+          Just x  → return x
+          Nothing → hGetNonBlocking serial msgSize
+                       >>= throw . hitltTimeoutErr msgSize
 
   pr dutResponse === pr eq
 
@@ -302,19 +355,27 @@ hitltTimeoutTime ∷ Int
 hitltTimeoutTime = 1_000_000
 
 -- | Serial timeout error
-hitltTimeoutErr ∷ HitltTimeout
-hitltTimeoutErr = HitltTimeout
-  $ "Serial Timout: no resonse received witin "
-       <> show hitltTimeoutTime <> " microseconds"
+hitltTimeoutErr ∷ Int → ByteString → HitltTimeout
+hitltTimeoutErr size bs
+  | BS.length bs == 0 = HitltTimeout
+      $ "Serial Timeout: no resonse received witin "
+     <> show hitltTimeoutTime <> " microseconds"
+  | otherwise = HitltTimeout
+      $ "Serial Timeout: expected to receive " <> show size <> " bytes within "
+     <> show hitltTimeoutTime <> " microseconds, but only received: "
+     <> show bs
 
 -- Useful for variable-length data.
 escapeAndTerminate ∷ ByteString → ByteString
 escapeAndTerminate = terminate . escape
- where
-  terminate = (`append` pack [0x00, 0x80])
-  escape = BS.concatMap $ \case
-    0x00 → pack [0x00, 0x00]
-    byte → singleton byte
+
+terminate ∷ ByteString → ByteString
+terminate = (`append` pack [0x00, 0x80])
+
+escape ∷ ByteString → ByteString
+escape = BS.concatMap $ \case
+  0x00 → pack [0x00, 0x00]
+  byte → singleton byte
 
 class CryptoHash (alg ∷ SHA) where
   cryptoHash ∷ Proxy alg → ByteString → ByteString
