@@ -66,8 +66,9 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
       [ testGroup "Contiguous Input (property based tests)"
           [ testProperty ("SHA-" <> algName)
               $ property
-              $ forAll (Gen.bytes $ Range.linear 100 1000)
-                  >>= hashStream
+              $ do b ← forAll Gen.bool
+                   xs ← forAll (Gen.bytes $ Range.linear 100 1000)
+                   hashStream b xs
           | (hashStream, algName) ←
               [ (testHashCStream @SHA1,      "1")
               , (testHashCStream @SHA224,    "224")
@@ -81,7 +82,7 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
           [ localOption (HedgehogTestLimit $ Just 1)
               $ testProperty "SHA-256 HITLT failure (reproducer)"
               $ property
-              $ testHashNCStream @SHA256
+              $ testHashNCStream @SHA256 False
               $ List.zip
                   (List.replicate 64 0)
                   (List.replicate 62 0 <> [64, 0])
@@ -89,14 +90,15 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
       , testGroup "Property Based Tests"
           [ testProperty ("SHA-" <> algName)
               $ property
-              $ do bs ← forAll
+              $ do b ← forAll Gen.bool
+                   bs ← forAll
                      $ Gen.bytes
                      $ Range.linear 80 100
                    xs ← forAll
                      $ Gen.list (Range.singleton $ BS.length bs)
                      $ Gen.integral @_ @Int
                      $ Range.linear 50 100
-                   hashStream $ List.zip (pack <$> BS.unpack bs) xs
+                   hashStream b $ List.zip (pack <$> BS.unpack bs) xs
           | (hashStream, algName) ←
               [ (testHashNCStream @SHA1,      "1")
               , (testHashNCStream @SHA224,    "224")
@@ -152,11 +154,13 @@ testHashCStream ∷
   ( Monad m, KnownSHA alg, CryptoHash alg
   , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
   ) ⇒
+  Bool →
+  -- ^ termination type selector
   ByteString →
   -- ^ input data
   PropertyT m ()
-testHashCStream
-  = testHashNCStream @alg
+testHashCStream t
+  = testHashNCStream @alg t
   . fmap ((, 0) . pack)
   . BS.unpack
 
@@ -166,17 +170,25 @@ testHashNCStream ∷
   ( Monad m, KnownSHA alg, CryptoHash alg
   , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
   ) ⇒
+  Bool →
+  -- ^ selector for the message termination type to be utilized. The
+  -- message is terminated with the last frame, if @True@, while one
+  -- more end-of-message frame indicator is used otherwise.
   [(BitVector 8, Int)] →
   -- ^ input data, where each byte in the first component is followed
-  -- by the number of idle cycles stated in the second component
+  -- by the number of idle cycles stated in the second component. The
+  -- list must be non-empty.
   PropertyT m ()
-testHashNCStream xs
+testHashNCStream terminateWithLastByte xs
   | SHAFacts alg ← knownSHA @alg
   , Dict ← cancelMultiple @(MessageDigestSize alg) @8
   = let
-      ncs = List.concatMap
-              (\(c, j) → Just (c, Nothing) : List.replicate j Nothing)
-              xs
+      upd x (c, j) = Just (c, x) : List.replicate j Nothing
+
+      ncs = case List.unsnoc xs of
+        Nothing      → []
+        Just (ys, y) → List.concatMap (upd Nothing) ys
+                    <> upd (if terminateWithLastByte then Just 0 else Nothing) y
 
       n = List.length ncs
 
@@ -191,8 +203,8 @@ testHashNCStream xs
       inputPlusCtrl
         = [ Nothing, Nothing, Nothing ]
        <> ncs
-       <> [ Just (0, Just maxBound) ]
-       <> List.replicate requiredSamples Nothing
+       <> (if terminateWithLastByte then [] else [Just (0, Just maxBound)])
+       <> List.repeat Nothing
 
       inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
       inputAsSignal = fromList inputPlusCtrl

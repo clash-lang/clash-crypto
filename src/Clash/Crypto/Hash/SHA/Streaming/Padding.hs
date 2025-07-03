@@ -10,6 +10,7 @@ Streaming based padding implementation of FIPS 180-4.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -109,7 +110,7 @@ deriving instance
 -- | Messages are streamed via using multiple message frames, where
 -- the individual data frames are encoded using the 'DataFrame'
 -- pattern, the end of a message is encoded using an 'EndOfMessage'
--- frame the 'NoData' pattern is used, if no frames a currenlty
+-- frame the 'NoData' pattern is used, if no frames are currenlty
 -- transfered on the bus.
 type PaddedMsgFrame n = Maybe (Either () (BitVector n))
 
@@ -175,13 +176,17 @@ padMessageStream
     (Either (MsgBits alg n) (MsgPad alg n), PaddedMsgFrame n)
   initiatePaddingWith (MsgBits s _) dLast trim
     = terminate dLast trim
-    $ addPaddingWith
+    $ (\mp →
+         if trim == 0
+         then (Right mp { terminated = False }, Data dLast)
+         else addPaddingWith mp
+      )
     $ createMsgPad
-    $ if natToNum @n == trim
-      then MsgBits s 0
-      else MsgBits (s + 1)
-        $ truncateB @_ @n @1
-        $ natToNum @n - trim
+    $ if | trim == natToNum @n → MsgBits s 0
+         | trim == 0           → MsgBits (s + 1) 0
+         | otherwise           → MsgBits s
+                               $ truncateB @_ @n @1
+                               $ natToNum @n - trim
 
   terminate ∷
     BitVector n →
@@ -191,25 +196,16 @@ padMessageStream
 
   terminate dLast trim (ePad, meVec)
     | trim == natToNum @n
-    = ( ePad
-      , fmap ( ((1 ∷ BitVector 1) ++#)
-             . truncateB# @(n-1) @1
-             ) <$> meVec
-      )
+    = (ePad, fmap riseMsb <$> meVec)
 
-    | trim == 0
-    = ( (\p → p { terminated = False }) <$> ePad
-      , Data dLast
-      )
-
-    | SHAFacts{} ← knownSHA @alg
+    | trim > 0
+    , SHAFacts{} ← knownSHA @alg
     , Dict ← fact₀
-    = let c = fromEnum trim
-       in ( ePad
-          , fmap ( or# (shiftL# (shiftR# dLast c) c)
-                 . \b → replaceBit# b (c - 1) high
-                 ) <$> meVec
-          )
+    , let c = fromEnum trim; bits = ((dLast `shiftR#` c) .<<+ 1) `shiftL#` c - 1
+    = (ePad, fmap (or# bits) <$> meVec)
+
+    | otherwise
+    = (ePad, meVec)
 
   addPaddingWith ∷
     MsgPad alg n →
@@ -217,32 +213,27 @@ padMessageStream
   addPaddingWith p@MsgPad{..}
     | remainingFrames > remainingSizeFrames
     , SHAFacts{} ← knownSHA @alg
-    = ( Right p
-          { remainingFrames = remainingFrames - 1
-          }
-      , Data $
-          if terminated
-          then 0
-          else (1 ∷ BitVector 1) ++# (0 :: BitVector (n - 1))
+    = ( Right p { remainingFrames = remainingFrames - 1
+                , terminated      = True
+                }
+      , Data $ if terminated then 0 else 1 +>>. 0
       )
 
     | otherwise
     , SHAFacts{} ← knownSHA @alg
     , Dict ← fact₁
     , Dict ← atLeastOneSizeFrame @(SizeBits alg) @n
+    , let d = head @(ReqSizeFrames alg n - 1) msgSize
     = ( if remainingSizeFrames > 0
-        then Right p { remainingFrames = remainingFrames - 1
+        then Right p { remainingFrames     = remainingFrames - 1
                      , remainingSizeFrames = remainingSizeFrames - 1
-                     , msgSize = fst $ shiftInAtN msgSize (0 :> Nil)
+                     , msgSize             = msgSize <<+ 0
+                     , terminated          = True
                      }
         else Left (MsgBits 0 0)
       , if remainingSizeFrames == 0
         then EndOfMessage
-        else Data $
-               let d = head @(ReqSizeFrames alg n - 1) msgSize
-                in if terminated
-                   then d
-                   else (1 ∷ BitVector 1) ++# truncateB# @(n-1) @1 d
+        else Data $ if terminated then d else riseMsb d
       )
 
   createMsgPad ∷ MsgBits alg n → MsgPad alg n
@@ -374,3 +365,6 @@ padMessageStream
       1 ≤ a ⇒
       Dict (0 `Mod` a ~ 0)
     lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+
+riseMsb ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ BitVector n → BitVector n
+riseMsb = (pack high ++#) . truncateB# @(n-1) @1
