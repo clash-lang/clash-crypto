@@ -108,6 +108,9 @@ shakeRules cfgs wanted = do
   forM_ [minBound :: SHA .. maxBound] $ \alg ->
     hitltRules "SHA" (show alg) [("HITLT_SHA", show alg)]
 
+  forM_ [minBound :: SHA .. maxBound] $ \alg ->
+    hitltRules "HMAC" ("HMAC" <> show alg) [("HITLT_SHA", show alg)]
+
   hitltRules "BEA" "BEA" []
   hitltRules "FastGCD" "FastGCD" []
   hitltRules "FltCtmi" "FltCtmi" []

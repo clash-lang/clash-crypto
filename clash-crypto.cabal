@@ -86,6 +86,7 @@ library
     Clash.Crypto.Hash.SHA.Streaming
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
+    Clash.Crypto.MAC.HMAC
     Clash.Signal.Delayed.Extra
     Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
@@ -99,6 +100,7 @@ test-suite simulation
   main-is: Main.hs
   other-modules:
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.MAC.HMAC
     Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
@@ -144,6 +146,7 @@ library hitlt-instances
     BEA
     FastGCD
     FltCtmi
+    HMAC
     Karatsuba
     Modulo
     SictMi

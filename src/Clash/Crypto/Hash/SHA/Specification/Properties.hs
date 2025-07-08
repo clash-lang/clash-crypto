@@ -41,6 +41,7 @@ data SHAFacts (alg ∷ SHA) where
         ~ BlockSize alg * ((2 ^ SizeBits alg) `Div` BlockSize alg)
     , 2 * BlockSize alg ≤ (2 ^ SizeBits alg) `Div` BlockSize alg
     , MessageDigestSize alg ≤ HashValueWords alg * WordSize alg
+    , MessageDigestSize alg ≤ BlockSize alg
     , BlockSize alg ~ 16 * WordSize alg
     , MessageDigestSize alg `Mod` 8 ~ 0 -- TODO: generalize
     ) ⇒
