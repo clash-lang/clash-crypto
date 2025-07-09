@@ -43,9 +43,9 @@ type TestLen = 512
 testKaratsubaEqualityWithMultiplication :: Monad m =>
  Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
 testKaratsubaEqualityWithMultiplication a b =
-  (karatsuba @6 @TestLen @TestLen SNat (resize a) (resize b))
+  karatsuba @6 @TestLen @TestLen SNat (resize a) (resize b)
   ===
-  (resize $ resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
+  resize (resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
 
 testKaratsubaSequential :: Monad m =>
  Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
@@ -70,4 +70,3 @@ testKaratsubaSequential p1 p2 = do
     withClockResetEnable clockGen resetGen enableGen $
     karatsubaSequentialGated @4 @36
     (fromList toggleInput) (fromList x) (fromList y)
-

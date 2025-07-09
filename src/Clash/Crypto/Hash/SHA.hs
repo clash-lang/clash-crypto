@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE MagicHash #-}
 
 module Clash.Crypto.Hash.SHA
   ( SHA(..), WordSize, BlockSize, MessageDigestSize, HashValueWords

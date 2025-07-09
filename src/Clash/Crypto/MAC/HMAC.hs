@@ -9,11 +9,11 @@ module Clash.Crypto.MAC.HMAC
 
 import Clash.Prelude
 
-import Data.Constraint (Dict(..))
+import Data.Constraint.Nat.Extra (CancelMultiple, KeepsPositiveIfMultiple)
 import Data.Functor ((<&>))
 import Data.Maybe (isJust, isNothing)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
-import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA
 
@@ -184,8 +184,8 @@ serializeEn ∷
   Signal dom (Maybe (BitVector n))
   -- ^ output stream
 serializeEn
-  | Dict ← lemma₀ @(BitSize a) @n
-  , Dict ← lemma₁ @(BitSize a) @n
+  | Rewrite ← using @(KeepsPositiveIfMultiple (BitSize a) n)
+  , Rewrite ← using @(CancelMultiple (BitSize a) n)
   = leToPlusKN @1 @(BitSize a `Div` n)
   $ curry $ mealyB (~~>)
       ( repeat neval ∷ Vec (BitSize a `Div` n) (BitVector n)
@@ -210,18 +210,6 @@ serializeEn
 
   -- a value that should never be evaluated
   neval = error "Clash.Crypto.MAC.HMAC.serializeEn: Mealy"
-
-  lemma₀ ∷
-    ∀ (x ∷ Nat) (y ∷ Nat).
-    (1 ≤ x, 1 ≤ y, Mod x y ~ 0) ⇒
-    Dict (1 ≤ Div x y)
-  lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  lemma₁ ∷
-    ∀ (x ∷ Nat) (y ∷ Nat).
-    (1 ≤ y, x `Mod` y ~ 0) ⇒
-    Dict (x `Div` y * y ~ x)
-  lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
 
 -- | A simple queuing FIFO that pushes data through on every arrival
 -- of a 'Just'-input. Hence, with every new input the output at the

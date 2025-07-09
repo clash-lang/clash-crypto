@@ -25,14 +25,15 @@ module Clash.Crypto.Hash.SHA.Streaming.Stages
 
 import Clash.Prelude
 
-import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (leTrans, minOverLE)
+import Data.Constraint.Nat.Extra (LeTrans, MinOverLE)
 import Data.Proxy (Proxy(..))
 import Data.Type.Bool (type (&&), If)
 import Data.Type.Equality (type (==))
 import GHC.TypeLits.KnownNat (KnownNat3(..), SNatKn(..), nameToSymbol)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
+
 
 import qualified GHC.TypeNats as GHC (natVal)
 
@@ -99,8 +100,8 @@ instance
 -- selects between the constants zero and one.
 --
 -- prop> ∀ x y z ∈ ℕ. DistributedStages x y z ≤ 1
-atMostOnePerStage ∷ ∀ x y z. Dict (DistributedStages x y z ≤ 1)
-atMostOnePerStage = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+atMostOnePerStage ∷ ∀ x y z. Rewrite (DistributedStages x y z ≤ 1)
+atMostOnePerStage = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
 -- | Evenly distributes @d@ registers between @n@ combinational
 -- computations. The introduced registers are all initialized with the
@@ -150,8 +151,8 @@ distributeStages d@SNat ival computations =
         → fmap (head cs)
         . distributeStages# (succSNat i) r (tail cs)
       USucc _
-        | Dict ← atMostOnePerStage @n @d @i
-        , Dict ← leTrans @(DistributedStages n d i) @1 @(r - 1 + 1)
+        | Rewrite ← atMostOnePerStage @n @d @i
+        , Rewrite ← using @(LeTrans (DistributedStages n d i) 1 (r - 1 + 1))
         → delayedI @(DistributedStages n d i) ival
         . fmap (head cs)
         . distributeStages#
@@ -182,7 +183,7 @@ mealyStages ∷
   -- are 'Just'-wrapped
   DSignal dom (t + d) a
 mealyStages SNat compute
-  | Dict ← minOverLE @n @(d + 1) @1
+  | Rewrite ← using @(MinOverLE n (d + 1) 1)
   , SNat @k ← SNat @(n `Div` Min n (d + 1))
   , SNat @r ← SNat @(n `Mod` Min n (d + 1))
   , SNat @b ← SNat @((k + 1) * r)

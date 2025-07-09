@@ -23,7 +23,7 @@ module Clash.Crypto.Hash.SHA.Specification.Algorithm
 import Clash.Prelude
 
 import Data.Function ((&))
-import Data.Constraint (Dict(..))
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -31,6 +31,9 @@ import Clash.Crypto.Hash.SHA.Specification.Types
 import Clash.Crypto.Hash.SHA.Specification.Definitions
 import Clash.Crypto.Hash.SHA.Specification.Properties
 import Data.Constraint.Nat.Extra
+  ( ModBound, TimesMonotoneRight, LeTrans, CancelMultiple, CancelFactor
+  , condMonotoneGE
+  )
 
 -- | Purely functional reference implementation of the hashing
 -- algorithms defined in FIPS 180-4.
@@ -43,23 +46,32 @@ hash ∷
   -- ^ resulting message digest
 hash msg
   | SHAFacts alg ← knownSHA @alg
-  , Dict ← modBound @ℓ @(BlockSize alg)
-  , Dict ← condMonotone @1 @1 @2
+  , Rewrite ← using @(ModBound ℓ (BlockSize alg))
+  , Rewrite ← condMonotoneGE @1 @1 @2
       @(1 + SizeBits alg <=? BlockSize alg - ℓ `Mod` BlockSize alg)
-  , Dict ← timesMonotoneRight
-      @(RequiredBlocks alg ℓ)
-      @(BlockSize alg)
-      @(BlockSize alg)
-  , Dict ← leTrans
-      @(ℓ `Mod` BlockSize alg)
-      @(BlockSize alg)
-      @(RequiredBlocks alg ℓ * BlockSize alg)
-  , Dict ← lemma₀ @alg @ℓ
-  , Dict ← lemma₁ @alg @ℓ
-  , Dict ← lemma₂ @alg @ℓ
-  , Dict ← lemma₃ @alg @ℓ
-  , Dict ← cancelMultiple @(PaddedMsgBits alg ℓ) @(WordSize alg)
-  , Dict ← cancelFactor @(PaddedMsgBits alg ℓ) @(WordSize alg) @MessageBlockWords
+  , Rewrite ← using
+      @( TimesMonotoneRight
+           (RequiredBlocks alg ℓ)
+           (BlockSize alg)
+           (BlockSize alg)
+       )
+  , Rewrite ← using
+      @( LeTrans
+           (ℓ `Mod` BlockSize alg)
+           (BlockSize alg)
+           (RequiredBlocks alg ℓ * BlockSize alg)
+       )
+  , Rewrite ← lemma₀ @alg @ℓ
+  , Rewrite ← lemma₁ @alg @ℓ
+  , Rewrite ← lemma₂ @alg @ℓ
+  , Rewrite ← lemma₃ @alg @ℓ
+  , Rewrite ← using @(CancelMultiple (PaddedMsgBits alg ℓ) (WordSize alg))
+  , Rewrite ← using
+      @( CancelFactor
+           (PaddedMsgBits alg ℓ)
+           (WordSize alg)
+           MessageBlockWords
+       )
   = let
       -- pad the message according to description of Section 5.1
       paddedMessage ∷ Message (PaddedMsgBits alg ℓ)
@@ -99,28 +111,24 @@ hash msg
 
   lemma₀ ∷
     ∀ alg' n.
-    Dict (PaddedMsgBits alg' n `Mod` BlockSize alg' ~ 0)
-  lemma₀ =
-    unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+    Rewrite (PaddedMsgBits alg' n `Mod` BlockSize alg' ~ 0)
+  lemma₀ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
 
   lemma₁ ∷
     ∀ alg' n.
-    Dict (PaddedMsgBits alg' n `Mod` WordSize alg' ~ 0)
-  lemma₁ =
-    unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+    Rewrite (PaddedMsgBits alg' n `Mod` WordSize alg' ~ 0)
+  lemma₁ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
 
   lemma₂ ∷
     ∀ alg' n.
-    Dict (1 ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg')
-  lemma₂ =
-    unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+    Rewrite (1 ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg')
+  lemma₂ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
   lemma₃ ∷
     ∀ alg' n.
-    Dict (SizeBits alg'
+    Rewrite (SizeBits alg'
             ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg' - 1)
-  lemma₃ =
-    unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+  lemma₃ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
 -- | Truncates the resulting hash value to the left-most @n@ bits,
 -- where @n@ is defined by the returned 'MessageDigestSize'.

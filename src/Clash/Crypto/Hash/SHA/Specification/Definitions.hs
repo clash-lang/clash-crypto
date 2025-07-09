@@ -196,12 +196,11 @@ type SizeBits alg = 2 * WordSize alg
 -- | The number of "zero" bits that must added in between the message
 -- plus the '1' bit and it's size stored at the end of the padding.
 type PaddingZeros ∷ SHA → Nat → Nat
-type family PaddingZeros alg ℓ where
-  PaddingZeros alg ℓ =
-    RequiredBlocks alg ℓ * BlockSize alg
-      - ℓ `Mod` BlockSize alg
-      - 1
-      - SizeBits alg
+type PaddingZeros alg ℓ =
+  RequiredBlocks alg ℓ * BlockSize alg
+    - ℓ `Mod` BlockSize alg
+    - 1
+    - SizeBits alg
 
 -- | The number of bits of a padded message.
 type PaddedMsgBits (alg ∷ SHA) (ℓ ∷ Nat) =

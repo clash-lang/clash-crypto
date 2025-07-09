@@ -18,7 +18,7 @@ module Language.Haskell.Unicode
   ) where
 
 import Data.Type.Ord (type (<=))
-import Data.Constraint (Constraint)
+import Data.Kind (Constraint)
 
 -- | Unicode version of the type level inequality constraint @<=@.
 infix 4 ≤
