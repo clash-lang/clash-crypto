@@ -52,7 +52,7 @@ import Clash.Crypto.ECDSA.Utils
 --
 -- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
 bea :: forall m dom.
- (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= m) =>
+ (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 2 <= m) =>
  Signal dom Bool -> -- ^ Toggle line
  Signal dom (Mod m) ->
  Signal dom (Maybe (Mod m))
@@ -201,9 +201,8 @@ fastGcdSequential :: forall m dom.
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
-fastGcdSequential toggle s
- | Rewrite <- using @(CLog2KeepsPositive m)
- = let
+fastGcdSequential toggle s =
+  let
    -- Precomputed value for the algorithm.
    precomp :: Signal dom (Unsigned (ModSize m))
    precomp = pure $ natToNum @(Precomp m)

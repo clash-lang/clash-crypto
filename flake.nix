@@ -4,7 +4,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
-    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
+    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=tests-and-bug-fixes";
   };
   outputs = { self, nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -36,11 +36,11 @@
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };
-          myHsPkgs = pkgs.haskell.packages.ghc910.extend overlay;
+          myHsPkgs = pkgs.haskell.packages.ghc9101.extend overlay;
       in
       {
         devShells.default = myHsPkgs.shellFor {
-          name = "ghc910";
+          name = "GHC 9.10.1";
           packages = p: [ p.clash-crypto ];
           inputsFrom = [];
           nativeBuildInputs =
