@@ -32,7 +32,7 @@ import Clash.Crypto.Hash.SHA.Specification.Definitions
 import Clash.Crypto.Hash.SHA.Specification.Properties
 import Data.Constraint.Nat.Extra
   ( ModBound, TimesMonotoneRight, LeTrans, CancelMultiple, CancelFactor
-  , condMonotoneGE
+  , CondMonotoneGE
   )
 
 -- | Purely functional reference implementation of the hashing
@@ -47,8 +47,8 @@ hash ∷
 hash msg
   | SHAFacts alg ← knownSHA @alg
   , Rewrite ← using @(ModBound ℓ (BlockSize alg))
-  , Rewrite ← condMonotoneGE @1 @1 @2
-      @(1 + SizeBits alg <=? BlockSize alg - ℓ `Mod` BlockSize alg)
+  , Rewrite ← using @(CondMonotoneGE 1 1 2
+      (1 + SizeBits alg <=? BlockSize alg - ℓ `Mod` BlockSize alg))
   , Rewrite ← using
       @( TimesMonotoneRight
            (RequiredBlocks alg ℓ)

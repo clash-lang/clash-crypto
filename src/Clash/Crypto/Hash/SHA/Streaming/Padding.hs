@@ -33,7 +33,7 @@ import Clash.Sized.Internal.BitVector
 
 import Data.Constraint.Nat.Extra
   ( DDiv, LeTrans, ModBound, TimesMod, DivisorIsLess, DivisorMonotoneInverse
-  , ModZero, cLog2IsLessProduct, positiveResultCond0, cLog2LECond0
+  , ModZero, CLog2IsLessProduct, PositiveResultCond0, CLog2LECond0
   )
 import Data.Type.Bool (If)
 import GHC.TypeNats.Proof (Rewrite(..), using)
@@ -212,7 +212,7 @@ padMessageStream
     | otherwise
     , SHAFacts{} ← knownSHA @alg
     , Rewrite ← fact₁
-    , Rewrite ← positiveResultCond0 @(SizeBits alg) @n
+    , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
     , let d = head @(ReqSizeFrames alg n - 1) msgSize
     = ( if remainingSizeFrames > 0
         then Right p { remainingFrames     = remainingFrames - 1
@@ -288,7 +288,7 @@ padMessageStream
     , Rewrite ← using
         @( LeTrans 1 (2 * BlockSize alg) ((2 ^ SizeBits alg) `Div` n)
          )
-    , Rewrite ← cLog2LECond0 @(SizeBits alg) @n
+    , Rewrite ← using @(CLog2LECond0 (SizeBits alg) n)
     = extend @BitVector
         @(CLog 2 ((2 ^ SizeBits alg) `Div` n))
         @(n * ReqSizeFrames alg n - CLog 2 ((2 ^ SizeBits alg) `Div` n))
@@ -298,8 +298,8 @@ padMessageStream
     BitVector (n * ReqSizeFrames alg n)
   extend₁
     | SHAFacts{} ← knownSHA @alg
-    , Rewrite ← positiveResultCond0 @(SizeBits alg) @n
-    , Rewrite ← cLog2IsLessProduct @n @(ReqSizeFrames alg n)
+    , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
+    , Rewrite ← using @(CLog2IsLessProduct n (ReqSizeFrames alg n))
     = extend @BitVector
         @(CLog 2 n)
         @(n * ReqSizeFrames alg n - CLog 2 n)
