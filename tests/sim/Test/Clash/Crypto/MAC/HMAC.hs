@@ -3,6 +3,9 @@
 module Test.Clash.Crypto.MAC.HMAC where
 
 import Clash.Prelude
+import Clash.Signal.Channel
+import Clash.Signal.DataStream
+
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import Data.Maybe
 import GHC.TypeNats.Proof (Rewrite(..), using)
@@ -47,35 +50,46 @@ testHmacHedgehog contiguous
           | contiguous = pure $ List.replicate j 0
           | otherwise  = Gen.list (Range.singleton j)
                        $ Gen.integral @_ @Int $ Range.linear 1 100
-    isKeyI <- forAll Gen.bool
     testKey <- forAll $ Gen.bytes $ Range.linear 1 n
     testMsg <- forAll $ Gen.bytes $ Range.linear 1 m
     keySpacings <- forAll $ genSpacings testKey
     msgSpacings <- forAll $ genSpacings testMsg
     let testInput = (testKey, testMsg)
     (===) (hmacRefImpl @alg testInput)
-          (hmacImpl @alg isKeyI (keySpacings, msgSpacings) testInput)
+          (hmacImpl @alg (keySpacings, msgSpacings) testInput)
+
+showLn :: ShowX a => [a] -> String
+showLn = List.concatMap ((<> "\n") . showX)
 
 hmacImpl ::
   forall (alg :: SHA).
   (KnownSHA alg, 8 <= BlockSize alg, Mod (BlockSize alg) 8 ~ 0) =>
-  Bool ->
   ([Int], [Int]) ->
   (ByteString, ByteString) ->
   ByteString
-hmacImpl isKeyI (keySpacings, msgSpacings) (keyData, msgData)
+hmacImpl (keySpacings, msgSpacings) (keyData, msgData)
   | SHAFacts _ <- knownSHA @alg
   , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       addSpacings xs
-        = List.concatMap (\(j, x) -> x : List.replicate j (fst x, Nothing))
+        = List.concatMap (\(j, x) -> x : List.replicate j NoData)
         . List.zip xs
 
-      restructure b
-        = ((b, )  . Just . bitCoerce <$>) . BS.unpack
+      restructure = (Middle . bitCoerce <$>) . BS.unpack
 
-      keyInput = addSpacings keySpacings $ restructure True keyData
-      msgInput = addSpacings msgSpacings $ restructure False msgData
+      keyInput = addSpacings keySpacings $
+        case restructure keyData of
+          Middle x : xr -> Start (toEnum $ BS.length keyData) x : xr
+          y -> y
+
+      msgSpacings' = List.reverse $ case List.reverse msgSpacings of
+        []     -> []
+        _ : xr -> 0 : xr
+
+      msgInput = addSpacings msgSpacings' $ List.reverse $
+        case List.reverse $ restructure msgData of
+          Middle x : xr -> End () x : xr
+          y -> y
 
       n = natToNum @(BlockSize alg `Div` 8)
       m = BS.length keyData + BS.length msgData
@@ -89,17 +103,18 @@ hmacImpl isKeyI (keySpacings, msgSpacings) (keyData, msgData)
         + 2 * n                 --   > passing key and digest of the outer hash
         + 5 * sc                --   > computing the outer hash
 
-      hmacTestInput :: [(Bool, Maybe (BitVector 8))]
+      hmacTestInput ::
+        [Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)]
       hmacTestInput =
         -- Skip over reset
-        List.replicate 3 (isKeyI, Nothing)
+        List.replicate 3 Idle
         -- Test data
         <> keyInput
         -- we need to send exactly `BlockSize alg` many bits before
         -- sending the msg
-        <> List.replicate (n - BS.length keyData) (False, Just 0xFF)
+        <> List.replicate (n - BS.length keyData) (Middle 0xFF)
         <> msgInput
-        <> List.repeat (True, Nothing)
+        <> List.repeat Idle
 
       output :: Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
       output
@@ -108,9 +123,9 @@ hmacImpl isKeyI (keySpacings, msgSpacings) (keyData, msgData)
         $ List.uncons
         $ catMaybes
         $ sampleN @System requiredSamples
+        $ newsfeed
         $ withClockResetEnable clockGen resetGen enableGen
-        $ uncurry (hmac @alg)
-        $ unbundle
+        $ hmac @alg
         $ fromList hmacTestInput
     in
       BS.pack $ toList $ unpack <$> output

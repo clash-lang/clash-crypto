@@ -1,10 +1,14 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 module HMAC (topEntity, descape) where
 
 import Clash.Prelude
+
 import Clash.Annotations.TH (makeTopEntity)
+import Clash.Signal.Channel (newsfeed)
+import Clash.Signal.DataStream (DataStream, Frame(..))
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
@@ -12,7 +16,7 @@ import Clash.Crypto.Hitlt.Shared (Byte)
 import Clash.Crypto.Hitlt.Uart (withUartRequestResponseHandler)
 
 import Clash.Crypto.MAC.HMAC (hmac)
-import Clash.Crypto.Hash.SHA (SHA(..))
+import Clash.Crypto.Hash.SHA (SHA(..), BlockSize)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
@@ -34,25 +38,41 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ uncurry (hmac @SHAX) . descape
+  $ newsfeed . hmac @SHAX . descape
 
 -- | We use `0x00` as an escape symbol to allow for changes in the
 -- polarity of the indicator input
 --
--- > 0x00 0   denotes `0x00`
--- > 0x00 1   triggers the "is key indicator" to be plulled 'low'
--- > 0x00 _   triggers the "is key indicator" to be plulled 'high '
+-- > 0x00 0x00  denotes `0x00`
+-- > 0x00 0xFF  denotes the next byte to be the last byte of the message
+-- > 0x00 size  initates a new message with @size@ being the key size
 descape ∷
   HiddenClockResetEnable dom ⇒
   Signal dom (Maybe Byte) →
-  (Signal dom Bool, Signal dom (Maybe Byte))
-descape = mealyB (~~>) (False, False)
+  DataStream dom (Index ((BlockSize SHAX `Div` BitSize Byte) + 1)) () Byte
+descape = mealy (~~>) (False, S 0 ∷ NextExpectedDataFrame)
  where
-  (isKey, esc  ) ~~> Nothing   = ((isKey, esc  ), (isKey, Nothing  ))
-  (isKey, False) ~~> Just 0x00 = ((isKey, True ), (isKey, Nothing  ))
-  (isKey, False) ~~> Just byte = ((isKey, False), (isKey, Just byte))
-  (isKey, True ) ~~> Just 0    = ((isKey, False), (isKey, Just 0x00))
-  (_    , True ) ~~> Just 1    = ((False, False), (False, Nothing  ))
-  (_    , True ) ~~> Just _    = ((True , False), (True , Nothing  ))
+  (esc,   nef) ~~> Nothing   = ((esc,   nef     ), emptyFrame nef)
+  (False, nef) ~~> Just 0x00 = ((True,  nef     ), emptyFrame nef)
+  (False, nef) ~~> Just byte = ((False, next nef), frame nef byte)
+  (True,  nef) ~~> Just 0x00 = ((False, next nef), frame nef 0x00)
+  (True,  nef) ~~> Just 0xFF = ((False, E       ), emptyFrame nef)
+  (True,  nef) ~~> Just byte = ((False, S byte  ), emptyFrame nef)
+
+  frame = \case
+    S x → Start $ unpack $ truncateB x
+    M   → Middle
+    E   → End ()
+
+  next = \case
+    E → S 0
+    _ → M
+
+  emptyFrame = \case
+    S _ → Idle
+    _   → NoData
+
+data NextExpectedDataFrame = S Byte | M | E
+  deriving (Generic, NFDataX)
 
 makeTopEntity 'topEntity

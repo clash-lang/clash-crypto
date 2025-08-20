@@ -33,6 +33,7 @@ data SHAFacts (alg ∷ SHA) where
     , SHAInitials alg
     , SHAHashCompute alg
     , 1 ≤ BlockSize alg
+    , 1 ≤ BlockSize alg `Div` 8
     , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
     , 1 ≤ MessageDigestSize alg
@@ -43,7 +44,7 @@ data SHAFacts (alg ∷ SHA) where
     , MessageDigestSize alg ≤ HashValueWords alg * WordSize alg
     , MessageDigestSize alg ≤ BlockSize alg
     , BlockSize alg ~ 16 * WordSize alg
-    , MessageDigestSize alg `Mod` 8 ~ 0 -- TODO: generalize
+    , MessageDigestSize alg `Mod` 8 ~ 0
     ) ⇒
     Proxy alg →
     SHAFacts alg

@@ -1,6 +1,6 @@
 {-|
 Module      : Clash.Crypto.Hash.SHA.Specification
-Copyright   : Copyright © 2024 QBayLogic B.V.
+Copyright   : Copyright © 2024-2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -33,6 +33,8 @@ module Clash.Crypto.Hash.SHA.Specification
   , SHAHashCompute(..), computeCycles, toDigest, hash
     -- * Derivable Properties
   , KnownSHA(..), SHAFacts(..)
+  , -- * Utility types
+    Digest
   ) where
 
 import Clash.Crypto.Hash.SHA.Specification.Types
