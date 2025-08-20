@@ -43,17 +43,30 @@
           name = "GHC 9.10.1";
           packages = p: [ p.clash-crypto ];
           inputsFrom = [];
-          nativeBuildInputs =
-            with pkgs; [
-              gnumake yosys nextpnr trellis
-            ] ++
-            (with myHsPkgs; [ cabal-install ])
-            ++ [ecpprog.defaultPackage.${system}]
-          ;
           shellHook = ''
             SHAKEPATH=`cabal list-bin clash-crypto:shake`
             export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
-          '';
+
+            export OCAML_VERSION=${pkgs.ocaml-ng.ocamlPackages_4_09.ocaml.version}
+            export OPAMROOT=$(pwd)/.opam-local
+            mkdir -p $OPAMROOT
+            export OPAMYES=true # Auto-answer yes to prompts
+
+            if [ ! -d "$OPAMROOT/default" ]; then
+              opam init --bare --disable-sandboxing --auto-setup
+              # Create a switch for the current OCaml version
+              opam switch create default $OCAML_VERSION
+            fi
+
+            eval $(opam env)
+          '';          nativeBuildInputs =
+            with pkgs; [
+              gnumake yosys nextpnr trellis ocaml-ng.ocamlPackages_4_09.ocaml opam gmp pkg-config
+              coq_8_13
+            ] ++
+            (with myHsPkgs; [ cabal-install haskell-language-server ])
+            ++ [ecpprog.defaultPackage.${system}]
+          ;
         };
         packages.default = dontCheck myHsPkgs.clash-crypto;
       });
