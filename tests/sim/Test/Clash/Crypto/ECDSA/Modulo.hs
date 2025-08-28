@@ -33,7 +33,7 @@ tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
   [ localOption (HedgehogTestLimit (Just 100))
   $  testGroup "Modulo"
-      [ testProperty ("Equality between sequential modulo and combinatorial modulo")
+      [ testProperty "Equality between sequential modulo and combinatorial modulo"
         $ property $ do
           n <- forAll $ genUnsigned $ Range.linear 0 (50_000 :: Unsigned 64)
           modulus <- forAll $ genUnsigned $ Range.linear 2 500
@@ -63,7 +63,7 @@ testOutput n testInput modulus
   in case listToMaybe output of
         Just a -> a
         Nothing -> error "The returned list was empty"
-    
+
 
 testMod :: (MonadFail m, MonadTest m) => Unsigned 64 -> Unsigned 64 -> m ()
 testMod n modulus = do
@@ -77,4 +77,3 @@ testMod n modulus = do
       LE Refl -> testOutput @modT n testInput modulus === fromIntegral n `mod` modulus
       NLE _ _ -> error "ModSize modulus should be less than or equal to 64"
     NLE _ _ -> error "The given modulus should be greater than 1"
-

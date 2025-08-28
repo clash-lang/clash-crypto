@@ -18,10 +18,10 @@ import Clash.Prelude
 import Clash.Sized.Vector (unsafeFromList)
 
 import Data.ByteString (ByteString)
-import Data.Constraint
 import Data.Constraint.Nat.Extra
 import Data.Maybe
 import Data.Proxy
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Hedgehog
 import Language.Haskell.Unicode (type (≤))
 import Test.Tasty
@@ -121,7 +121,7 @@ testHashPure ∷
   PropertyT m ()
 testHashPure bs
   | SHAFacts alg ← knownSHA @alg
-  , Dict ← cancelMultiple @(MessageDigestSize alg) @8
+  , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = do
 
   Just (SomeNat (_ ∷ Proxy n)) ←
@@ -181,7 +181,7 @@ testHashNCStream ∷
   PropertyT m ()
 testHashNCStream terminateWithLastByte xs
   | SHAFacts alg ← knownSHA @alg
-  , Dict ← cancelMultiple @(MessageDigestSize alg) @8
+  , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       upd x (c, j) = Just (c, x) : List.replicate j Nothing
 
@@ -203,7 +203,7 @@ testHashNCStream terminateWithLastByte xs
       inputPlusCtrl
         = [ Nothing, Nothing, Nothing ]
        <> ncs
-       <> (if terminateWithLastByte then [] else [Just (0, Just maxBound)])
+       <> [ Just (0, Just maxBound) | not terminateWithLastByte ]
        <> List.repeat Nothing
 
       inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))

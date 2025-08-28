@@ -8,8 +8,8 @@ import Clash.Prelude
 import Clash.Cores.Uart (ValidBaud, uart)
 import Clash.Crypto.Hitlt.Shared (Byte, ByteSize, isReadyIndicator)
 
-import Data.Constraint (Dict(..))
-import Unsafe.Coerce (unsafeCoerce)
+import Data.Constraint.Nat.Extra (CancelMultiple)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 
 -- | Exends a circuit receiving a byte stream and computing a response
 -- with a UART interface providing the input stream and passing back the
@@ -40,7 +40,7 @@ withUartRequestResponseHandler clk rst baud requestResponseHandler rx
       (rxData, tx, ack) = uart baud rx txReq
 
       result ∷ Signal dom (Maybe (Vec (ByteSize a - 1 + 1) Byte))
-      result | Dict ← modZero @(BitSize a) @(BitSize Byte)
+      result | Rewrite ← using @(CancelMultiple (BitSize a) (BitSize Byte))
              = fmap (bitCoerce . pack) <$> requestResponseHandler rxData
 
       txReq = mealyB
@@ -76,13 +76,10 @@ bulkRead = mealy (~~>) ival
   ival = (0, def)
 
   (n, v) ~~> Just ((v <<+) → nv)
-    | Dict ← modZero @(BitSize a) @(BitSize Byte)
+    | Rewrite ← using @(CancelMultiple (BitSize a) (BitSize Byte))
     = if n < maxBound
         then ((n + 1, nv ), Nothing            )
         else ((0,     def), Just $ bitCoerce nv)
 
   s ~~> Nothing
     = (s, Nothing)
-
-modZero ∷ ∀ m n. m `Mod` n ~ 0 => Dict (m `Div` n * n ~ m)
-modZero = unsafeCoerce (Dict ∷ Dict (0 ~ 0))

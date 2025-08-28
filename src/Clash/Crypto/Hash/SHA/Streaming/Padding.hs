@@ -19,7 +19,6 @@ Streaming based padding implementation of FIPS 180-4.
 
 module Clash.Crypto.Hash.SHA.Streaming.Padding
   ( ReqSizeFrames
-  , atLeastOneSizeFrame
   , PaddedMsgFrame
   , pattern NoData
   , pattern Data
@@ -32,11 +31,13 @@ module Clash.Crypto.Hash.SHA.Streaming.Padding
 import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
-import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (DDiv, leTrans, modBound, timesMod)
+import Data.Constraint.Nat.Extra
+  ( DDiv, LeTrans, ModBound, TimesMod, DivisorIsLess, DivisorMonotoneInverse
+  , ModZero, CLog2IsLessProduct, PositiveResultCond0, CLog2LECond0
+  )
 import Data.Type.Bool (If)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
-import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
 
@@ -46,17 +47,6 @@ type ReqSizeFrames alg n =
   If (n <=? SizeBits alg)
     (SizeBits alg `Div` n + If (n `Mod` SizeBits alg <=? 0) 0 1)
     1
-
--- | Evidence that always at least one frame is required to store the
--- message size.
---
--- prop> ∀ a b ∈ ℕ. b > 0 → a > b ? a div b + (b mod a ≡ 0 ? 0 : 1) : 1
-atLeastOneSizeFrame ∷
-  ∀ (a ∷ Nat) (b ∷ Nat).
-  1 ≤ b ⇒
-  Dict (1 ≤ If (b <=? a) (a `Div` b + If (b `Mod` a <=? 0) 0 1) 1)
-atLeastOneSizeFrame =
-  unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
 -- | We store the message size in terms of the number of @n@-bit
 -- frames + some remaining bits required to hold the whole message.
@@ -142,7 +132,7 @@ padMessageStream ∷
   -- of the message will always be aligned with the frame size @n@.
 padMessageStream
   | SHAFacts{} ← knownSHA @alg
-  , Dict ← fact₁
+  , Rewrite ← fact₁
   = mealy (~~>) $ Left $ MsgBits 0 0
  where
   (~~>) ∷
@@ -200,7 +190,7 @@ padMessageStream
 
     | trim > 0
     , SHAFacts{} ← knownSHA @alg
-    , Dict ← fact₀
+    , Rewrite ← fact₀
     , let c = fromEnum trim; bits = ((dLast `shiftR#` c) .<<+ 1) `shiftL#` c - 1
     = (ePad, fmap (or# bits) <$> meVec)
 
@@ -221,8 +211,8 @@ padMessageStream
 
     | otherwise
     , SHAFacts{} ← knownSHA @alg
-    , Dict ← fact₁
-    , Dict ← atLeastOneSizeFrame @(SizeBits alg) @n
+    , Rewrite ← fact₁
+    , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
     , let d = head @(ReqSizeFrames alg n - 1) msgSize
     = ( if remainingSizeFrames > 0
         then Right p { remainingFrames     = remainingFrames - 1
@@ -253,8 +243,8 @@ padMessageStream
               -- ^ specialized 'truncateB'
               rFrames ∷ Index (2 * BlockSize alg)
               rFrames
-                | Dict ← fact₀
-                , Dict ← fact₁
+                | Rewrite ← fact₀
+                , Rewrite ← fact₁
                 = nFits - truncateB₀ (mod s nFits)
               -- ^ number of @n@-bit frames that still must be padded
               -- within the current message block
@@ -284,9 +274,9 @@ padMessageStream
     BitVector (CLog 2 ((2 ^ SizeBits alg) `Div` n))
   pack₀
     | SHAFacts{} ← knownSHA @alg
-    , Dict ← fact₀
-    , Dict ← fact₁
-    , Dict ← leTrans @1 @(2 * BlockSize alg) @((2 ^ SizeBits alg) `Div` n)
+    , Rewrite ← fact₀
+    , Rewrite ← fact₁
+    , Rewrite ← using @(LeTrans 1 (2 * BlockSize alg) (2 ^ SizeBits alg `Div` n))
     = pack
 
   extend₀ ∷
@@ -294,77 +284,51 @@ padMessageStream
     BitVector (n * ReqSizeFrames alg n)
   extend₀
     | SHAFacts{} ← knownSHA @alg
-    , Dict ← fact₀
-    , Dict ← leTrans @1 @(2 * BlockSize alg) @((2 ^ SizeBits alg) `Div` n)
-    , Dict ← lemma₀ @(SizeBits alg) @n
+    , Rewrite ← fact₀
+    , Rewrite ← using
+        @( LeTrans 1 (2 * BlockSize alg) ((2 ^ SizeBits alg) `Div` n)
+         )
+    , Rewrite ← using @(CLog2LECond0 (SizeBits alg) n)
     = extend @BitVector
         @(CLog 2 ((2 ^ SizeBits alg) `Div` n))
         @(n * ReqSizeFrames alg n - CLog 2 ((2 ^ SizeBits alg) `Div` n))
-   where
-    lemma₀ ∷
-      ∀ (a ∷ Nat) (b ∷ Nat).
-      1 ≤ b ⇒
-      Dict ( CLog 2 ((2 ^ a) `Div` b)
-           ≤ b * (If (b <=? a) (a `Div` b + If (b `Mod` a <=? 0) 0 1) 1)
-           )
-    lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
   extend₁ ∷
     BitVector (CLog 2 n) →
     BitVector (n * ReqSizeFrames alg n)
   extend₁
     | SHAFacts{} ← knownSHA @alg
-    , Dict ← atLeastOneSizeFrame @(SizeBits alg) @n
-    , Dict ← lemma₀ @n @(ReqSizeFrames alg n)
+    , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
+    , Rewrite ← using @(CLog2IsLessProduct n (ReqSizeFrames alg n))
     = extend @BitVector
         @(CLog 2 n)
         @(n * ReqSizeFrames alg n - CLog 2 n)
-   where
-    lemma₀ ∷
-      ∀ (a ∷ Nat) (b ∷ Nat).
-      1 ≤ b ⇒
-      Dict (CLog 2 a ≤ a * b)
-    lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
 
-  fact₀ ∷ Dict (2 * BlockSize alg <= (2 ^ SizeBits alg) `Div` n)
+  fact₀ ∷ Rewrite (2 * BlockSize alg <= (2 ^ SizeBits alg) `Div` n)
   fact₀
     | SHAFacts{} ← knownSHA @alg
-    , Dict ← modBound @(BlockSize alg) @n
-    , Dict ← lemma₀ @(BlockSize alg) @n
-    , Dict ← lemma₁
-        @(BlockSize alg)
-        @n
-        @(2 ^ SizeBits alg)
-        @(2 * BlockSize alg)
-    = Dict
-   where
-    lemma₀ ∷
-      ∀ (a ∷ Nat) (b ∷ Nat).
-      (1 ≤ b, a `Mod` b ~ 0) ⇒
-      Dict (b ≤ a)
-    lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
+    , Rewrite ← using @(ModBound (BlockSize alg) n)
+    , Rewrite ← using @(DivisorIsLess (BlockSize alg) n)
+    , Rewrite ← using
+        @( DivisorMonotoneInverse
+             (BlockSize alg)
+             n
+             (2 ^ SizeBits alg)
+             (2 * BlockSize alg)
+         )
+    = Rewrite
 
-    lemma₁ ∷
-      ∀ (a ∷ Nat) (b ∷ Nat) (c ∷ Nat) (d ∷ Nat).
-      (b ≤ a, d ≤ c `Div` a) ⇒
-      Dict (d ≤ c `Div` b)
-    lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  fact₁ ∷ Dict ((2 ^ SizeBits alg) `DDiv` n ~ (2 ^ SizeBits alg) `Div` n)
+  fact₁ ∷ Rewrite ((2 ^ SizeBits alg) `DDiv` n ~ (2 ^ SizeBits alg) `Div` n)
   fact₁
     | SHAFacts{} ← knownSHA @alg
-    , Dict ← timesMod
-        @(BlockSize alg)
-        @((2 ^ SizeBits alg) `Div` BlockSize alg)
-        @n
-    , Dict ← lemma₀ @n
-    = Dict
-   where
-    lemma₀ ∷
-      ∀ (a ∷ Nat).
-      1 ≤ a ⇒
-      Dict (0 `Mod` a ~ 0)
-    lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))
+    , Rewrite ← using
+        @(TimesMod
+            (BlockSize alg)
+            ((2 ^ SizeBits alg) `Div` BlockSize alg)
+            n
+         )
+    , Rewrite ← using @(ModZero n)
+    = Rewrite
 
 riseMsb ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ BitVector n → BitVector n
 riseMsb = (pack high ++#) . truncateB# @(n-1) @1

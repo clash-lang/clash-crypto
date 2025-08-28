@@ -66,15 +66,13 @@ library
   hs-source-dirs: src
   build-depends:
     , clash-lib
-    , constraints
-    , template-haskell
     , ghc-typelits-proof-assist
+    , template-haskell
   exposed-modules:
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
-    Clash.Crypto.ECDSA.Lemmas
     Clash.Crypto.ECDSA.Modulo
     Clash.Crypto.ECDSA.Utils
     Clash.Crypto.Hash.SHA
@@ -108,8 +106,8 @@ test-suite simulation
     , bytestring
     , clash-crypto
     , clash-prelude-hedgehog
-    , constraints
     , cryptohash
+    , ghc-typelits-proof-assist
     , hedgehog >= 1.0
     , modular-arithmetic
     , tasty >= 1.5
@@ -121,8 +119,9 @@ library hitlt-shared
   import: common-options
   hs-source-dirs: tests/hitl/lib
   build-depends:
+    , clash-crypto
     , clash-lib
-    , constraints
+    , ghc-typelits-proof-assist
     , infinite-list
     , mtl
     , pretty-show
@@ -141,7 +140,6 @@ library hitlt-instances
   build-depends:
     , clash-crypto
     , clash-crypto:hitlt-shared
-    , constraints
   exposed-modules:
     BEA
     FastGCD

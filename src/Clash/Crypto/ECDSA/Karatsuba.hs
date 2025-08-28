@@ -13,17 +13,17 @@ algorithm.
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
- (karatsuba, karatsubaSequentialGated)
-where
+  ( karatsuba
+  , karatsubaSequentialGated
+  ) where
 
-import Clash.Crypto.ECDSA.Lemmas
-import Clash.Prelude hiding ((++))
 import Clash.Netlist.Util (orNothing)
-import Data.Constraint (Dict (..))
+import Clash.Prelude hiding ((++))
+
 import Data.Functor ((<&>))
 import Data.Maybe (isJust)
-import Unsafe.Coerce (unsafeCoerce)
-import GHC.TypeNats.Proof
+import Data.Constraint.Nat.Extra (Div2RoundsDown, HalfIsLess)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 
 -- * Combinatorial implementations
 
@@ -43,7 +43,7 @@ karatsuba ::
   -- ^ The lower bound defining the base case at which standard
   -- multiplication is used instead of another recursive call
   Unsigned n -> Unsigned m -> Unsigned (n + m)
-karatsuba regSize@SNat x y | Rewrite <- using @(LemmaLowIsLess (Max n m)) =
+karatsuba regSize@SNat x y | Rewrite <- using @(HalfIsLess (Max n m)) =
   case compareSNat (SNat @(n + m)) regSize of
     SNatLE -> extend x * extend y
     SNatGT -> karatsubaInternal size
@@ -116,8 +116,8 @@ karatsubaSequentialGated# UZero toggle x y = register Nothing $
  (Just <$> liftA2 (karatsuba @regSize SNat) x y) (pure Nothing)
 karatsubaSequentialGated# (USucc streamingStagesLeft) toggle x y
  | _ :: UNat streamLeft <- streamingStagesLeft
- , Rewrite <- using @(LemmaLowIsLess s)
- , Dict <- lemmaLowIsLessThanHigh @s
+ , Rewrite <- using @(HalfIsLess s)
+ , Rewrite <- using @(Div2RoundsDown s)
  =
  let
   toggleSwitched = toggle ./=. register False toggle
@@ -191,9 +191,3 @@ computeZ1 z3 z2 z0 = z3 - z2 - z0
 extendRight :: forall b a. (KnownNat a, KnownNat b) =>
  Unsigned a -> Unsigned (a + b)
 extendRight a = bitCoerce (a, 0 :: Unsigned b)
-
--- * Lemmas
-
-lemmaLowIsLessThanHigh :: forall s. Dict (Low s <= High s)
-lemmaLowIsLessThanHigh = unsafeCoerce (Dict :: Dict (0 <= 0))
-

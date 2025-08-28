@@ -9,46 +9,54 @@ Implementations of inverse modulo algorithms.
 -}
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-type-defaults #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
- (bea, divSteps, fastGcdSequential, fltCtmi, Precomp, sictMiSequential,
-  deriveSictPrecomp)
-where
+  ( Precomp
+  , bea
+  , divSteps
+  , fastGcdSequential
+  , fltCtmi
+  , sictMiSequential
+  , deriveSictPrecomp
+  ) where
 
-import Clash.Crypto.ECDSA.Lemmas (lemmaModSize)
-import Clash.Crypto.ECDSA.Modulo
- (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
-import Clash.Crypto.ECDSA.Utils
-import Clash.Prelude hiding (Mod)
-import Data.Constraint (Dict (Dict))
-import qualified GHC.TypeLits as P
-import Data.Type.Bool (If)
-import Clash.Crypto.ECDSA.Fraction (HWFraction (HWFraction), shiftRFraction)
-import Unsafe.Coerce (unsafeCoerce)
-import qualified Data.Functor as F
-import Data.Maybe (isJust, fromMaybe)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
 import Clash.Netlist.Util (orNothing)
-import Clash.Crypto.ECDSA.InverseModulo.Internal
+import Clash.Prelude hiding (Mod)
+
 import Control.Monad (guard)
+import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
+import Data.Maybe (isJust, fromMaybe)
+import Data.Type.Bool (If)
+import GHC.TypeNats.Proof (Rewrite(..), using)
+
+import qualified Data.Functor as F (unzip)
+import qualified GHC.TypeLits as P (Mod)
+
+import Clash.Crypto.ECDSA.InverseModulo.Internal
+import Clash.Crypto.ECDSA.Fraction (HWFraction (HWFraction), shiftRFraction)
+import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
+import Clash.Crypto.ECDSA.Modulo
+  (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
+import Clash.Crypto.ECDSA.Utils
+  ( ComputationState, pattern Working, pattern Finished
+  , signedToUnsigned, unsignedToSigned
+  )
 
 -- * Binary Euclidean Algorithm
 
--- |A streaming implementation of the Binary Euclidean Algorithm.
+-- | A streaming implementation of the Binary Euclidean Algorithm.
 -- It computes the inverse of a positive integer modulo m.
--- 
+--
 -- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
 bea :: forall m dom.
- (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= m) =>
+ (KnownNat m, KnownDomain dom, HiddenClockResetEnable dom, 2 <= m) =>
  Signal dom Bool -> -- ^ Toggle line
  Signal dom (Mod m) ->
  Signal dom (Maybe (Mod m))
-bea toggle s | Dict <- lemmaModSize @m =
+bea toggle s | Rewrite <- using @(CLog2KeepsPositive m) =
  let
   p = natToNum @m
   (~~>) :: BeaState m ->
@@ -127,13 +135,13 @@ data BeaState (m :: Nat)
 
 -- * FastGCD
 
--- |Number of iterations for FastGCD based on the bitlength.
+-- | Number of iterations for FastGCD based on the bitlength.
 type Iterations (d :: Nat) =
- If (d <=? 45) (Div (49 * d + 80) 17) (Div (49 * d + 57) 17)
+ 1 + If (d <=? 45) (Div (49 * d + 80 - 17) 17) (Div (49 * d + 57 - 17) 17)
 
 type FastGCDIterations d = Iterations (ModSize d)
 
--- |Precomputed value used by FastGCD.
+-- | Precomputed value used by FastGCD.
 type Precomp (f :: Nat) =
  P.Mod (Div (f + 1) 2 ^ (FastGCDIterations f - 1)) f
 
@@ -153,7 +161,7 @@ data FastGCDRecord m = FastGCD
 
 type FastGCDState m = ComputationState (FastGCDRecord m)
 
--- |A sequential implementation of the divSteps2 function described in
+-- | A sequential implementation of the divSteps2 function described in
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
 -- inversion.
 divSteps :: forall m dom.
@@ -185,7 +193,7 @@ divSteps toggle value = mealy (~~>) Finished valueM
    Working (FastGCD { remaining = 0, .. }) ~~> _ = (Finished, Just (f, v))
    Working state ~~> _ = (Working . shifter . shuffle $ state, Nothing)
 
--- |A sequential implementation for FastGCD. It shouldn't be used directly,
+-- | A sequential implementation for FastGCD. It shouldn't be used directly,
 -- because better resource usage could be achieved by sharing subcomponents.
 fastGcdSequential :: forall m dom.
  (KnownNat m, 1 <= m, KnownDomain dom, HiddenClockResetEnable dom, 1 <= Iterations m,
@@ -193,10 +201,8 @@ fastGcdSequential :: forall m dom.
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Mod m) -> -- ^ Number to invert
  Signal dom (Maybe (Mod m))
-fastGcdSequential toggle s
- | Dict <- lemmaModSize @m
- , Dict <- lemmaIterations @(ModSize m)
- = let
+fastGcdSequential toggle s =
+  let
    -- Precomputed value for the algorithm.
    precomp :: Signal dom (Unsigned (ModSize m))
    precomp = pure $ natToNum @(Precomp m)
@@ -275,7 +281,7 @@ fltCtmi toggle value
   _ ~~> (True, _) = (FLTSquare maxBound, (False, True, False))
   FLTWaiting ~~> _ = (FLTWaiting, (False, False, False))
   FLTSquare 0 ~~> _ = (FLTWaiting, (False, False, True))
-  FLTSquare remaining ~~> (_, True) = 
+  FLTSquare remaining ~~> (_, True) =
    -- Check the i-th bit of k
    if bitToBool $ k !! (remaining - 1) then
     (FLTMul remaining, (True, True, False))
@@ -366,7 +372,3 @@ sictMiSequential toggle s
     toggleKaratsuba (bitCoerce . fromMaybe 0 <$> register Nothing modResult) precomp
   in
    computeModuloUnsigned @m toggleLastMod $ fromMaybe 0 <$> register Nothing karatsubaRes
--- * Lemmas
-
-lemmaIterations :: forall d. (KnownNat d, 1 <= d) => Dict (1 <= Iterations d)
-lemmaIterations = unsafeCoerce (Dict :: Dict (0 <= 0))

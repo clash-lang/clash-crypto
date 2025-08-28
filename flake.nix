@@ -36,11 +36,11 @@
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };
-          myHsPkgs = pkgs.haskell.packages.ghc910.extend overlay;
+          myHsPkgs = pkgs.haskell.packages.ghc9101.extend overlay;
       in
       {
         devShells.default = myHsPkgs.shellFor {
-          name = "ghc910";
+          name = "GHC 9.10.1";
           packages = p: [ p.clash-crypto ];
           inputsFrom = [];
           nativeBuildInputs =

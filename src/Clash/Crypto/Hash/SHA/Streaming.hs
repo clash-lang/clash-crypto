@@ -15,12 +15,11 @@ module Clash.Crypto.Hash.SHA.Streaming where
 import Clash.Prelude
 import Clash.Signal.Delayed.Extra
 
-import Data.Constraint (Dict(..))
-import Data.Constraint.Nat.Extra (DDiv)
+import Data.Constraint.Nat.Extra (DDiv, CancelMultiple, KeepsPositiveIfMultiple)
 import Data.Either (fromRight)
 import Data.Maybe (isJust, isNothing)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
-import Unsafe.Coerce (unsafeCoerce)
 
 import Clash.Crypto.Hash.SHA.Specification
 import Clash.Crypto.Hash.SHA.Streaming.Padding
@@ -51,8 +50,13 @@ hashStream ∷
   DSignal dom (k + DDiv (BlockSize alg) n) (Maybe (HashValue alg))
 hashStream input
   | SHAFacts alg ← knownSHA @alg
-  , Dict ← lemma₀ @(BlockSize alg) @n
-  , Dict ← lemma₁ @(BitSize (MessageBlock alg)) @n
+  , Rewrite ← using @(KeepsPositiveIfMultiple (BlockSize alg) n)
+  , let lemma ∷
+          ∀ (m ∷ Nat).
+          (1 ≤ Div m n, Mod m n ~ 0) ⇒
+          Rewrite (((Div m n - 1) + 1) * n ~ m)
+        lemma | Rewrite ← using @(CancelMultiple m n) = Rewrite
+  , Rewrite ← lemma @(BitSize (MessageBlock alg))
   =
   let
     -- some buffer to shift in @(BlockSize alg / n) - 1@ frames
@@ -130,16 +134,3 @@ hashStream input
     mux endOfMessage
       (Just <$> hashValue)
       (pure Nothing)
-
- where
-  lemma₀ ∷
-    ∀ (a ∷ Nat) (b ∷ Nat).
-    (1 ≤ a, 1 ≤ b, Mod a b ~ 0) ⇒
-    Dict (1 ≤ Div a b)
-  lemma₀ = unsafeCoerce (Dict ∷ Dict (0 ≤ 0))
-
-  lemma₁ ∷
-    ∀ (a ∷ Nat) (b ∷ Nat).
-    (1 ≤ Div a b, Mod a b ~ 0) ⇒
-    Dict (((Div a b - 1) + 1) * b ~ a)
-  lemma₁ = unsafeCoerce (Dict ∷ Dict (0 ~ 0))

@@ -79,11 +79,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1749544109,
-        "narHash": "sha256-zyqdK9UPNLa5yCWRJ0Y37/w8rfuj9ZJB7+plN9/vK+Q=",
+        "lastModified": 1755002660,
+        "narHash": "sha256-4/dQKCodsaVrHFZA04xOnKZxXACNKCSksYr5VG1oQRM=",
         "ref": "main",
-        "rev": "57567b0ac4eed12d410cb9f789fc83f289e5c4c7",
-        "revCount": 8,
+        "rev": "9af91227336ce056b8be7cf993b43a77cd3ff589",
+        "revCount": 9,
         "type": "git",
         "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       },
@@ -127,11 +127,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1748662220,
-        "narHash": "sha256-7gGa49iB9nCnFk4h/g9zwjlQAyjtpgcFkODjcOQS0Es=",
+        "lastModified": 1754990257,
+        "narHash": "sha256-eEq2wlYNF2t89PsNyEv5Sz4lSxdukZCj4SdhZBVAGpI=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "59138c7667b7970d205d6a05a8bfa2d78caa3643",
+        "rev": "372d9eeeafa5b15913201e2b92e8e539ac7c64d1",
         "type": "github"
       },
       "original": {

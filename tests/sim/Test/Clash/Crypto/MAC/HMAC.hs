@@ -3,10 +3,10 @@
 module Test.Clash.Crypto.MAC.HMAC where
 
 import Clash.Prelude
-import Data.Constraint (Dict(..))
+import Data.Constraint.Nat.Extra (CancelMultiple)
 import Data.Maybe
+import GHC.TypeNats.Proof (Rewrite(..), using)
 import qualified Data.List as List
-import Unsafe.Coerce (unsafeCoerce)
 
 import Test.Tasty
 import Test.Tasty.Hedgehog
@@ -65,7 +65,7 @@ hmacImpl ::
   ByteString
 hmacImpl isKeyI (keySpacings, msgSpacings) (keyData, msgData)
   | SHAFacts _ <- knownSHA @alg
-  , Dict ← lemma @(MessageDigestSize alg) @8
+  , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       addSpacings xs
         = List.concatMap (\(j, x) -> x : List.replicate j (fst x, Nothing))
@@ -111,16 +111,9 @@ hmacImpl isKeyI (keySpacings, msgSpacings) (keyData, msgData)
         $ withClockResetEnable clockGen resetGen enableGen
         $ uncurry (hmac @alg)
         $ unbundle
-        $ fromList
-        $ hmacTestInput
+        $ fromList hmacTestInput
     in
       BS.pack $ toList $ unpack <$> output
- where
-  lemma ::
-    forall (x :: Nat) (y :: Nat).
-    (1 <= y, x `Mod` y ~ 0) =>
-    Dict (x `Div` y * y ~ x)
-  lemma = unsafeCoerce (Dict :: Dict (0 ~ 0))
 
 hmacRefImpl ::
   forall (alg :: SHA).
