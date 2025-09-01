@@ -6,7 +6,7 @@ Stability   : experimental
 Portability : POSIX
 
 A 'Channel' is a special purpose 'Signal' additionally keeping track
-of the availability and temporally stability of the data it
+of the availability and temporal stability of the data it
 captures. On the one hand, a channel makes it more comfortable for the
 data provider to release and maintain the provided data over time. On
 the other hand, it helps the consumer to access the data and keep
@@ -40,7 +40,7 @@ import Clash.Signal (Signal, HiddenClockResetEnable)
 import Clash.Signal.Bundle (Bundle(..))
 import Clash.XException (NFDataX(..), ShowX)
 import Control.Applicative (Applicative(..), Alternative(..), (<$>))
-import Data.Bool (Bool(..))
+import Data.Bool (Bool(..), not)
 import Data.Eq (Eq)
 import Data.Enum (Enum, Bounded)
 import Data.Function (($), (.))
@@ -56,9 +56,9 @@ import GHC.Records (HasField(..))
 import GHC.Show (Show)
 
 -- | An extended option type that allows to differentiate between
--- whether some data is fresh or old.
+-- old and fresh data.
 data Content a = None | Fresh a | Old a
-  deriving (Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX)
+  deriving (Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX, Functor)
 
 instance Semigroup a ⇒ Semigroup (Content a) where
   None    <> p       = p
@@ -71,11 +71,6 @@ instance Semigroup a ⇒ Semigroup (Content a) where
 instance Semigroup a ⇒ Monoid (Content a) where
   mempty = None
 
-instance Functor Content where
-  fmap f = \case
-    None    → None
-    Fresh x → Fresh $ f x
-    Old x   → Old $ f x
 
 instance Applicative Content where
   pure = Old
@@ -93,9 +88,10 @@ instance Alternative Content where
   None <|> p = p
   p    <|> _ = p
 
+
 -- | A channel is a signal that either holds value or none.
 -- Additionally, if holding a signal, the channel keeps track of the
--- hold value being fresh, i.e., updated at the current cycle, or not.
+-- held value being fresh, i.e., updated at the current cycle, or not.
 --
 -- From a theoretical point of view, a 'Channel' can be considered to
 -- be a 'Signal' over a special 'Monoid' that enables some more
@@ -185,16 +181,14 @@ instance HasField "isEmpty" (Channel dom a) (Signal dom Bool) where
 -- | A Boolean flag indicating the points in time at which the channel
 -- holds some data.
 isNonEmpty ∷ Channel dom a → Signal dom Bool
-isNonEmpty c = getContent c <&> \case
-  None → False
-  _    → True
+isNonEmpty = fmap not . isEmpty
 
 instance HasField "isNonEmpty" (Channel dom a) (Signal dom Bool) where
   getField = isNonEmpty
 
 -- | Turns a 'Signal' into a 'Channel' via adding a 'ProviderAction'
--- with the assumption that the data from the input keeps stable after
--- being released until the next release or being cleared.
+-- with the assumption that the data from the input stays stable after
+-- being released until being cleared or released again.
 --
 -- If the input signal cannot maintain this condition, consider using
 -- 'cachedChannel' instead.
@@ -216,7 +210,7 @@ channel cnt act = Channel $ mealy (~~>) False $ bundle (cnt, act)
 -- to 'Clear' the channel.
 --
 -- Note that this channel constructor requires additional memory for
--- caching the input. If the input keeps stable after a 'Release'
+-- caching the input. If the input stays stable after a 'Release'
 -- anyway, then it might be desirable to use 'channel' instead.
 cachedChannel ∷
   (HiddenClockResetEnable dom, NFDataX a) ⇒
@@ -243,10 +237,9 @@ contentFilter f = Channel . mealy (~~>) True . getContent
 
   g b c = (b, if b then c else None)
 
--- | Restricts channel access over time, where the content of the
--- input channel only passes the guard, if the Boolean selector
--- evaluates positively at the point in time where content gets
--- released.
+-- | Restricts channel access over time: the content of the input
+-- channel only passes the guard, if the Boolean selector evaluates to
+-- @True@ at the point in time where content gets released.
 channelGuard ∷
   (HiddenClockResetEnable dom, NFDataX a) ⇒
   Signal dom Bool →
