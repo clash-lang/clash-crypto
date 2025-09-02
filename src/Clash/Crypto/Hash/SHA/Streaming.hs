@@ -112,7 +112,7 @@ hashStream input
           (Just <$> msgBlock)
           (pure Nothing)
   in
-    channel hashValue
+    channel $ bundle $ (hashValue, )
       $ mux input.atStartFrame        (pure Clear)
       $ mux (proceed .&&. afterInput) (pure Release)
                                       (pure Keep)

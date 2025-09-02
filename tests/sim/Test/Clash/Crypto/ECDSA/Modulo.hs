@@ -14,7 +14,9 @@ module Test.Clash.Crypto.ECDSA.Modulo where
 
 import Clash.Crypto.ECDSA.Modulo (computeModuloUnsigned, ModSize, unMod)
 import Clash.Prelude
-import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
+import Clash.Signal.Channel
+import Data.Maybe (fromMaybe)
+import Data.Monoid (First(..))
 import Data.Proxy
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Stack (HasCallStack)
@@ -26,7 +28,6 @@ import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit), testProperty)
 
 import qualified Data.List as List
-import qualified Data.List.NonEmpty as NonEmpty
 import qualified Hedgehog.Range as Range
 
 tastyTests :: HasCallStack => TestTree
@@ -46,34 +47,28 @@ testOutput ::
   (KnownNat modT, 1 <= modT, ModSize modT <= 64) =>
   Unsigned 64 ->
   -- ^ n
-  [Maybe (Unsigned 64)] ->
-  -- ^ TestInput
   Unsigned 64 ->
   -- ^ Modulus
   Unsigned 64
-testOutput n testInput modulus
-  = let output =
-          catMaybes
-          $ sampleN @System (fromEnum (n `div` modulus) + 100)
-          $ withClockResetEnable clockGen resetGen enableGen
-          $ fmap (fmap (resize . bitCoerce . unMod)) $ computeModuloUnsigned @modT
-            (fromList listToggle) (fromList $ fromMaybe 0 <$> testInput)
-        listToggle = NonEmpty.tail $
-          NonEmpty.scanl (\t m -> maybe t (const (not t)) m) False testInput
-  in case listToMaybe output of
-        Just a -> a
-        Nothing -> error "The returned list was empty"
-
+testOutput n modulus
+  = fromMaybe (error "The returned list was empty")
+  $ getFirst
+  $ foldMap First
+  $ sampleN @System (fromEnum (n `div` modulus) + 100)
+  $ withClockResetEnable clockGen resetGen enableGen
+  $ newsfeed
+  $ fmap (resize . bitCoerce . unMod)
+  $ computeModuloUnsigned @modT
+  $ channel
+  $ fmap (n, )
+  $ fromList
+  $ Keep : Keep : Release : List.repeat Keep
 
 testMod :: (MonadFail m, MonadTest m) => Unsigned 64 -> Unsigned 64 -> m ()
 testMod n modulus = do
   Just (SomeNat (_ :: Proxy modT)) <- return $ someNatVal $ toInteger modulus
-  let testInput =
-        [Nothing, Nothing]
-        <> [Just n]
-        <> List.repeat Nothing
   case (Proxy :: Proxy 1) %<=? (Proxy :: Proxy modT) of
     LE Refl -> case (Proxy :: Proxy (ModSize modT)) %<=? (Proxy :: Proxy 64) of
-      LE Refl -> testOutput @modT n testInput modulus === fromIntegral n `mod` modulus
+      LE Refl -> testOutput @modT n modulus === fromIntegral n `mod` modulus
       NLE _ _ -> error "ModSize modulus should be less than or equal to 64"
     NLE _ _ -> error "The given modulus should be greater than 1"

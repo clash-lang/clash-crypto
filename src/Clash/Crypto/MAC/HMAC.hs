@@ -159,7 +159,7 @@ hmac (mapEnd (const (0 :: Index 8)) → input)
       atOuterKeyStage    = stage <&> \case { OuterKey    → True; _ → False }
       atOuterDigestStage = stage <&> \case { OuterDigest → True; _ → False }
     in
-      channelGuard atOuterDigestStage digest
+      guardC atOuterDigestStage digest
 
 -- | Stores the last received 'Charge' and holds it until being
 -- discharged. While discharging, the stored value is streamed out in

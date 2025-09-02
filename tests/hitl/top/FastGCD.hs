@@ -11,10 +11,9 @@ import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.ECDSA.InverseModulo (fastGcdSequential)
-
-import Data.Maybe (isJust)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -29,12 +28,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom12 Bit
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ \(bulkRead → request) →
-      let
-        -- switch the toggle when a new value is received
-        toggle = register False $ toggle ./=. (isJust <$> request)
-        x = regMaybe 0 request
-      in
-        fastGcdSequential @Q toggle x
+  $ newsfeed . fastGcdSequential @Q . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

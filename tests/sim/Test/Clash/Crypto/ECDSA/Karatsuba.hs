@@ -12,7 +12,10 @@ module Test.Clash.Crypto.ECDSA.Karatsuba where
 
 import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaSequentialGated)
 import Clash.Prelude
-import Data.Maybe (catMaybes, listToMaybe)
+import Clash.Signal.Channel
+import Data.Maybe (fromMaybe)
+import Data.Monoid (First(..))
+--import Data.Maybe (catMaybes, listToMaybe)
 
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Hedgehog
@@ -55,18 +58,15 @@ testKaratsubaSequential p1 p2 = do
   expectedOutput :: Unsigned (TestLen * 2)
   expectedOutput = resize p1 * resize p2
 
-  testInput = List.repeat (p1, p2)
-  toggleInput =
-    [False, False]
-      <> List.repeat True
-  actualOutput =
-    case listToMaybe actualOutputList of
-      Just a -> a
-      Nothing -> error "The returned list was empty"
-  (x,y) = List.unzip testInput
-  actualOutputList =
-    catMaybes $
-    sampleN @System 4000 $
-    withClockResetEnable clockGen resetGen enableGen $
-    karatsubaSequentialGated @4 @36
-    (fromList toggleInput) (fromList x) (fromList y)
+  actualOutput
+    = fromMaybe (error "The returned list was empty")
+    $ getFirst
+    $ foldMap First
+    $ sampleN @System 4000
+    $ withClockResetEnable clockGen resetGen enableGen
+    $ newsfeed
+    $ karatsubaSequentialGated @4 @36
+    $ channel
+    $ fmap ((p1, p2), )
+    $ fromList
+    $ Keep : Keep : Release : List.repeat Keep
