@@ -61,10 +61,8 @@
             eval $(opam env)
           '';          nativeBuildInputs =
             with pkgs; [
-              gnumake yosys nextpnr trellis ocaml-ng.ocamlPackages_4_09.ocaml opam gmp pkg-config
-              coq_8_13
-            ] ++
-            (with myHsPkgs; [ cabal-install haskell-language-server ])
+              gnumake yosys nextpnr trellis opam gmp pkg-config ] ++
+            (with myHsPkgs; [ cabal-install ])
             ++ [ecpprog.defaultPackage.${system}]
           ;
         };

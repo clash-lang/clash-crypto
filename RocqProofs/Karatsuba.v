@@ -1,59 +1,17 @@
 Require Import Coq.Init.Wf.
 Require Import Coq.Program.Wf.
 From Equations Require Import Equations.
-From mathcomp Require Import ssreflect ssrfun ssrbool ssrnat ssreflect.fintype.
+From mathcomp Require Import ssreflect ssrfun ssrbool ssrnat tuple seq.
 From mathcomp Require Import zify.
+From Bits Require Import bits.
 
+Require Import Wf.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-From Bits Require Import bits.
-
-Search BITS.
-
-(* TODO: Make bitlength a variable global to the section
-   However, it needs to interact correctly with the karatsuba defintion. *)
-
 Section Karatsuba.
-  
-  (* We need wellfoundedness in order to use `<` as a measure. *)  
-  Section Well_founded_Nat.
-    Variable A : Type.
-    Variable f : A -> nat.
-
-    Definition ltof (a b:A) := f a < f b.
-
-    Lemma leq_ltn_trans2 n m p : m < n -> n <= p -> m < p.
-      by move=> Hmn; apply: leq_trans.
-    Qed.
-
-    (* There are easier proofs given as an example of Equations. *)
-
-    Theorem well_founded_ltof : well_founded ltof.
-      assert (H : forall n (a:A), f a < n -> Acc ltof a).
-      { intro n; induction n as [|n IHn].
-        - by intros a Ha; absurd (f a < 0); auto.
-        - intros a Ha. apply Acc_intro. unfold ltof at 1. intros b Hb.
-          apply IHn.
-          apply leq_ltn_trans2 with (n := f a).
-          apply Hb. by [].
-          
-      }
-      by intros a ; apply (H (S (f a))) ; apply ltnSn.
-    Qed.
-
-  End Well_founded_Nat.
-  
-  Definition ltn2 (a b:nat) := a < b.
-
-  Lemma ltn_wf : well_founded ltn2.
-    exact (well_founded_ltof (fun m => m)).
-  Qed.
-
-  Instance ltn_wf' : WellFounded ltn2 := ltn_wf.
-
   Lemma uphalf_half1 : forall (n : nat), n = uphalf n + half n.
     move=> n.
     rewrite uphalf_half.
@@ -109,6 +67,8 @@ Section Karatsuba.
     by rewrite uphalf_half addnC [in RHS]addnAC !doubleD //=.
   Qed.
 
+  (* This is equivalent, modulo the max(n, m) part, to the corresponding sequential
+     Karatsuba implementation in Clash.Crypto.ECDSA.Karatsuba *)
   Equations karatsuba {bitlength : nat} {prf : bitlength <> 0} (x : BITS bitlength) (y: BITS bitlength) : BITS (bitlength.*2) by wf bitlength ltn2  :=
     karatsuba (bitlength := 0) _ _ with prf eq_refl := { | ! } ;
     karatsuba (bitlength := n.+4) x y :=
@@ -127,8 +87,10 @@ Section Karatsuba.
               (addB
                  (shlBn (zeroExtend (bitlength./2.*2 - 2) z1) (bitlength./2))
                  (zeroExtend (bitlength./2.*2 - 2) z0))))) ;
-    karatsuba x y := fromNat (toNat x * toNat y)
+    (* Base case: 0 < bitlength < 4 *)
+    karatsuba x y := fullmulB x y
   .
+  (* Size of the recursive argument is decreasing *)
   Next Obligation.
     by rewrite /ltn2 ; lia.
   Qed.
@@ -161,7 +123,6 @@ Section Karatsuba.
 
   Lemma kara_sum : forall (A x0 x1 y0 y1 : nat),
       (x1 * A + x0) * (y1 * A + y0) = x1 * y1 * A ^2 + (x1 * y0 + x0 * y1) * A + x0 * y0.
-    Unset Printing Parentheses.
     lia.
   Qed.
 
@@ -192,19 +153,22 @@ Section Karatsuba.
       have Hextra: 1 <= extra by rewrite -(ltn_predK leq_shift).
       have Hblextra : 2 <= bitlength + extra by rewrite -addn1; apply (leq_add Hbl Hextra).
       have Hpower : 4 <= 2 ^ (bitlength + extra).
-      rewrite [_ < _]/(_.+1 <= _) [4]/(2^2). apply leq_pexp2l. by []. exact Hblextra.
+      rewrite [_ < _]/(_.+1 <= _) [4]/(2^2);  apply leq_pexp2l.
+      + by [].
+      + exact Hblextra.
       rewrite (IHshift (ltnW leq_shift)).
-      rewrite !div.modn_small. by rewrite -mulnA -expnSr.
-      have Hbidule: 2 < 3 by [].
-      apply (ltn_trans Hbidule Hpower).
-      rewrite -mulnA -expnSr.
-      rewrite expnD.
-      apply ltn_mull.
-      rewrite -{1}(exp0n (n := extra) Hextra).
-      apply ltn_exp2r. exact Hextra.
-      apply toNatBounded.
-      apply leq_pexp2l. by []. exact leq_shift.
-      apply (ltn_trans) with (n := 3). by []. exact Hpower.
+      rewrite !div.modn_small.
+      + by rewrite -mulnA -expnSr.
+      + have H2lt3: 2 < 3 by [].
+        exact (ltn_trans H2lt3 Hpower).
+      + rewrite -mulnA -expnSr.
+        rewrite expnD.
+        apply ltn_mull.
+        * rewrite -{1}(exp0n (n := extra) Hextra).
+          apply ltn_exp2r. exact Hextra.
+        * apply toNatBounded.
+        * apply leq_pexp2l. by []. exact leq_shift.
+        * apply (ltn_trans) with (n := 3). by []. exact Hpower.
   Qed.
 
   Lemma n_half_odd n : n./2.*2 = n - odd n.
@@ -220,12 +184,8 @@ Section Karatsuba.
   Qed.
 
   Lemma rewritepower n : 2 ^ (n./2.*2 + 4) = (2 ^ (n./2 +2)) ^ 2.
-    set (my_term := ((n./2).*2 + 2.*2)%Nrec).
-    assert (H_eq : my_term = (n./2).*2 + 2.*2) by reflexivity.
-    rewrite -H_eq H_eq. (* Replace my_term everywhere *)
-    clear H_eq my_term. (* Clean up *)
-    rewrite -doubleD -muln2.
-    by rewrite expnM.
+    have <- : 2.*2 = 4 by [].
+    by rewrite -doubleD -muln2 ; rewrite expnM.
   Qed.
 
   Lemma rewriteterm2 x n : x * 2 ^ n./2 * 2 * 2 = x * 2 ^ (n./2 + 2).
@@ -242,10 +202,10 @@ Section Karatsuba.
     toNat (high (uphalf n).+2 (tuple.behead_tuple (tuple.behead_tuple (idSum y)))) + div.modn (toNat (idSum y)) (2 ^ n./2.+2) < 2 ^ ((uphalf n).+2 + 1).
     rewrite expnD expn1 muln2 -addnn.
     apply ltn_add.
-    - apply toNatBounded.
+    - by apply toNatBounded.
     - apply leq_trans with (n := 2 ^ n./2.+2) ; last (apply leq_pexp2l ; first by []).
       + apply ltnW.
-      + apply div.ltn_pmod.
+        apply div.ltn_pmod.
         rewrite -(addn2 (n./2)).
         rewrite expnD -{1}(muln0 0).
         by apply ltn_mul ; last 1 [ by rewrite expn_gt0 | by [] ].
@@ -269,10 +229,7 @@ Section Karatsuba.
   Qed.
 
   Lemma simplPow x y n : ((((x * y * 2 ^ ((n./2).*2)%Nrec).*2).*2).*2).*2 = x * y * (2 ^ (n./2.+2)) ^ 2.
-    set (my_term := ((n./2).*2)%Nrec).
-    assert (H_eq : my_term = (n./2).*2) by reflexivity.
-    rewrite H_eq. (* Replace my_term everywhere *)
-    clear H_eq my_term. (* Clean up *)
+    have -> : ((n./2).*2)%Nrec = n./2.*2 by [].
     rewrite -!muln2 -![in LHS]mulnA mulnn -!expnS -expnD.
     have -> : 4 = 2.*2 by lia.
     rewrite muln2 -doubleD addn2 -muln2.
@@ -287,17 +244,17 @@ Section Karatsuba.
       toNat (karatsuba (prf := prf) x y) = toNat x * toNat y.
     move=> bitlength x y prf.
     funelim (karatsuba x y).
-    - rewrite -Heqcall.
-      rewrite toNat_fromNatBounded //.
-      by rewrite -[2 ^ (1.*2)]/(2 * 2); apply ltn_mul; do 2! apply toNatBounded.
-    - rewrite -Heqcall toNat_fromNatBounded // -muln2 expnM -mulnn.
-      by apply ltn_mul; do 2! apply toNatBounded.
-    - rewrite -Heqcall toNat_fromNatBounded // -muln2 expnM -mulnn.
-      by apply ltn_mul; do 2! apply toNatBounded.
+    (* base cases *)
+    - by rewrite -Heqcall -toNat_fullmulB //=.
+    - by rewrite -Heqcall -toNat_fullmulB //=.
+    - by rewrite -Heqcall -toNat_fullmulB //=.
+    (* recursive call *)
     - rewrite -Heqcall.
       rewrite toNat_tcast.
       rewrite !toNat_addB !toNat_shlB.
-      rewrite !toNat_shlB_zExtend.
+      rewrite !toNat_shlB_zExtend //= ; first last.
+      + have -> : ((n./2).*2)%Nrec = n./2.*2 by []; lia.
+      + lia.
       rewrite !toNat_tcast.
       rewrite !toNat_zeroExtend !toNat_tcast !toNat_zeroExtend.
       rewrite !toNat_subB.
@@ -318,16 +275,13 @@ Section Karatsuba.
       rewrite -addnA div.modnDml addnC -addnA -addnA - addnA.
       rewrite div.modnDml addnC. rewrite !addnn.
       rewrite -!toNat_fullmulB.
-      rewrite !(div.modn_small (m := (toNat _ + toNat _))) ; last first.
+      rewrite !(div.modn_small (m := (toNat _ + toNat _))) ; first last.
       + by rewrite toNat_low ; apply big_ineq.
       + by rewrite toNat_low ; apply big_ineq.
       rewrite div.modn_small.
       rewrite !toNat_fullmulB.
       (* to remove the Nrec scope *)
-      set (my_term := ((n./2).*2)%Nrec).
-      assert (H_eq : my_term = (n./2).*2) by reflexivity.
-      rewrite H_eq. (* Replace my_term everywhere *)
-      clear H_eq my_term. (* Clean up *)
+      have -> : ((n./2).*2)%Nrec = n./2.*2 by [].
       rewrite -addnCAC -!muln2 -!mulnA !mulnn. 
       rewrite -!expnS -!expnD addnACl (addnC ((toNat (joinlsb _) * _))) addnA.
       rewrite -(addn2 2) addnn muln2 -doubleD -muln2 expnM.
@@ -380,7 +334,9 @@ Section Karatsuba.
     - rewrite leB_nat.
       rewrite toNat_tcast toNat_zeroExtend toNat_subB.
       rewrite toNat_tcast toNat_zeroExtend.
-      rewrite H ; first 2 [ exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | reflexivity ].
+      rewrite H ;
+        first 2 [ exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) |
+                  exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | reflexivity ].
       rewrite H1 ; first 2 [ exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | reflexivity ].
       rewrite H0 ; first 2 [ exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | reflexivity ].
       rewrite !toNat_addB.
@@ -398,20 +354,10 @@ Section Karatsuba.
       rewrite !div.modn_small ; first last.
       + by rewrite toNat_tcast ; rewrite !toNat_zeroExtend ; rewrite toNat_low ; apply big_ineq.
       + by rewrite toNat_tcast ; rewrite !toNat_zeroExtend ; rewrite toNat_low ; apply big_ineq.        
-
       rewrite !toNat_tcast.
       rewrite !toNat_zeroExtend.
       rewrite H0 ; first 2 [ exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | exact (zero (uphalf n.+4)) |  exact (zero n.+4./2) | reflexivity ].
-
       by rewrite mulnDl mulnDr -addnA leq_addr.
-      by [].
-      lia.
-      by [].
-      set (my_term := ((n./2).*2)%Nrec).
-      assert (H_eq : my_term = (n./2).*2) by reflexivity.
-      rewrite H_eq. (* Replace my_term everywhere *)
-      clear H_eq my_term. (* Clean up *)
-      lia.
   Qed.
 
 End Karatsuba.
