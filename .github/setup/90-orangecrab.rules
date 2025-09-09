@@ -1,0 +1,45 @@
+# To be stored at: /etc/udev/rules.d/90-orangecrab.rules
+#
+########################################################
+#
+# Adafruit FT232H
+#
+ACTION=="add|change" \
+, DRIVER=="usb" \
+, ATTRS{idVendor}=="0403" \
+, ATTRS{idProduct}=="6014" \
+, ENV{ID_SERIAL}=="0403_6014" \
+, MODE="0666" \
+, GROUP="plugdev" \
+, TAG+="uaccess"
+ACTION=="add|change" \
+, DRIVER!="usb" \
+, ATTRS{idVendor}=="0403" \
+, ATTRS{idProduct}=="6014" \
+, ENV{ID_SERIAL}=="0403_6014" \
+, MODE="0666" \
+, GROUP="plugdev" \
+, PROGRAM="/etc/udev/scripts/unique-device-num /dev ttyFT232H $env{DEVNAME}" \
+, TAG+="uaccess" \
+, SYMLINK+="ttyFT232H%c"
+#
+# PmodUSBUART
+#
+ACTION=="add|change" \
+, DRIVER=="usb" \
+, ATTRS{idVendor}=="0403" \
+, ATTRS{idProduct}=="6001" \
+, ENV{ID_SERIAL_SHORT}=="AV0KRAG9" \
+, MODE="0666" \
+, GROUP="plugdev" \
+, TAG+="uaccess"
+ACTION=="add|change" \
+, DRIVER!="usb" \
+, ATTRS{idVendor}=="0403" \
+, ATTRS{idProduct}=="6001" \
+, ENV{ID_SERIAL_SHORT}=="AV0KRAG9" \
+, MODE="0666" \
+, GROUP="plugdev" \
+, PROGRAM="/etc/udev/scripts/unique-device-num /dev ttyPmodUSB $env{DEVNAME}" \
+, TAG+="uaccess" \
+, SYMLINK+="ttyPmodUSB%c"

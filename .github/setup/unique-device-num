@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Thanks to https://unix.stackexchange.com/questions/641137/what-is-deleting-my-symlink-to-my-usb-luks-partition-upon-cryptsetup-luksopen
+#
+# To be stored at: /etc/udev/scripts/unique-device-num
+
+if [ $# -ne 3 ]; then
+    printf "Usage: $0 location prefix devicename\n" >&2
+    exit 1
+fi
+
+location="$1"
+prefix="$2"
+devname="$3"
+
+# Find any symlinks in the location that may already
+# exist to our device. Save only the first one.
+old_symlink=$( find $location -maxdepth 1 \
+                    -lname "$(basename ${devname})" \
+                    -name "$prefix*" |
+                    sort -n | head -n 1 )
+
+# If we found any symlinks with our prefix to the specified device, then print
+# its numeric suffix to stdout for it to be "$result" (%c) in the caller udev
+# rule.
+if [ "${old_symlink}" != "" ]; then
+   devbase=$(basename ${old_symlink})
+   printf "${devbase##$prefix}\n"
+   exit
+fi
+
+# No symlink was already in existence, so find a unique new suffix number.
+for ((index=0; index<256; index++)); do
+  if [ ! -e "$location/$prefix$index" ]; then
+     # Merely print this to our stdout for it to be $result (%c) in caller udev
+     # rule. Then exit.
+     printf "$index\n"
+     exit
+  fi
+done
+# If we did not exit above, we printed (returned) nothing.
+exit 1

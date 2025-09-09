@@ -20,7 +20,7 @@ import Control.Exception (Exception, throw)
 import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Char (isSpace)
-import Data.List (intercalate, find)
+import Data.List (intercalate, find, unsnoc)
 import Data.Maybe (catMaybes, fromJust)
 import System.IO (hPutStr, stderr)
 import System.Directory
@@ -225,9 +225,25 @@ hitltRules group component defines = do
       pnrFlags <- getConfigParameter "PNR_FLAGS"
 
       cmd_ placeAndRoute
+        "--quiet"
         "--json" inp
         "--textcfg" out
+        "--log" (bdir </> "log" </> "pnr.log")
         pnrFlags
+
+      pnrLog <- liftIO $ readFile (bdir </> "log" </> "pnr.log")
+
+      let ls = dropWhile (/= "Info: Device utilisation:") $ lines pnrLog
+          utilization = takeWhile (not . null) ls
+          maxFreq = maybe "" snd $ unsnoc $ filter isFrequencyInfo ls
+          isFrequencyInfo xs = case words xs of
+            "Info:" : "Max" : "frequency" : _ -> True
+            _ -> False
+
+      putInfo ""
+      putInfo $ unlines utilization
+      putInfo maxFreq
+      putInfo ""
 
     bdir </> "03-net" </> top <.> "json" %> \out -> do
       let inp = bdir </> "02-hdl" </> top <.> "v"
@@ -238,19 +254,21 @@ hitltRules group component defines = do
         $ fmap (bdir </>) [ "03-net", "log" ]
       yosys <- getConfigCmd "YOSYS"
       cmd_ yosys
-        "-l" (bdir </> "log" </> "synth.log")
-        "-p" [ intercalate "; "
-                 [ unwords
-                     [ "read_verilog"
-                     ,   takeDirectory inp </> "*.v"
-                     ]
-                 , unwords
-                     [ "synth_ecp5"
-                     ,   "-top", top
-                     ,   "-json", out
-                     ]
-                 ]
-             ]
+        "--quiet"
+        "--logfile" (bdir </> "log" </> "synth.log")
+        "--commands"
+          [ intercalate "; "
+              [ unwords
+                  [ "read_verilog"
+                  ,   takeDirectory inp </> "*.v"
+                  ]
+              , unwords
+                  [ "synth_ecp5"
+                  ,   "-top", top
+                  ,   "-json", out
+                  ]
+              ]
+          ]
 
     bdir </> "02-hdl" </> top <.> "v" %> \_ -> do
       projectShake <- ?getCabalBinPath "shake"
