@@ -142,7 +142,6 @@ sBox ∷ Vec (2 GHC.TypeLits.* ByteSize alg) (Vec (2 GHC.TypeLits.* ByteSize alg
 sBox m a = (m Clash.Sized.Vector.!! x_part a 0)  Clash.Sized.Vector.!! x_part a 1
     where
         splitBitVector ∷ ByteType alg → SplitByteType alg -- Binding such that the rest also works.
-        -- splitBitVector b = Clash.Sized.Vector.map v2bv (Clash.Sized.Vector.unconcatI (bv2v b)) -- other way of writting
         splitBitVector = unconcatBitVector#
         x_part ∷ (Enum i) ⇒ ByteType alg → i → NibbleType alg
         x_part b c = splitBitVector b Clash.Sized.Vector.!! c
@@ -183,16 +182,27 @@ rotWord word = Clash.Sized.Vector.rotateLeft word 1
 
 subWord ∷ WordType alg → WordType alg
 subWord = Clash.Sized.Vector.map (sBox xySBox)
+-- 5.2 table 5
+class AESConstants (alg ∷ AES) where
+  _Rcon ∷ Proxy alg → RconType alg
+  _Rcon¹ ∷ Proxy alg → WordType alg
 
+instance AESConstants AES128 where
+    _Rcon¹ _ = 0x01:>0x00:>0x00:>0x00:>Nil
+    _Rcon alg = transpose (fmap (Clash.Sized.Vector.generateI xTimes) (_Rcon¹ alg))
+deriving via AES128 instance AESConstants AES192
+deriving via AES128 instance AESConstants AES256
 
 -- | Implementation of 
--- class AESFunctions (alg ∷ AES) where
---   keyExpansion ∷ Proxy alg →  KeyType alg → WType alg
+class AESFunctions (alg ∷ AES) where
+  keyExpansion ∷ Proxy alg →  KeyType alg → Vec 16 (ByteType alg) --WType alg
 
--- instance AESFunctions AES128 where
---   keyExpansion alg key = key
---     where
---         wKey =
+instance AESFunctions AES128 where
+  keyExpansion _ b = wKey b
+    where
+        wKey :: KeyType AES128 -> Vec 16 (ByteType AES128)
+        wKey = unconcatBitVector# @16 @8
+
 
 
 -- instance AESFunctions AES192 where
