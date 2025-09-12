@@ -84,7 +84,7 @@ type family Nk alg where
   Nk AES256 = 8
   Nk _      = 8
 -- | Key length in bits (defined in Table 3) and recommanded to be flexible 6.3.
-type KeyLength (alg ∷ AES) = Nk alg  GHC.TypeLits.* WordSize alg
+type KeyLength (alg ∷ AES) = Nk alg  GHC.TypeLits.* WordSize alg GHC.TypeLits.* ByteSize alg
 -- | Key type based on the key length
 type KeyType (alg ∷ AES) = BitVector (KeyLength alg)
 -- | Number of rounds (defined in Table 3) and recommanded to be flexible 6.3.
@@ -103,8 +103,10 @@ type RoundWType (alg ∷ AES) = (BlockType alg)
 type WType (alg ∷ AES) = Vec (4 * (Nr alg + 1))  (WordType alg)   -- TODO maybe make it 4 * instead of what it is now
 
 
+type NFixedWords ∷ AES → Nat
+type family NFixedWords alg where
+  NFixedWords _      = 10
 
-
-
+type RconType  (alg ∷ AES) = Vec (NFixedWords alg) (WordType alg)
 
 

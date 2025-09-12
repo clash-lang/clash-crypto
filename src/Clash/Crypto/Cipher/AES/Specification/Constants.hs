@@ -41,7 +41,7 @@ import GHC.Show (Show)
 import GHC.TypeNats (Nat)
 import GHC.Generics (Generic)
 import GHC.TypeLits
-
+import Data.Proxy (Proxy)
 import Clash.Crypto.Cipher.AES.Specification.Types
 -- import Clash.Crypto.Cipher.AES.Specification.Definitions
 -- Equation 4.3 expressed in bits ~ Constant m(x) from section 4.2
@@ -94,3 +94,4 @@ xyInvSBox =
     (0xa0 :> 0xe0 :> 0x3b :> 0x4d :> 0xae :> 0x2a :> 0xf5 :> 0xb0 :> 0xc8 :> 0xeb :> 0xbb :> 0x3c :> 0x83 :> 0x53 :> 0x99 :> 0x61:> Nil):>
     (0x17 :> 0x2b :> 0x04 :> 0x7e :> 0xba :> 0x77 :> 0xd6 :> 0x26 :> 0xe1 :> 0x69 :> 0x14 :> 0x63 :> 0x55 :> 0x21 :> 0x0c :> 0x7d:> Nil):>
     Nil
+
