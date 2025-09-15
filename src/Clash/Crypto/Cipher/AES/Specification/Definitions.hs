@@ -23,7 +23,7 @@ module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
 import Clash.Prelude(d4, Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,  (.<<+), xor, Nat(..), divSNat )
 import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
-import Clash.Sized.Vector(iterateI,iterate, map, concat, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (!!))
+import Clash.Sized.Vector(iterateI,iterate, postscanl, map, concat, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (!!))
 import GHC.Internal.Bits
 
 import Control.Arrow (first)
@@ -223,7 +223,7 @@ deriving via AES128 instance AESConstants AES256
 keyExpansion3
   :: Proxy AES128
      -> KeyType AES128 -> WType AES128
-keyExpansion3 alg key = Clash.Sized.Vector.mapAccumL (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1)
+keyExpansion3 alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.postscanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
     where
     middelCalculation ∷ Enum i ⇒ Proxy AES128 → KeyType AES128→ i → KeyType AES128
     middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
