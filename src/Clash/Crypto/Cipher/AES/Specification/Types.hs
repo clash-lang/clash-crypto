@@ -86,7 +86,7 @@ type family Nk alg where
 -- | Key length in bits (defined in Table 3) and recommanded to be flexible 6.3.
 type KeyLength (alg ∷ AES) = Nk alg  GHC.TypeLits.* WordSize alg GHC.TypeLits.* ByteSize alg
 -- | Key type based on the key length
-type KeyType (alg ∷ AES) = BitVector (KeyLength alg)
+type KeyType (alg ∷ AES) = Vec (Nk alg) (WordType alg)
 -- | Number of rounds (defined in Table 3) and recommanded to be flexible 6.3.
 type Nr ∷ AES → Nat
 type family Nr alg where
