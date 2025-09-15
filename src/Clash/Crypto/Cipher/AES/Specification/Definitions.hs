@@ -21,9 +21,9 @@ Basic definitions covering the fundamentals of FIPS 197.
 module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
 
-import Clash.Prelude(Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,  (.<<+), xor, Nat(..), divSNat )
+import Clash.Prelude(d4, Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,  (.<<+), xor, Nat(..), divSNat )
 import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
-import Clash.Sized.Vector(iterateI, map, zipWith, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (!!))
+import Clash.Sized.Vector(iterateI,iterate, map, concat, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (!!))
 import GHC.Internal.Bits
 
 import Control.Arrow (first)
@@ -75,7 +75,7 @@ xTimes a =  if y == 0x01 then z ⊕ resize mX else z
 -- | the result will be no bigger then 0x57 thus not bigger as 1 byte.
 -- | Equation 4.4
 (•) ∷ (KnownNat w) ⇒ BitVector w →  BitVector w →  BitVector w
-(•) b c = foldl (⊕) (0x00) (Clash.Sized.Vector.zipWith (\f g →  if f then g else (0x00)) (bv2vbool b) (list_xtimes c))
+(•) b c = Clash.Sized.Vector.foldl (⊕) (0x00) (Clash.Sized.Vector.zipWith (\f g →  if f then g else (0x00)) (bv2vbool b) (list_xtimes c))
     where
         list_xtimes ∷  (KnownNat n, KnownNat w) ⇒ BitVector w → Vec n (BitVector w)
         list_xtimes = iterateI xTimes
@@ -91,7 +91,7 @@ matrixMultiplication ∷ (KnownNat w, KnownNat m, KnownNat n) ⇒ Vec m (Vec n (
 matrixMultiplication a b = fmap (vectorMultiplication b) a
     where
         vectorMultiplication ∷ (KnownNat w, KnownNat n) ⇒  Vec n (BitVector w) → Vec n (BitVector w) → BitVector w
-        vectorMultiplication b a = foldl (⊕) 0x00  (Clash.Sized.Vector.zipWith (•) b a)
+        vectorMultiplication b a = Clash.Sized.Vector.foldl (⊕) 0x00  (Clash.Sized.Vector.zipWith (•) b a)
 
 -- | Multiplication as defined in equation 4.9
 -- | Matrix multiplication based on two vectors as neded MixColumns() and InvMixColumns()
@@ -105,7 +105,7 @@ vectorMatrixMultiplication a = matrixMultiplication (generateMatrixA a)
 -- | inverse based of 4.11
 inv :: (KnownNat w) =>
      BitVector w -> BitVector w
-inv b = foldl (•) 0X01 (list_binary_powers b)
+inv b = Clash.Sized.Vector.foldl (•) 0X01 (list_binary_powers b)
     where
         pow2 :: KnownNat w => BitVector w -> BitVector w
         pow2 b = (•) b b
@@ -182,6 +182,9 @@ rotWord word = Clash.Sized.Vector.rotateLeft word 1
 
 subWord ∷ WordType alg → WordType alg
 subWord = Clash.Sized.Vector.map (sBox xySBox)
+
+xorWord ∷ WordType alg → WordType alg → WordType alg
+xorWord = Clash.Sized.Vector.zipWith (⊕)
 -- 5.2 table 5
 class AESConstants (alg ∷ AES) where
   _Rcon ∷ Proxy alg → RconType alg
@@ -194,14 +197,38 @@ deriving via AES128 instance AESConstants AES192
 deriving via AES128 instance AESConstants AES256
 
 -- | Implementation of 
-class AESFunctions (alg ∷ AES) where
-  keyExpansion ∷ Proxy alg →  KeyType alg → Vec 16 (ByteType alg) --WType alg
+-- class AESFunctions (alg ∷ AES) where
+--   keyExpansion ∷ Proxy alg →  KeyType alg → WType alg --WType alg
 
-instance AESFunctions AES128 where
-  keyExpansion _ b = wKey b
+-- instance AESFunctions AES128 where
+
+--  keys 
+-- k1 = w1  ==> 
+-- k2 = w2  ==>
+-- k3 = w3  ==>
+-- k4 = w4  ==>
+-- keyExpansion alg i key = Clash.Sized.Vector.generateI (middelCalculation alg i) key
+--     where
+--         middelCalculation ∷ Enum i ⇒ Proxy AES128 → i → KeyType AES128 → KeyType AES128
+--         middelCalculation alg i (wl:>wl1:>wl2:>wl3:>Nil) = xorWord wl (partWord wl3 i):>xorWord wl wl1:>xorWord wl2 wl1:>xorWord wl2 wl3:>Nil
+--                 where
+--                     partWord word index = xorWord (subWord (rotWord word))   (_Rcon alg Clash.Sized.Vector.!! index)
+
+-- keyExpansion2 alg i key = Clash.Sized.Vector.generateI (middelCalculation alg i) key
+--     where
+--         middelCalculation ∷ Enum i ⇒ Proxy AES128 → i → KeyType AES128 → KeyType AES128
+--         middelCalculation alg i ws = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+--                 where
+--                     partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
+keyExpansion3
+  :: Proxy AES128
+     -> KeyType AES128 -> WType AES128
+keyExpansion3 alg key = Clash.Sized.Vector.mapAccumL (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1)
     where
-        wKey :: KeyType AES128 -> Vec 16 (ByteType AES128)
-        wKey = unconcatBitVector# @16 @8
+    middelCalculation ∷ Enum i ⇒ Proxy AES128 → KeyType AES128→ i → KeyType AES128
+    middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+            where
+                partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
 
 
 
