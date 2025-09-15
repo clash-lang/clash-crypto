@@ -13,7 +13,7 @@ Basic definitions covering the fundamentals of FIPS 197.
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-
+{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
@@ -21,9 +21,9 @@ Basic definitions covering the fundamentals of FIPS 197.
 module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
 
-import Clash.Prelude(d4, Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,  (.<<+), xor, Nat(..), divSNat )
+import Clash.Prelude(d4, Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,   (.<<+), xor, Nat(..), divSNat )
 import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
-import Clash.Sized.Vector(iterateI,iterate, postscanl, map, concat, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (!!))
+import Clash.Sized.Vector(iterateI, splitAtI, scanl, dropI,takeI, map, concat, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (++), (!!))
 import GHC.Internal.Bits
 
 import Control.Arrow (first)
@@ -34,6 +34,9 @@ import Language.Haskell.Unicode (type (≤))
 import Clash.Crypto.Cipher.AES.Specification.Types
 import Clash.Crypto.Cipher.AES.Specification.Constants
 import Clash.Sized.Vector.Extra ((‼))
+import GHC.Show (Show)
+import GHC.TypeNats (Nat)
+import GHC.Generics (Generic)
 import GHC.TypeLits
 -- Explanation of infix can be found here https://www.haskell.org/onlinereport/decls.html#prelude-fixities
 -- It is basically defining the ordering of execution. 9 is used standard.
@@ -126,8 +129,8 @@ inv b = Clash.Sized.Vector.foldl (•) 0X01 (list_binary_powers b)
 -- | Definitions for cipher
 -- _AddRoundKey
 -- test matrix:
-test_matrix ∷ StateType alg
-test_matrix = (0x00 :> 0x10 :> 0x20 :> 0x30 :> Nil) :> (0x01 :> 0x11 :> 0x21 :> 0x31 :> Nil) :> (0x02 :> 0x12 :> 0x22 :> 0x32 :> Nil) :> (0x03 :> 0x13 :> 0x23 :> 0x33 :> Nil) :>Nil
+testMatrix ∷ StateType alg
+testMatrix = (0x00 :> 0x10 :> 0x20 :> 0x30 :> Nil) :> (0x01 :> 0x11 :> 0x21 :> 0x31 :> Nil) :> (0x02 :> 0x12 :> 0x22 :> 0x32 :> Nil) :> (0x03 :> 0x13 :> 0x23 :> 0x33 :> Nil) :>Nil
 -- Shift test 
 -- Clash.Crypto.Cipher.AES.Specification.Definitions.invShiftRows ( Clash.Crypto.Cipher.AES.Specification.Definitions.shiftRows Clash.Crypto.Cipher.AES.Specification.Definitions.test_matrix)
 -- should give the same back.
@@ -197,44 +200,55 @@ deriving via AES128 instance AESConstants AES192
 deriving via AES128 instance AESConstants AES256
 
 -- | Implementation of 
--- class AESFunctions (alg ∷ AES) where
---   keyExpansion ∷ Proxy alg →  KeyType alg → WType alg --WType alg
+class AESFunctions (alg ∷ AES) where
+  keyExpansion ∷ Proxy alg →  KeyType alg → WType alg --WType alg
 
--- instance AESFunctions AES128 where
-
+instance AESFunctions AES128 where
+-- The keyexpansion function as written in Algorithm 2 and as illustrate in 6
 --  keys 
--- k1 = w1  ==> 
--- k2 = w2  ==>
--- k3 = w3  ==>
--- k4 = w4  ==>
--- keyExpansion alg i key = Clash.Sized.Vector.generateI (middelCalculation alg i) key
---     where
---         middelCalculation ∷ Enum i ⇒ Proxy AES128 → i → KeyType AES128 → KeyType AES128
---         middelCalculation alg i (wl:>wl1:>wl2:>wl3:>Nil) = xorWord wl (partWord wl3 i):>xorWord wl wl1:>xorWord wl2 wl1:>xorWord wl2 wl3:>Nil
---                 where
---                     partWord word index = xorWord (subWord (rotWord word))   (_Rcon alg Clash.Sized.Vector.!! index)
-
--- keyExpansion2 alg i key = Clash.Sized.Vector.generateI (middelCalculation alg i) key
---     where
---         middelCalculation ∷ Enum i ⇒ Proxy AES128 → i → KeyType AES128 → KeyType AES128
---         middelCalculation alg i ws = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
---                 where
---                     partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
-keyExpansion3
-  :: Proxy AES128
-     -> KeyType AES128 -> WType AES128
-keyExpansion3 alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.postscanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
-    where
-    middelCalculation ∷ Enum i ⇒ Proxy AES128 → KeyType AES128→ i → KeyType AES128
-    middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
-            where
-                partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
+-- k1 = wl    ==> formula(wl⊹3) ⊕ wl    ==> wl⊹4   
+-- k2 = wl⊹1  ==> wl            ⊕ wl⊹1  ==> wl⊹5   
+-- k3 = wl⊹2  ==> wl⊹1          ⊕ wl⊹2  ==> wl⊹6
+-- k4 = wl⊹3  ==> wl⊹2          ⊕ wl⊹3  ==> wl⊹7
+    keyExpansion ∷ Proxy AES128 → KeyType AES128 → WType AES128
+    keyExpansion alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 0))
+        where
+        middelCalculation ∷ Enum i ⇒ Proxy AES128 → KeyType AES128→ i → KeyType AES128
+        middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+                where
+                    partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
 
 
+instance AESFunctions AES192 where
+    -- Similiar fashion as for AES128
+    -- The keyexpansion function as written in Algorithm 2 and as illustrate in 7
+    keyExpansion ∷ Proxy AES192 → KeyType AES192 → WType AES192
+    keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
+        where 
+            keyExpansionInBlocks ∷ Proxy AES192 → KeyType AES192 → Vec (Nk AES192 GHC.TypeLits.* Nr AES192) (WordType AES192)
+            keyExpansionInBlocks alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
+                where
+                middelCalculation ∷ Enum i ⇒ Proxy AES192 → KeyType AES192 → i → KeyType AES192
+                middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+                        where
+                            partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
 
--- instance AESFunctions AES192 where
---   keyExpansion alg key = key
+instance AESFunctions AES256 where
+    -- The keyexpansion function as written in Algorithm 2 and as illustrate in 8
+    keyExpansion ∷ Proxy AES256 → KeyType AES256 → WType AES256
+    keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
+        where 
+            keyExpansionInBlocks ∷ Proxy AES256 → KeyType AES256 → Vec (Nk AES256 GHC.TypeLits.* (Nr AES256 + 3) GHC.TypeLits.* (Nr AES256 + 3)) (WordType AES256)
+            keyExpansionInBlocks alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
+                where
+                middelCalculation ∷ Enum i ⇒ Proxy AES256 → KeyType AES256 → i → KeyType AES256
+                middelCalculation alg ws i = firstPart ws i Clash.Sized.Vector.++ secondPart ws i
+                    where
+                        firstPart ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord (firstSplit ws) i) (firstSplit ws)) (firstSplit ws)
+                        firstSplit = Clash.Sized.Vector.takeI @(Nk AES256 `Div` 2)
+                        secondPart ws i= Clash.Sized.Vector.zipWith xorWord ((+>>) (subWord (Clash.Sized.Vector.last (firstPart ws i))) (secondSplit ws)) (secondSplit ws)
+                        secondSplit = Clash.Sized.Vector.dropI @(Nk AES256 `Div` 2)
+                        partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
 
--- instance AESFunctions AES256 where
---   keyExpansion alg key = key
--- deriving via AES128 instance AESFunctions _
+
+
