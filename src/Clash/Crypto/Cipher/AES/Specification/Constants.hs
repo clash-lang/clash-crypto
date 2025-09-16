@@ -13,35 +13,18 @@ functional description.
 {-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 module Clash.Crypto.Cipher.AES.Specification.Constants where
-import Clash.Prelude(Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,  (.<<+), xor, Nat(..))
-import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
-import Clash.Sized.Vector
-    ( iterateI, zipWith, rotateRight, generateI, transpose, Vec )
-import GHC.Internal.Bits
-import Control.Arrow (first)
--- import Data.Type.Bool (type(If)
-import Language.Haskell.Unicode (type (≤))
+import Clash.Prelude
 
-import Clash.Sized.BitVector (BitVector)
-import Clash.Class.BitPack (BitPack)
-import Clash.XException (NFDataX)
-import Data.Eq (Eq)
-import Data.Enum (Enum, Bounded)
-import Data.Kind (Type)
-import Data.Ord (Ord)
-import Data.Typeable (Typeable)
-import GHC.Show (Show)
-import GHC.TypeNats (Nat)
-import GHC.Generics (Generic)
+
+
 import GHC.TypeLits
-import Data.Proxy (Proxy)
+
 import Clash.Crypto.Cipher.AES.Specification.Types
 -- import Clash.Crypto.Cipher.AES.Specification.Definitions
 -- Equation 4.3 expressed in bits ~ Constant m(x) from section 4.2
@@ -94,4 +77,3 @@ xyInvSBox =
     (0xa0 :> 0xe0 :> 0x3b :> 0x4d :> 0xae :> 0x2a :> 0xf5 :> 0xb0 :> 0xc8 :> 0xeb :> 0xbb :> 0x3c :> 0x83 :> 0x53 :> 0x99 :> 0x61:> Nil):>
     (0x17 :> 0x2b :> 0x04 :> 0x7e :> 0xba :> 0x77 :> 0xd6 :> 0x26 :> 0xe1 :> 0x69 :> 0x14 :> 0x63 :> 0x55 :> 0x21 :> 0x0c :> 0x7d:> Nil):>
     Nil
-
