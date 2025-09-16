@@ -1,5 +1,5 @@
 {-|
-Module      : Clash.Crypto.Blockcipher.AES.Specification
+Module      : Clash.Crypto.Cipher.AES.Specification
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
@@ -15,29 +15,26 @@ consistent, the symbol is added to some function names starting with a
 small letter as well.
 -}
 {-# LANGUAGE UnicodeSyntax #-}
-module Clash.Crypto.Blockcipher.AES.Specification
-  ( -- * INTRODUCTION and DEFINITIONS
---     SHA(..), WordSize, BlockSize, MessageDigestSize, HashValueWords
---   , ScheduleCount, SHAWord, MessageBlock, HashValue, Message
---     -- * Section 2.2.2 - Symbols and Operations
---   , (∧), (∨), (⊕), (¬), (≪), (≫), _ROTL, _ROTR, _SHR
---     -- * Section 4.1 - Functions
---   , _Ch, _Parity, _Mai, _f, SHAFunctions(..)
---     -- * Section 4.2 - Constants
---   , SHAConstants(..)
---     -- * Section 5.1 - Padding the Message
---   , SizeBits, PaddingZeros, RequiredBlocks
---     -- * Section 5.3 - Setting the Initial Hash Value
---   , SHAInitials(..)
---     -- * Section 6 - SECURE HASH ALGORITHMS
---   , SHAHashCompute(..), computeCycles, toDigest, hash
---     -- * Derivable Properties
---   , KnownSHA(..), SHAFacts(..)
---   , -- * Utility types
---     Digest
+module Clash.Crypto.Cipher.AES.Specification
+  ( -- All functions that are present in the FIPS.
+    AESFunctions(..),
+    -- Type of all specific AES functions.
+    AES,
+    -- Verification
+    KnownAES(..),
+    -- Types
+    InType, OutType, StateType,
+    WordType,
+
+    -- Definitions
+    AESConstants,
+    -- Constants
+    mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
   ) where
 
-import Clash.Crypto.Blockcipher.AES.Specification.Types
-import Clash.Crypto.Blockcipher.AES.Specification.Definitions
-import Clash.Crypto.Blockcipher.AES.Specification.Properties
-import Clash.Crypto.Blockcipher.AES.Specification.Algorithm
+
+import Clash.Crypto.Cipher.AES.Specification.Properties
+import Clash.Crypto.Cipher.AES.Specification.Algorithm
+import Clash.Crypto.Cipher.AES.Specification.Constants
+import Clash.Crypto.Cipher.AES.Specification.Definitions
+import Clash.Crypto.Cipher.AES.Specification.Types

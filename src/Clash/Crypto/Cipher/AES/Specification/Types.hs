@@ -40,7 +40,7 @@ data AES =
   deriving
     ( Generic
     , NFDataX
-    -- , BitPack
+    , BitPack
     , Eq
     , Ord
     , Show
