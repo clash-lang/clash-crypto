@@ -70,6 +70,12 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.Cipher.AES.Specification
+    Clash.Crypto.Cipher.AES.Specification.Properties
+    Clash.Crypto.Cipher.AES.Specification.Algorithm
+    Clash.Crypto.Cipher.AES.Specification.Constants
+    Clash.Crypto.Cipher.AES.Specification.Definitions
+    Clash.Crypto.Cipher.AES.Specification.Types
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
