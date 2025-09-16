@@ -100,7 +100,7 @@ type family Nr alg where
 -- since w always used in groups of 4 and cλash is not as good as python with indexes
 -- and converting back and forth doesn't make any sense
 type RoundWType (alg ∷ AES) = (BlockType alg)
-type WType (alg ∷ AES) = Vec (4 * (Nr alg + 1))  (WordType alg)   -- TODO maybe make it 4 * instead of what it is now
+type WType (alg ∷ AES) = Vec ((Nr alg + 1) * 4)  (WordType alg)
 
 
 type NFixedWords ∷ AES → Nat
@@ -110,3 +110,6 @@ type family NFixedWords alg where
 type RconType  (alg ∷ AES) = Vec (NFixedWords alg) (WordType alg)
 
 
+-- 3.4 definition of in, state, out
+type InType (alg ∷ AES) = BlockType alg
+type OutType (alg ∷ AES) = BlockType alg
