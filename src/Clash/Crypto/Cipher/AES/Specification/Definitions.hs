@@ -13,6 +13,7 @@ Basic definitions covering the fundamentals of FIPS 197.
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NoStarIsType #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
@@ -22,7 +23,7 @@ Basic definitions covering the fundamentals of FIPS 197.
 module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
 
-import Clash.Prelude(d4, Vec(..), KnownNat(..),Bits(..), Bit(..), Unsigned(..),resize,   (.<<+), xor, Nat(..), divSNat, Div, type (*), type (+), SNat(..), type (-), type(<=))
+import Clash.Prelude
 import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
 import Clash.Sized.Vector(iterateI, splitAtI, scanl, dropI,takeI, map, concat, unconcat, select, reverse, head, init, tail, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (++), (!!))
 import GHC.Internal.Bits
@@ -79,7 +80,7 @@ xTimes a =  if y == 0x01 then z ⊕ resize mX else z
 -- | the result will be no bigger then 0x57 thus not bigger as 1 byte.
 -- | Equation 4.4
 (•) ∷ (KnownNat w) ⇒ BitVector w →  BitVector w →  BitVector w
-(•) b c = Clash.Sized.Vector.foldl (⊕) (0x00) (Clash.Sized.Vector.zipWith (\f g →  if f then g else (0x00)) (bv2vbool b) (list_xtimes c))
+(•) b c = foldl (⊕) (0x00) (zipWith (\f g →  if f then g else (0x00)) (bv2vbool b) (list_xtimes c))
     where
         list_xtimes ∷  (KnownNat n, KnownNat w) ⇒ BitVector w → Vec n (BitVector w)
         list_xtimes = iterateI xTimes
@@ -95,7 +96,7 @@ matrixMultiplication ∷ (KnownNat w, KnownNat m, KnownNat n) ⇒ Vec m (Vec n (
 matrixMultiplication a b = fmap (vectorMultiplication b) a
     where
         vectorMultiplication ∷ (KnownNat w, KnownNat n) ⇒  Vec n (BitVector w) → Vec n (BitVector w) → BitVector w
-        vectorMultiplication b a = Clash.Sized.Vector.foldl (⊕) 0x00  (Clash.Sized.Vector.zipWith (•) b a)
+        vectorMultiplication b a = foldl (⊕) 0x00  (zipWith (•) b a)
 
 -- | Multiplication as defined in equation 4.9
 -- | Matrix multiplication based on two vectors as neded MixColumns() and InvMixColumns()
@@ -103,18 +104,18 @@ vectorMatrixMultiplication :: (KnownNat w, KnownNat n) => Vec n (BitVector w) ->
 vectorMatrixMultiplication a = matrixMultiplication (generateMatrixA a)
     where
         generateMatrixA :: (KnownNat w, KnownNat n) =>  Vec n (BitVector w) -> Vec n (Vec n (BitVector w))
-        generateMatrixA a = transpose (iterateI (`Clash.Sized.Vector.rotateRight` 1) a)
+        generateMatrixA a = transpose (iterateI (`rotateRight` 1) a)
 
 -- | Section 4.3:
 -- | inverse based of 4.11
 inv :: (KnownNat w) =>
      BitVector w -> BitVector w
-inv b = Clash.Sized.Vector.foldl (•) 0X01 (list_binary_powers b)
+inv b = foldl (•) 0X01 (list_binary_powers b)
     where
         pow2 :: KnownNat w => BitVector w -> BitVector w
         pow2 b = (•) b b
         list_binary_powers :: (KnownNat w) => BitVector w -> Vec w (BitVector w)
-        list_binary_powers = Clash.Sized.Vector.generateI pow2
+        list_binary_powers = generateI pow2
 -- | TODO: A faster inverse can be implemented with extended ecuclidean algorithm
 
  -- TODO:
@@ -140,19 +141,19 @@ testMatrix = (0x00 :> 0x10 :> 0x20 :> 0x30 :> Nil) :> (0x01 :> 0x11 :> 0x21 :> 0
 
 -- | 5.1.1 subBytes() (equation 5.2, 5.3, 5.4) but implemented with table 4
 subBytes ∷ StateType alg → StateType alg
-subBytes = Clash.Sized.Vector.map (Clash.Sized.Vector.map (sBox xySBox))
+subBytes = map (map (sBox xySBox))
 -- | the methode to select the right value from sBox that is given with it. 
 sBox ∷ Vec (2 * ByteSize alg) (Vec (2 * ByteSize alg) (ByteType alg)) → ByteType alg → ByteType alg
-sBox m a = (m Clash.Sized.Vector.!! x_part a 0)  Clash.Sized.Vector.!! x_part a 1
+sBox m a = (m !! x_part a 0)  !! x_part a 1
     where
         splitBitVector ∷ ByteType alg → SplitByteType alg -- Binding such that the rest also works.
         splitBitVector = unconcatBitVector#
         x_part ∷ (Enum i) ⇒ ByteType alg → i → NibbleType alg
-        x_part b c = splitBitVector b Clash.Sized.Vector.!! c
+        x_part b c = splitBitVector b !! c
 
 -- | 5.1.2 shiftRows() (equation 5.5)
 shiftRows ∷ StateType alg → StateType alg
-shiftRows state = transpose (Clash.Sized.Vector.zipWith Clash.Sized.Vector.rotateLeft (transpose state) (iterateI (+1) 0))
+shiftRows state = transpose (zipWith rotateLeft (transpose state) (iterateI (+1) 0))
 
 -- | 5.1.3 mixColumns() (equation 5.7, 5.8)
 mixColumns ∷ StateType alg → StateType alg
@@ -160,15 +161,15 @@ mixColumns = fmap (vectorMatrixMultiplication aMixColumns)
 
 -- | 5.1.4 addRoundKey() (equation 5.9)
 addRoundKey ∷ StateType alg → RoundWType alg → StateType alg
-addRoundKey = Clash.Sized.Vector.zipWith (Clash.Sized.Vector.zipWith (⊕))
+addRoundKey = zipWith (zipWith (⊕))
 
 -- | 5.3.1 invShiftRows() (equation 5.5)
 invShiftRows ∷ StateType alg → StateType alg
-invShiftRows state = transpose (Clash.Sized.Vector.zipWith Clash.Sized.Vector.rotateRight (transpose state) (iterateI (+1) 0))
+invShiftRows state = transpose (zipWith rotateRight (transpose state) (iterateI (+1) 0))
 
 -- | 5.3.2 invSubBytes() implemented with table 6
 invSubBytes ∷ StateType alg → StateType alg
-invSubBytes = Clash.Sized.Vector.map (Clash.Sized.Vector.map (sBox xySBox))
+invSubBytes = map (map (sBox xySBox))
 
 -- | 5.3.3 the inverse of mixColumns() (equation5.14, 5.15)
 invMixColumns ∷ StateType alg → StateType alg
@@ -182,13 +183,15 @@ invAddRoundKey = addRoundKey
 -- Section 5.2 and 5.3: keyexpansion support functions                              --
 --------------------------------------------------------------------------------------
 rotWord ∷ WordType alg → WordType alg
-rotWord word = Clash.Sized.Vector.rotateLeft word 1
+rotWord word = rotateLeft word 1
 
 subWord ∷ WordType alg → WordType alg
-subWord = Clash.Sized.Vector.map (sBox xySBox)
+subWord = map (sBox xySBox)
 
 xorWord ∷ WordType alg → WordType alg → WordType alg
-xorWord = Clash.Sized.Vector.zipWith (⊕)
+xorWord = zipWith (⊕)
+
+
 -- 5.2 table 5
 class AESConstants (alg ∷ AES) where
   _Rcon ∷ Proxy alg → RconType alg
@@ -196,7 +199,7 @@ class AESConstants (alg ∷ AES) where
 
 instance AESConstants AES128 where
     _Rcon¹ _ = 0x01:>0x00:>0x00:>0x00:>Nil
-    _Rcon alg = transpose (fmap (Clash.Sized.Vector.generateI xTimes) (_Rcon¹ alg))
+    _Rcon alg = transpose (fmap (generateI xTimes) (_Rcon¹ alg))
 deriving via AES128 instance AESConstants AES192
 deriving via AES128 instance AESConstants AES256
 
@@ -210,6 +213,7 @@ class AESFunctions (alg ∷ AES) where
     invCipher ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒ Proxy alg → InType alg → SNat nr → WType alg → OutType alg 
     -- Algorithm 4 of FIPS 197
     eqInvCipher ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒ Proxy alg → InType alg → SNat nr → WType alg → OutType alg 
+    keyExpansionIEC ∷ Proxy alg →  KeyType alg → WType alg
 instance AESFunctions AES128 where
 -- The keyexpansion function as written in Algorithm 2 and as illustrate in 6
 --  keys 
@@ -218,18 +222,18 @@ instance AESFunctions AES128 where
 -- k3 = wl⊹2  ==> wl⊹1          ⊕ wl⊹2  ==> wl⊹6
 -- k4 = wl⊹3  ==> wl⊹2          ⊕ wl⊹3  ==> wl⊹7
     keyExpansion ∷ Proxy AES128 → KeyType AES128 → WType AES128
-    keyExpansion alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 0))
+    keyExpansion alg key = concat (scanl (middelCalculation alg) key (iterateI (+1) 0))
         where
         middelCalculation ∷ Enum i ⇒ Proxy AES128 → KeyType AES128→ i → KeyType AES128
-        middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+        middelCalculation alg ws i = zipWith xorWord ((+>>) (partWord ws i) ws) ws
                 where
-                    partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
+                    partWord ws index = xorWord (subWord (rotWord (last ws)))   (_Rcon alg !! index)
 
     cipher ∷ forall nr. (Nr AES128 ~ nr, Nr AES128 + 1 ~ nr + 1) ⇒ Proxy AES128 → InType AES128 → SNat nr → WType AES128 → OutType AES128
-    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (Clash.Sized.Vector.last (Clash.Sized.Vector.select @(1) @1 @1 @nr nr (SNat :: SNat 1)  (SNat :: SNat 1) (wInWords alg ws)))
+    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (last (select @(1) @1 @1 @nr nr (SNat :: SNat 1)  (SNat :: SNat 1) (wInWords alg ws)))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (addRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (addRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
@@ -237,17 +241,35 @@ instance AESFunctions AES128 where
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
     invCipher ∷ forall nr. (Nr AES128 ~ nr, Nr AES128 + 1 ~ nr + 1) ⇒ Proxy AES128 → InType AES128 → SNat nr → WType AES128 → OutType AES128
-    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (Clash.Sized.Vector.reverse ws)))) (Clash.Sized.Vector.last (wInWords alg (Clash.Sized.Vector.reverse ws)))
+    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (invAddRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
-        
+
+    eqInvCipher ∷ forall nr. (Nr AES128 ~ nr, Nr AES128 + 1 ~ nr + 1) ⇒ Proxy AES128 → InType AES128 → SNat nr → WType AES128 → OutType AES128
+    eqInvCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
+        where 
+            rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
+            -- Algorithm 2 codeline 5-8 as a function
+            mutation ∷ StateType alg → RoundWType alg → StateType alg
+            mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state))) 
+    keyExpansionIEC ∷ Proxy AES128 →  KeyType AES128 → WType AES128
+    keyExpansionIEC (alg ∷ Proxy alg) key = concat (head (orignal alg key):>Nil ++ map invMixColumns (init (tail (orignal alg key))) ++ last (orignal alg key):>Nil)
+        where
+            orignal ∷ Proxy alg →  KeyType alg →  Vec (Nr alg + 1) (RoundWType alg)
+            orignal alg ws = wInWords alg (keyExpansionIEC alg ws) 
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat ∷ SNat (Nb alg ))
 
 instance AESFunctions AES192 where
     -- Similiar fashion as for AES128
@@ -256,17 +278,17 @@ instance AESFunctions AES192 where
     keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
         where 
             keyExpansionInBlocks ∷ Proxy AES192 → KeyType AES192 → Vec (Nk AES192 * Nr AES192) (WordType AES192)
-            keyExpansionInBlocks alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
+            keyExpansionInBlocks alg key = concat (scanl (middelCalculation alg) key (iterateI (+1) 1))
                 where
                 middelCalculation ∷ Enum i ⇒ Proxy AES192 → KeyType AES192 → i → KeyType AES192
-                middelCalculation alg ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord ws i) ws) ws
+                middelCalculation alg ws i = zipWith xorWord ((+>>) (partWord ws i) ws) ws
                         where
-                            partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
+                            partWord ws index = xorWord (subWord (rotWord (last ws)))   (_Rcon alg !! index)
     cipher ∷ forall nr. (Nr AES192 ~ nr, Nr AES192 + 1 ~ nr + 1) ⇒ Proxy AES192 → InType AES192 → SNat nr → WType AES192 → OutType AES192
-    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (Clash.Sized.Vector.last (wInWords alg ws))
+    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (last (wInWords alg ws))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (addRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (addRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
             -- Algorithm 1 codeline 5-8 as a function
@@ -274,38 +296,57 @@ instance AESFunctions AES192 where
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
 
     invCipher ∷ forall nr. (Nr AES192 ~ nr, Nr AES192 + 1 ~ nr + 1) ⇒ Proxy AES192 → InType AES192 → SNat nr → WType AES192 → OutType AES192
-    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (Clash.Sized.Vector.reverse ws)))) (Clash.Sized.Vector.last (wInWords alg (Clash.Sized.Vector.reverse ws)))
+    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (invAddRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
+
+    eqInvCipher ∷ forall nr. (Nr AES192 ~ nr, Nr AES192 + 1 ~ nr + 1) ⇒ Proxy AES192 → InType AES192 → SNat nr → WType AES192 → OutType AES192
+    eqInvCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
+        where 
+            rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
+            -- Algorithm 2 codeline 5-8 as a function
+            mutation ∷ StateType alg → RoundWType alg → StateType alg
+            mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state))) 
+    keyExpansionIEC ∷ Proxy AES192 →  KeyType AES192 → WType AES192
+    keyExpansionIEC (alg ∷ Proxy alg) key = concat (head (orignal alg key):>Nil ++ map invMixColumns (init (tail (orignal alg key))) ++ last (orignal alg key):>Nil)
+        where
+            orignal ∷ Proxy alg →  KeyType alg →  Vec (Nr alg + 1) (RoundWType alg)
+            orignal alg ws = wInWords alg (keyExpansionIEC alg ws) 
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat ∷ SNat (Nb alg ))
 instance AESFunctions AES256 where
     -- The keyexpansion function as written in Algorithm 2 and as illustrate in 8
     keyExpansion ∷ Proxy AES256 → KeyType AES256 → WType AES256
     keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
         where 
             keyExpansionInBlocks ∷ Proxy AES256 → KeyType AES256 → Vec (Nk AES256 * (Nr AES256 + 3) * (Nr AES256 + 3)) (WordType AES256)
-            keyExpansionInBlocks alg key = Clash.Sized.Vector.concat (Clash.Sized.Vector.scanl (middelCalculation alg) key (Clash.Sized.Vector.iterateI (+1) 1))
+            keyExpansionInBlocks alg key = concat (scanl (middelCalculation alg) key (iterateI (+1) 1))
                 where
                 middelCalculation ∷ Enum i ⇒ Proxy AES256 → KeyType AES256 → i → KeyType AES256
-                middelCalculation alg ws i = firstPart ws i Clash.Sized.Vector.++ secondPart ws i
+                middelCalculation alg ws i = firstPart ws i ++ secondPart ws i
                     where
-                        firstPart ws i = Clash.Sized.Vector.zipWith xorWord ((+>>) (partWord (firstSplit ws) i) (firstSplit ws)) (firstSplit ws)
-                        firstSplit = Clash.Sized.Vector.takeI @(Nk AES256 `Div` 2)
-                        secondPart ws i= Clash.Sized.Vector.zipWith xorWord ((+>>) (subWord (Clash.Sized.Vector.last (firstPart ws i))) (secondSplit ws)) (secondSplit ws)
-                        secondSplit = Clash.Sized.Vector.dropI @(Nk AES256 `Div` 2)
-                        partWord ws index = xorWord (subWord (rotWord (Clash.Sized.Vector.last ws)))   (_Rcon alg Clash.Sized.Vector.!! index)
+                        firstPart ws i = zipWith xorWord ((+>>) (partWord (firstSplit ws) i) (firstSplit ws)) (firstSplit ws)
+                        firstSplit = takeI @(Nk AES256 `Div` 2)
+                        secondPart ws i= zipWith xorWord ((+>>) (subWord (last (firstPart ws i))) (secondSplit ws)) (secondSplit ws)
+                        secondSplit = dropI @(Nk AES256 `Div` 2)
+                        partWord ws index = xorWord (subWord (rotWord (last ws)))   (_Rcon alg !! index)
 
     cipher ∷ forall nr. (Nr AES256 ~ nr, Nr AES256 + 1 ~ nr + 1) ⇒ Proxy AES256 → InType AES256 → SNat nr → WType AES256 → OutType AES256
-    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (Clash.Sized.Vector.last (Clash.Sized.Vector.select @(1) @1 @1 @nr nr (SNat :: SNat 1)  (SNat :: SNat 1) (wInWords alg ws)))
+    cipher (alg ∷ Proxy alg) input nr ws = addRoundKey (shiftRows (subBytes (rounds alg input nr ws))) (last (select @(1) @1 @1 @nr nr (SNat :: SNat 1)  (SNat :: SNat 1) (wInWords alg ws)))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (addRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (addRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
             -- Algorithm 1 codeline 5-8 as a function
@@ -313,13 +354,32 @@ instance AESFunctions AES256 where
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
 
     invCipher ∷ forall nr. (Nr AES256 ~ nr, Nr AES256 + 1 ~ nr + 1) ⇒ Proxy AES256 → InType AES256 → SNat nr → WType AES256 → OutType AES256
-    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (Clash.Sized.Vector.reverse ws)))) (Clash.Sized.Vector.last (wInWords alg (Clash.Sized.Vector.reverse ws)))
+    invCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
         where 
             rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
-            rounds (alg ∷ Proxy alg) input nr ws = Clash.Sized.Vector.foldl mutation (invAddRoundKey input (Clash.Sized.Vector.head (wInWords alg ws))) (Clash.Sized.Vector.select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
             --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
             wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
+
+    eqInvCipher ∷ forall nr. (Nr AES256 ~ nr, Nr AES256 + 1 ~ nr + 1) ⇒ Proxy AES256 → InType AES256 → SNat nr → WType AES256 → OutType AES256
+    eqInvCipher (alg ∷ Proxy alg) input nr ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input nr (reverse ws)))) (last (wInWords alg (reverse ws)))
+        where 
+            rounds ∷ forall nr. (Nr alg ~ nr, Nr alg + 1 ~ nr + 1) ⇒  Proxy alg → InType alg → SNat nr → WType alg → StateType alg                  
+            rounds (alg ∷ Proxy alg) input nr ws = foldl mutation (invAddRoundKey input (head (wInWords alg ws))) (select @nr @1 @(nr -2) @1 (SNat :: SNat 1) (SNat :: SNat 1) (SNat :: SNat (nr-2)) (wInWords alg ws))
+            --                                                                                                                                            i (f+i) size   s   n        f  f offset          s select          n number
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat :: SNat (Nb alg ))
+            -- Algorithm 2 codeline 5-8 as a function
+            mutation ∷ StateType alg → RoundWType alg → StateType alg
+            mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state))) 
+    keyExpansionIEC ∷ Proxy AES256 →  KeyType AES256 → WType AES256
+    keyExpansionIEC (alg ∷ Proxy alg) key = concat (head (orignal alg key):>Nil ++ map invMixColumns (init (tail (orignal alg key))) ++ last (orignal alg key):>Nil)
+        where
+            orignal ∷ Proxy alg →  KeyType alg →  Vec (Nr alg + 1) (RoundWType alg)
+            orignal alg ws = wInWords alg (keyExpansionIEC alg ws) 
+            wInWords ∷ Proxy alg → WType alg → Vec (Nr alg + 1) (RoundWType alg)
+            wInWords (alg ∷ Proxy alg) = unconcat (SNat ∷ SNat (Nb alg ))
