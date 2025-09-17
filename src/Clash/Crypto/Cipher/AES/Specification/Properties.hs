@@ -9,8 +9,8 @@ Some properties that can be proven to be valid from the FIPS 197
 specification.
 -}
 {-# LANGUAGE UnicodeSyntax #-}
-{-# OPTIONS_GHC -XDataKinds #-}
-{-# OPTIONS_GHC -XExplicitNamespaces #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 module Clash.Crypto.Cipher.AES.Specification.Properties
   ( AESFacts(..)
   , KnownAES(..)
@@ -20,9 +20,8 @@ import Clash.Prelude
 
 import Data.Proxy (Proxy(..))
 import Language.Haskell.Unicode (type (≤))
-import Clash.Crypto.Cipher.AES.Specification.Algorithm
 import Clash.Crypto.Cipher.AES.Specification.Types
-
+import Clash.Crypto.Cipher.AES.Specification.Algorithm
 -- | We collect all required properties via the 'AESFacts' class.
 -- | In chapter 6 the constraints are defined.
 data AESFacts (alg ∷ AES) where

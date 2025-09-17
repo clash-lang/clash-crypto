@@ -17,8 +17,6 @@ Basic definitions covering the fundamentals of FIPS 197.
 
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 
 module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
@@ -120,9 +118,6 @@ inv b = foldl (•) 0X01 (list_binary_powers b)
 --------------------------------------------------------------------------------------
 -- | Definitions for cipher
 -- _AddRoundKey
--- test matrix:
-testMatrix ∷ StateType alg
-testMatrix = (0x00 :> 0x10 :> 0x20 :> 0x30 :> Nil) :> (0x01 :> 0x11 :> 0x21 :> 0x31 :> Nil) :> (0x02 :> 0x12 :> 0x22 :> 0x32 :> Nil) :> (0x03 :> 0x13 :> 0x23 :> 0x33 :> Nil) :>Nil
 -- Shift test 
 -- Clash.Crypto.Cipher.AES.Specification.Definitions.invShiftRows ( Clash.Crypto.Cipher.AES.Specification.Definitions.shiftRows Clash.Crypto.Cipher.AES.Specification.Definitions.test_matrix)
 -- should give the same back.
@@ -159,7 +154,7 @@ invShiftRows state = transpose (zipWith rotateRight (transpose state) (iterateI 
 
 -- | 5.3.2 invSubBytes() implemented with table 6
 invSubBytes ∷ StateType alg → StateType alg
-invSubBytes = map (map (sBox xySBox))
+invSubBytes = map (map (sBox xyInvSBox))
 
 -- | 5.3.3 the inverse of mixColumns() (equation5.14, 5.15)
 invMixColumns ∷ StateType alg → StateType alg
