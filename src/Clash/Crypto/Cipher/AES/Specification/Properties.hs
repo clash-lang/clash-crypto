@@ -20,9 +20,8 @@ import Clash.Prelude
 
 import Data.Proxy (Proxy(..))
 import Language.Haskell.Unicode (type (≤))
-
+import Clash.Crypto.Cipher.AES.Specification.Algorithm
 import Clash.Crypto.Cipher.AES.Specification.Types
-import Clash.Crypto.Cipher.AES.Specification.Definitions
 
 -- | We collect all required properties via the 'AESFacts' class.
 -- | In chapter 6 the constraints are defined.
@@ -35,6 +34,7 @@ data AESFacts (alg ∷ AES) where
     , KnownNat (KeyLength alg)
     , KnownNat (Nr alg)
     -- , AESInitials alg
+    , AESFunctions alg
     , 1 ≤ BlockSize alg
     , 1 ≤ BlockSize alg `Div` 8
     -- , 1 ≤ ScheduleCount alg

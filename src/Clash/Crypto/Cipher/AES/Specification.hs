@@ -21,10 +21,10 @@ module Clash.Crypto.Cipher.AES.Specification
     -- Type of all specific AES functions.
     AES,
     -- Verification
-    KnownAES(..),
+    KnownAES(..), AESFacts(..),
     -- Types
     InType, OutType, StateType,
-    WordType,
+    WordType, KeyType, Nr,
 
     -- Definitions
     AESConstants,

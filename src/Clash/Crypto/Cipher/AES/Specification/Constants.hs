@@ -21,8 +21,6 @@ functional description.
 module Clash.Crypto.Cipher.AES.Specification.Constants where
 import Clash.Prelude
 
-
-
 import GHC.TypeLits
 
 import Clash.Crypto.Cipher.AES.Specification.Types
