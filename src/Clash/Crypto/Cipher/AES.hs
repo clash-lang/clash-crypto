@@ -21,16 +21,21 @@ module Clash.Crypto.Cipher.AES
     -- Types
     InType, OutType, StateType,
     WordType,
+    -- Definitions
+    (⊕), subBytes, invSubBytes,
+    mixColumns, invMixColumns,
+    shiftRows, invShiftRows,
+    addRoundKey, invAddRoundKey,
   ) where
 
-import Clash.Prelude
-import Clash.Signal.Channel
-import Clash.Signal.DataStream
+-- import Clash.Prelude
+-- import Clash.Signal.Channel
+-- import Clash.Signal.DataStream
 
-import Language.Haskell.Unicode (type (≤))
+-- import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Cipher.AES.Specification
-import Clash.Crypto.Cipher.AES.Streaming
+-- import Clash.Crypto.Cipher.AES.Streaming
 
 
 -- | Reads serialized messages from an input stream, calculates their
@@ -46,14 +51,13 @@ import Clash.Crypto.Cipher.AES.Streaming
 -- The digset relased on the channel is calculated according to the
 -- selected hash algorithm. It is released after the arrival of a
 -- message's end frame and the calculation of the hash.
-aes ∷
-  ∀ (alg ∷ AES) (dom ∷ Domain) (n ∷ Nat).
-  (KnownAES alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
-  DataStream dom () (Index n) (BitVector n) →
-  -- ^ streamed input messages
-  Channel dom (Digest alg)
-  -- ^ result channel
-aes
-  | AESFacts{} ← knownAES @alg
-  = aesStream @alg @dom @n
+-- aes ∷
+--   ∀ (alg ∷ AES) (dom ∷ Domain) (n ∷ Nat).
+--   (KnownAES alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
+--   DataStream dom () (Index n) (InType alg) →
+--   -- ^ streamed input messages
+--   Channel dom (OutType alg)
+--   -- ^ result channel
+-- aes
+--   | AESFacts{} ← knownAES @alg
+--   = aesCipher alg

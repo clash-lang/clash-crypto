@@ -27,7 +27,11 @@ module Clash.Crypto.Cipher.AES.Specification
     WordType, KeyType, Nr,
 
     -- Definitions
-    AESConstants,
+    AESConstants, (⊕), 
+    subBytes, invSubBytes,
+    mixColumns, invMixColumns,
+    shiftRows, invShiftRows,
+    addRoundKey, invAddRoundKey,
     -- Constants
     mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
   ) where

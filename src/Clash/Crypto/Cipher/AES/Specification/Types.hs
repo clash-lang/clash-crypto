@@ -28,7 +28,6 @@ import Data.Kind (Type)
 import Data.Ord (Ord)
 import Data.Typeable (Typeable)
 import GHC.Show (Show)
-import GHC.TypeNats (Nat)
 import GHC.Generics (Generic)
 import GHC.TypeLits
 -- | Supported hash algorithms.
@@ -94,22 +93,20 @@ type family Nr alg where
   Nr AES192 = 12
   Nr AES256 = 14
   Nr _      = 14
-
-
 -- | 5.1 state, w
 -- since w always used in groups of 4 and cλash is not as good as python with indexes
 -- and converting back and forth doesn't make any sense
 type RoundWType (alg ∷ AES) = (BlockType alg)
+
 type WType (alg ∷ AES) = Vec ((Nr alg + 1) * 4)  (WordType alg)
 
-
 type NFixedWords ∷ AES → Nat
+
 type family NFixedWords alg where
   NFixedWords _      = 10
 
 type RconType  (alg ∷ AES) = Vec (NFixedWords alg) (WordType alg)
-
-
 -- 3.4 definition of in, state, out
 type InType (alg ∷ AES) = BlockType alg
+
 type OutType (alg ∷ AES) = BlockType alg
