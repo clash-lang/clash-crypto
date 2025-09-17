@@ -24,20 +24,11 @@ module Clash.Crypto.Cipher.AES.Specification.Definitions where
 
 
 import Clash.Prelude
-import Clash.Sized.Internal.BitVector(BitVector(..), bitPattern, xor#, eq#)
-import Clash.Sized.Vector(iterateI, splitAtI, scanl, dropI,takeI, map, concat, unconcat, select, reverse, head, init, tail, foldl, last,(+>>), zipWith, mapAccumL, rotateRight,rotateLeft, generateI, transpose,unconcatBitVector#, bv2v, v2bv, unconcatI, (++), (!!))
-
-import Control.Arrow (first)
 import Data.Proxy (Proxy)
-import Data.Type.Bool (If)
-import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Cipher.AES.Specification.Types
 import Clash.Crypto.Cipher.AES.Specification.Constants
-import Clash.Sized.Vector.Extra ((‼))
-import GHC.Show (Show)
-import GHC.TypeNats (Nat)
-import GHC.Generics (Generic)
+
 import GHC.TypeLits ()
 -- Explanation of infix can be found here https://www.haskell.org/onlinereport/decls.html#prelude-fixities
 -- It is basically defining the ordering of execution. 9 is used standard.
@@ -62,7 +53,7 @@ import GHC.TypeLits ()
 -------------------------------------------
 -- Section 4.1: Addition in GF(2⁸)
 (⊕) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(⊕) = xor#
+(⊕) = xor
 -- Section 4.2: Multiplication in GF(2⁸)
 
 
@@ -85,7 +76,7 @@ xTimes a =  if y == 0x01 then z ⊕ resize mX else z
         list_xtimes = iterateI xTimes
         -- | function that transform from bitvector to vector of booleans.
         bv2vbool ∷  (KnownNat w) ⇒ BitVector w → Vec w Bool
-        bv2vbool b = fmap (testBit b) (iterateI (+1) 0)
+        bv2vbool b1 = fmap (testBit b1) (iterateI (+1) 0)
 
 
 
@@ -95,7 +86,7 @@ matrixMultiplication ∷ (KnownNat w, KnownNat m, KnownNat n) ⇒ Vec m (Vec n (
 matrixMultiplication a b = fmap (vectorMultiplication b) a
     where
         vectorMultiplication ∷ (KnownNat w, KnownNat n) ⇒  Vec n (BitVector w) → Vec n (BitVector w) → BitVector w
-        vectorMultiplication b a = foldl (⊕) 0x00  (zipWith (•) b a)
+        vectorMultiplication b1 a1 = foldl (⊕) 0x00  (zipWith (•) b1 a1)
 
 -- | Multiplication as defined in equation 4.9
 -- | Matrix multiplication based on two vectors as neded MixColumns() and InvMixColumns()
@@ -103,7 +94,7 @@ vectorMatrixMultiplication :: (KnownNat w, KnownNat n) => Vec n (BitVector w) ->
 vectorMatrixMultiplication a = matrixMultiplication (generateMatrixA a)
     where
         generateMatrixA :: (KnownNat w, KnownNat n) =>  Vec n (BitVector w) -> Vec n (Vec n (BitVector w))
-        generateMatrixA a = transpose (iterateI (`rotateRight` 1) a)
+        generateMatrixA a1 = transpose (iterateI (`rotateRight` (1 ∷ Integer)) a1)
 
 -- | Section 4.3:
 -- | inverse based of 4.11
@@ -112,7 +103,7 @@ inv :: (KnownNat w) =>
 inv b = foldl (•) 0X01 (list_binary_powers b)
     where
         pow2 :: KnownNat w => BitVector w -> BitVector w
-        pow2 b = (•) b b
+        pow2 b1 = (•) b1 b1
         list_binary_powers :: (KnownNat w) => BitVector w -> Vec w (BitVector w)
         list_binary_powers = generateI pow2
 -- | TODO: A faster inverse can be implemented with extended ecuclidean algorithm
@@ -143,7 +134,7 @@ subBytes ∷ StateType alg → StateType alg
 subBytes = map (map (sBox xySBox))
 -- | the methode to select the right value from sBox that is given with it. 
 sBox ∷ Vec (2 * ByteSize alg) (Vec (2 * ByteSize alg) (ByteType alg)) → ByteType alg → ByteType alg
-sBox m a = (m !! x_part a 0)  !! x_part a 1
+sBox m a = (m !! x_part a (0 ∷ Integer))  !! x_part a (1 ∷ Integer)
     where
         splitBitVector ∷ ByteType alg → SplitByteType alg -- Binding such that the rest also works.
         splitBitVector = unconcatBitVector#
@@ -152,7 +143,7 @@ sBox m a = (m !! x_part a 0)  !! x_part a 1
 
 -- | 5.1.2 shiftRows() (equation 5.5)
 shiftRows ∷ StateType alg → StateType alg
-shiftRows state = transpose (zipWith rotateLeft (transpose state) (iterateI (+1) 0))
+shiftRows state = transpose (zipWith rotateLeft (transpose state) (iterateI (+1) (0 ∷ Integer)))
 
 -- | 5.1.3 mixColumns() (equation 5.7, 5.8)
 mixColumns ∷ StateType alg → StateType alg
@@ -164,7 +155,7 @@ addRoundKey = zipWith (zipWith (⊕))
 
 -- | 5.3.1 invShiftRows() (equation 5.5)
 invShiftRows ∷ StateType alg → StateType alg
-invShiftRows state = transpose (zipWith rotateRight (transpose state) (iterateI (+1) 0))
+invShiftRows state = transpose (zipWith rotateRight (transpose state) (iterateI (+1) (0 ∷ Integer)))
 
 -- | 5.3.2 invSubBytes() implemented with table 6
 invSubBytes ∷ StateType alg → StateType alg
@@ -182,7 +173,7 @@ invAddRoundKey = addRoundKey
 -- Section 5.2 and 5.3: keyexpansion support functions                              --
 --------------------------------------------------------------------------------------
 rotWord ∷ WordType alg → WordType alg
-rotWord word = rotateLeft word 1
+rotWord word = rotateLeft word (1 ∷ Integer)
 
 subWord ∷ WordType alg → WordType alg
 subWord = map (sBox xySBox)
