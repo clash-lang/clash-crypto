@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE PackageImports #-}
 module Test.Clash.Crypto.MAC.HMAC where
 
 import Clash.Prelude
@@ -24,7 +25,7 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 -- Reference implementation
-import qualified Crypto.MAC.HMAC as Spec
+import qualified "cryptohash" Crypto.MAC.HMAC as Spec
 import qualified Data.ByteString as BS
 import Data.ByteString (ByteString)
 

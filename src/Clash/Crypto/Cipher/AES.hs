@@ -20,7 +20,7 @@ module Clash.Crypto.Cipher.AES
     AESFacts(..),
     -- Types
     InType, OutType, StateType,
-    WordType,
+    WordType, RoundWType,
     -- Definitions
     (⊕), subBytes, invSubBytes,
     mixColumns, invMixColumns,

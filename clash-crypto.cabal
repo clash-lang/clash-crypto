@@ -70,6 +70,8 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.Cipher.AES
+    Clash.Crypto.Cipher.AES.Streaming
     Clash.Crypto.Cipher.AES.Specification
     Clash.Crypto.Cipher.AES.Specification.Properties
     Clash.Crypto.Cipher.AES.Specification.Algorithm
@@ -107,6 +109,8 @@ test-suite simulation
   ghc-options: -threaded
   main-is: Main.hs
   other-modules:
+    Test.Clash.Crypto.Cipher.AES.Specifications.Definitions
+    Test.Clash.Crypto.Cipher.AES
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.MAC.HMAC
     Test.Clash.Crypto.ECDSA.InverseModulo
@@ -117,6 +121,8 @@ test-suite simulation
     , clash-crypto
     , clash-prelude-hedgehog
     , cryptohash
+    -- , AES
+    , cryptonite
     , ghc-typelits-proof-assist
     , hedgehog >= 1.0
     , modular-arithmetic
