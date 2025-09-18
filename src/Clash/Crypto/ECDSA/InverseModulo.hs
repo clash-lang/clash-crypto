@@ -148,25 +148,25 @@ type Precomp (f :: Nat) =
 type MulRegisterSize = 36
 type GCDStreamingStages = 3
 
-type DenMax m = Iterations (ModSize m) + 1
+type DenMax m = FastGCDIterations m + 1
 
-data FastGCDRecord m = FastGCD
- { remaining :: Index (FastGCDIterations m + 1)
- , delta     :: Signed (ModSize (Iterations (ModSize m)) + 1)
- , f         :: Signed (Iterations (ModSize m) + 1)
- , g         :: Signed (Iterations (ModSize m) + 1)
- , v         :: HWFraction (DenMax m) (Iterations (ModSize m))
- , r         :: HWFraction (DenMax m) (Iterations (ModSize m))
+data FastGCDRecord len = FastGCD
+ { remaining :: Index (len + 1)
+ , delta     :: Signed (ModSize len + 1)
+ , f         :: Signed (len + 1)
+ , g         :: Signed (len + 1)
+ , v         :: HWFraction (len + 1) len
+ , r         :: HWFraction (len + 1) len
  } deriving (Generic, NFDataX)
 
-type FastGCDState m = ComputationState (FastGCDRecord m)
+type FastGCDState m = ComputationState (FastGCDRecord (FastGCDIterations m))
 
 -- | A sequential implementation of the divSteps2 function described in
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
 -- inversion.
 divSteps :: forall m dom.
  (HiddenClockResetEnable dom, KnownNat m, KnownDomain dom, 1 <= m, 1 <= FastGCDIterations m,
-  ModSize m <= FastGCDIterations m) =>
+  KnownNat (FastGCDIterations m), ModSize m <= FastGCDIterations m) =>
  Signal dom Bool -> -- ^ Toggle signal
  Signal dom (Unsigned (ModSize m)) ->
  Signal dom (Maybe (Signed (DenMax m), HWFraction (DenMax m) (FastGCDIterations m)))
