@@ -39,61 +39,11 @@ import Data.Proxy (Proxy(..))
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+import qualified Test.Clash.Crypto.Cipher.AES.Specifications.Definitions as Def
+-- Test AES128
+import Crypto.Cipher.AES as Reference
+
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES"
-  [ tastyTestDefinitions] 
-
-tastyTestDefinitions ∷ TestTree
-tastyTestDefinitions = testGroup "Clash.Crypto.Cipher.AES"
-  [localOption (HedgehogTestLimit (Just 10)) $ -- Purpose is mainly to get familiar with testing.
-      testProperty "Functional equality of XOR" $ property $ do
-        a ← forAll $ genDefinedBitVector
-        b ← forAll $ genDefinedBitVector
-        testOplus a b,
-   localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Functional with subBytes" $ property $ do
-        a ← forAll $ genVec (genVec  genDefinedBitVector)
-        testsubBytes a,
-   localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Functional with subBytes" $ property $ do
-        a ← forAll $ genVec (genVec  genDefinedBitVector)
-        testMixColumns a,
-   localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Functional with shiftRows" $ property $ do
-        a ← forAll $ genVec (genVec  genDefinedBitVector) 
-        testShiftRows a,
-  localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Generic functional with testMixColumns fully" $ property $ do
-        a ← forAll $ genVec (genVec  genDefinedBitVector) 
-        testMixColumns a
-  ]
-type TestLen = 8
-testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m ()
-testOplus a b = a ⊕ b === xor a b 
-
--- test matrix:
-testState ∷ StateType alg
-testState = (0x00 :> 0x10 :> 0x20 :> 0x30 :> Nil) :> (0x01 :> 0x11 :> 0x21 :> 0x31 :> Nil) :> (0x02 :> 0x12 :> 0x22 :> 0x32 :> Nil) :> (0x03 :> 0x13 :> 0x23 :> 0x33 :> Nil) :>Nil
-testResultShiftRows ∷ StateType alg
-testResultShiftRows = (0x00:>0x11:>0x22:>0x33:>Nil):>(0x01:>0x12:>0x23:>0x30:>Nil):>(0x02:>0x13:>0x20:>0x31:>Nil):>(0x03:>0x10:>0x21:>0x32:>Nil):>Nil
-testResultInvShiftRows ∷ StateType alg
-testResultInvShiftRows = (0x00:>0x13:>0x22:>0x31:>Nil):>(0x01:>0x10:>0x23:>0x32:>Nil):>(0x02:>0x11:>0x20:>0x33:>Nil):>(0x03:>0x12:>0x21:>0x30:>Nil):>Nil
-testShiftRows ∷ (Monad m) ⇒ StateType alg -> PropertyT m ()
-testShiftRows state = do
-  invShiftRows (shiftRows state) === state
-  shiftRows testState ===  testResultShiftRows 
-  invShiftRows testState ===  testResultInvShiftRows 
-
-testStateSubBytes ∷ StateType alg
-testStateSubBytes = (0x53:>0x53:>0x53:>0x53:>Nil):>(0x00:>0x00:>0x00:>0x00:>Nil):>(0x53:>0x53:>0x53:>0x53:>Nil):>(0x53:>0x53:>0x53:>0x353:>Nil):>Nil
-testResultStateSubBytes ∷ StateType alg
-testResultStateSubBytes = (0xed:>0xed:>0xed:>0xed:>Nil):>(0x63:>0x63:>0x63:>0x63:>Nil):>(0xed:>0xed:>0xed:>0xed:>Nil):>(0xed:>0xed:>0xed:>0xed:>Nil):>Nil
-testsubBytes ∷ (Monad m) ⇒ StateType alg -> PropertyT m ()
-testsubBytes state = do
-  state === invSubBytes (subBytes state)
-  testResultStateSubBytes === subBytes testStateSubBytes
-  invSubBytes testResultStateSubBytes === testStateSubBytes
-
-testMixColumns ∷ (Monad m) ⇒ StateType alg -> PropertyT m ()
-testMixColumns state = state === invMixColumns (mixColumns state)
+  [ Def.tastyTests] 
 

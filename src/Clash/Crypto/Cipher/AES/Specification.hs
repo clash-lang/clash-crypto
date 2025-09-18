@@ -27,7 +27,7 @@ module Clash.Crypto.Cipher.AES.Specification
     WordType, KeyType, Nr,
 
     -- Definitions
-    AESConstants, (⊕), 
+    AESConstants, (⊕), RoundWType,
     subBytes, invSubBytes,
     mixColumns, invMixColumns,
     shiftRows, invShiftRows,
@@ -36,9 +36,14 @@ module Clash.Crypto.Cipher.AES.Specification
     mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
   ) where
 
-
+import Data.Proxy (Proxy)
 import Clash.Crypto.Cipher.AES.Specification.Properties
 import Clash.Crypto.Cipher.AES.Specification.Algorithm
 import Clash.Crypto.Cipher.AES.Specification.Constants
 import Clash.Crypto.Cipher.AES.Specification.Definitions
 import Clash.Crypto.Cipher.AES.Specification.Types
+
+aesFunctional ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ Proxy alg →  InType alg → KeyType alg → OutType alg    
+aesFunctional (alg ∷ Proxy alg) input key 
+  | AESFacts{} ← knownAES @alg
+  = cipher alg input (keyExpansion alg key)
