@@ -2,6 +2,9 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
+
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module SHA (topEntity) where
 
 import Clash.Prelude

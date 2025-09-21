@@ -13,6 +13,8 @@ Test suite for 'Clash.Crypto.Hash.SHA'.
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedLists #-}
 
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Test.Clash.Crypto.Hash.SHA where
 
 import Clash.Prelude
