@@ -120,9 +120,13 @@ test-suite simulation
     , bytestring
     , clash-crypto
     , clash-prelude-hedgehog
+    --SHA
     , cryptohash
-    -- , AES
-    , cryptonite
+    --
+    --AES
+    , crypton >= 1.0.4
+    , memory
+    ---
     , ghc-typelits-proof-assist
     , hedgehog >= 1.0
     , modular-arithmetic
