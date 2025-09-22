@@ -18,13 +18,14 @@ small letter as well.
 module Clash.Crypto.Cipher.AES.Specification
   ( -- All functions that are present in the FIPS.
     AESFunctions(..),
+    aesFunctional,
     -- Type of all specific AES functions.
-    AES,
+    AES(..), 
     -- Verification
     KnownAES(..), AESFacts(..),
     -- Types
     InType, OutType, StateType,
-    WordType, KeyType, Nr,
+    WordType, KeyType, Nr, Nk, Nb, WordSize,
 
     -- Definitions
     AESConstants, (⊕), RoundWType,

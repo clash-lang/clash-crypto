@@ -204,3 +204,4 @@ instance AESFunctions AES256 where
             orignal alg1 w1s = wInWords (keyExpansion alg1 w1s) 
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords = unconcat (SNat ∷ SNat (Nb alg ))
+

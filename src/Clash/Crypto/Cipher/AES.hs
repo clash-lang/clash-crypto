@@ -14,13 +14,13 @@ module Clash.Crypto.Cipher.AES
   ( -- All functions that are present in the FIPS.
     AESFunctions(..),
     -- Type of all specific AES functions.
-    AES,
+
     -- Verification
     KnownAES(..),
     AESFacts(..),
     -- Types
     InType, OutType, StateType,
-    WordType, RoundWType,
+    WordType, RoundWType, WordSize, Nk, Nb, Nr, KeyType,
     -- Definitions
     (⊕), subBytes, invSubBytes,
     mixColumns, invMixColumns,
