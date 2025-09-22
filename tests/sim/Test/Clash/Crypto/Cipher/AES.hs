@@ -71,7 +71,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES"
 tastyTestsAESSpecification ∷ TestTree
 tastyTestsAESSpecification = testGroup "Clash.Crypto.Cipher.AES.Specification"
   [ localOption (HedgehogTestLimit (Just 10)) $
-      testGroup "Specification Sanity Checks (unit tests)"
+      testGroup "Specification Sanity Checks against haskell crypton AES128"
         [ testProperty ("AES-" <> algName) $
             property $ do
               key <- forAll (genKeyFor (Proxy @Spec.AES128))
@@ -79,10 +79,29 @@ tastyTestsAESSpecification = testGroup "Clash.Crypto.Cipher.AES.Specification"
               aesPure key input
         | (aesPure, algName) <-
             [ (testAESPure @Spec.AES128, "128")
-            -- , (testAESPure @Spec.AES192, "192", Proxy @Spec.AES192, forAll (genKeyFor . Proxy Spec.AES192))
-            -- , (testAESPure @Spec.AES256, "256", Proxy @Spec.AES256, forAll (genKeyFor . Proxy Spec.AES256))
+            ]
+        ],
+        testGroup "Specification Sanity Checks against haskell crypton AES192" $
+        [ testProperty ("AES-" <> algName) $
+            property $ do
+              key <- forAll (genKeyFor (Proxy @Spec.AES192))
+              input <- forAll (genInputBlock)
+              aesPure key input
+        | (aesPure, algName) <-
+            [ (testAESPure @Spec.AES192, "192")
+            ]
+        ],
+        testGroup "Specification Sanity Checks against haskell crypton AES256" $
+        [ testProperty ("AES-" <> algName) $
+            property $ do
+              key <- forAll (genKeyFor (Proxy @Spec.AES256))
+              input <- forAll (genInputBlock)
+              aesPure key input
+        | (aesPure, algName) <-
+            [ (testAESPure @Spec.AES256, "256")
             ]
         ]
+
 
   ]
 genInputBlock :: Gen ByteString
