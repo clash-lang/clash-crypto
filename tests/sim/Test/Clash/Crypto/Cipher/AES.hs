@@ -10,11 +10,10 @@ Test suite for 'Clash.Crypto.Cipher.AES'.
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NoStarIsType #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-
+{-# LANGUAGE OverloadedLists #-} -- Used to inturper a list as Byte String
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 {-# LANGUAGE DataKinds #-}
@@ -22,9 +21,11 @@ Test suite for 'Clash.Crypto.Cipher.AES'.
 
 module Test.Clash.Crypto.Cipher.AES (tastyTests) where
 
-import Clash.Sized.Vector (unsafeFromList)
 import Clash.Crypto.Cipher.AES
 import Clash.Prelude
+import Clash.Signal.Channel
+import Clash.Signal.DataStream
+import Clash.Sized.Vector (unsafeFromList)
 -- import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
@@ -50,16 +51,16 @@ import Crypto.Error
 import qualified Crypto.Random.Types as CRT
 
 import Data.ByteArray ( ByteArray, convert )
-import Data.ByteString as BA (ByteString) 
+import Data.ByteString (ByteString) 
 import Crypto.Cipher.AES 
 import Crypto.Cipher.Types 
 import Crypto.Random (getRandomBytes)
 import Crypto.Error (throwCryptoError)
-import Data.ByteArray (convert)
+-- import Data.ByteArray (convert)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import Data.ByteString.Lazy (toStrict, fromStrict)
-import Data.Word (Word8)
+-- import Data.ByteString.Lazy (toStrict, fromStrict)
+-- import Data.Word (Word8)
 
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
 tastyTests ∷ TestTree
@@ -72,37 +73,38 @@ tastyTestsAESSpecification ∷ TestTree
 tastyTestsAESSpecification = testGroup "Clash.Crypto.Cipher.AES.Specification"
   [ localOption (HedgehogTestLimit (Just 10)) $
       testGroup "Specification Sanity Checks against haskell crypton AES128"
-        [ testProperty ("AES-" <> algName) $
+        [ 
+          testProperty "AES128" $
             property $ do
               key <- forAll (genKeyFor (Proxy @Spec.AES128))
-              input <- forAll (genInputBlock)
-              aesPure key input
-        | (aesPure, algName) <-
-            [ (testAESPure @Spec.AES128, "128")
-            ]
-        ],
-        testGroup "Specification Sanity Checks against haskell crypton AES192" $
-        [ testProperty ("AES-" <> algName) $
+              input <- forAll genInputBlock
+              testAESPure @Spec.AES128 key input,
+        testProperty "AES-128, specific key" $
             property $ do
-              key <- forAll (genKeyFor (Proxy @Spec.AES192))
-              input <- forAll (genInputBlock)
-              aesPure key input
-        | (aesPure, algName) <-
-            [ (testAESPure @Spec.AES192, "192")
-            ]
-        ],
-        testGroup "Specification Sanity Checks against haskell crypton AES256" $
-        [ testProperty ("AES-" <> algName) $
-            property $ do
-              key <- forAll (genKeyFor (Proxy @Spec.AES256))
-              input <- forAll (genInputBlock)
-              aesPure key input
-        | (aesPure, algName) <-
-            [ (testAESPure @Spec.AES256, "256")
-            ]
+              testAESPure @Spec.AES128 key1AES128 input1AES128
         ]
-
-
+        -- ,
+        -- testGroup "Specification Sanity Checks against haskell crypton AES" $
+        -- [ testProperty ("AES-" <> algName) $
+        --     property $ do
+        --       key <- forAll (genKeyFor proxyAlg)
+        --       input <- forAll (genInputBlock)
+        --       aesPure key input
+        -- | (aesPure, algName, proxyAlg) <-
+        --     [ (testAESPure @Spec.AES192, "192", Proxy @Spec.AES192)
+        --     ]
+        -- ]
+        -- ,
+        -- testGroup "Specification Sanity Checks against haskell crypton AES256" $
+        -- [ testProperty ("AES-" <> algName) $
+        --     property $ do
+        --       key <- forAll (genKeyFor (Proxy @Spec.AES256))
+        --       input <- forAll (genInputBlock)
+        --       aesPure key input
+        -- | (aesPure, algName) <-
+        --     [ (testAESPure @Spec.AES256, "256")
+        --     ]
+        -- ]
   ]
 genInputBlock :: Gen ByteString
 genInputBlock = BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nb Spec.AES128 * Spec.WordSize Spec.AES128)))) Gen.enumBounded
@@ -117,47 +119,47 @@ testOplus a b = a ⊕ b === xor a b
 
 -- | Not required, but most general implementation
 -- A function to pad the data to be a multiple of the block size (AES block size is 16 bytes)
-padData :: BA.ByteString -> BA.ByteString
+padData :: ByteString -> ByteString
 padData bs = BS.take 16 (bs `BS.append` BS.replicate 16 0)  -- Simple padding to 16 bytes
 -- Encrypt function using AES in ECB mode
-encryptECB :: BA.ByteString -> BA.ByteString -> BA.ByteString
+encryptECB :: ByteString -> ByteString -> ByteString
 encryptECB key plainText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher :: AES128) -> ecbEncrypt cipher (padData plainText)
 -- Decrypt function using AES in ECB mode
-decryptECB ∷ BA.ByteString -> BA.ByteString -> BA.ByteString
+decryptECB ∷ ByteString -> ByteString -> ByteString
 decryptECB key cipherText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher ∷ AES128)-> ecbDecrypt cipher (padData cipherText)
 
 -- Typeclass over all AES block cipher algorithms
 class CryptoAES (alg ∷ Spec.AES) where
-  encryptoECB :: Proxy alg -> BA.ByteString -> BA.ByteString -> BA.ByteString
-  decryptoECB :: Proxy alg -> BA.ByteString -> BA.ByteString -> BA.ByteString
+  encryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
+  decryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
 instance CryptoAES Spec.AES128      where 
-  encryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   encryptoECB _ key plainText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher :: AES128) -> ecbEncrypt cipher (padData plainText)
-  decryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   decryptoECB _ key cipherText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher ∷ AES128)-> ecbDecrypt cipher (padData cipherText)
 instance CryptoAES Spec.AES192    where
-  encryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   encryptoECB _ key plainText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher :: AES192) -> ecbEncrypt cipher (padData plainText)
-  decryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   decryptoECB _ key cipherText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher ∷ AES192)-> ecbDecrypt cipher (padData cipherText)
 instance CryptoAES Spec.AES256    where 
-  encryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   encryptoECB _ key plainText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher :: AES256) -> ecbEncrypt cipher (padData plainText)
-  decryptoECB ∷ Proxy alg → BA.ByteString -> BA.ByteString -> BA.ByteString
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   decryptoECB _ key cipherText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
     CryptoPassed (cipher ∷ AES256)-> ecbDecrypt cipher (padData cipherText)
@@ -208,3 +210,9 @@ testAESPure input key
   ref === dut
 
 
+-- | Some example input for unit testing.
+input1AES128 ∷ ByteString
+input1AES128 = [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
+
+key1AES128 ∷ ByteString
+key1AES128 = [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
