@@ -86,10 +86,10 @@ tastyTestsAESSpecification = testGroup "Clash.Crypto.Cipher.AES.Specification"
 
   ]
 genInputBlock :: Gen ByteString
-genInputBlock = BS.pack <$> Gen.list (Range.singleton 16) Gen.enumBounded
+genInputBlock = BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nb Spec.AES128 * Spec.WordSize Spec.AES128)))) Gen.enumBounded
 genKeyFor :: ∀ alg. KnownAES alg => Proxy alg -> Gen ByteString
 genKeyFor alg = do
-  BS.pack <$> Gen.list (Range.singleton  16) Gen.enumBounded
+  BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nk Spec.AES128 * Spec.WordSize Spec.AES128)))) Gen.enumBounded
 
 type TestLen = 8
 testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m ()
@@ -188,5 +188,4 @@ testAESPure input key
 
   ref === dut
 
--- k ∷ 
--- k = natToNum  @(Nk alg * WordSize alg) @Int
+
