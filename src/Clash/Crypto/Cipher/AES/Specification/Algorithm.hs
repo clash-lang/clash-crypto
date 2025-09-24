@@ -57,33 +57,34 @@ instance AESFunctions AES128 where
                     partWord w1s index = xorWord (subWord (rotWord (last w1s)))   (_Rcon alg !! index)
 
     cipher ∷ Proxy AES128 → InType AES128 → WType AES128 → OutType AES128
-    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes (rounds alg input w1s))) (last (wInWords w1s))
+    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes(rounds alg input w1s))) (last (wInWords w1s))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
-            rounds _ input1 ws = foldl mutation (addRoundKey input1 (head (wInWords ws))) (init (tail (wInWords ws)))
+            rounds _ input1 ws = foldl mutation (addRoundKey  input1 (head (wInWords ws))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords = unconcat (SNat ∷ SNat (Nb alg ))
             -- Algorithm 1 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
+
     invCipher ∷ Proxy AES128 → InType AES128 → WType AES128 → OutType AES128
-    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input (reverse ws)))) (last (wInWords (reverse ws)))
+    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat ∷ SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
 
     eqInvCipher ∷ Proxy AES128 → InType AES128 → WType AES128 → OutType AES128
-    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 (reverse ws)))) (last (wInWords (reverse ws)))
+    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat :: SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))
@@ -105,14 +106,14 @@ instance AESFunctions AES192 where
             keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 0))
                 where
                 middelCalculation ∷ Proxy AES192 → KeyType AES192 → Integer → KeyType AES192
-                middelCalculation _ ws i = postscanl xorWord (partWord ws i)  ws -- zipWith xorWord ((+>>) (partWord ws i) ws) ws
+                middelCalculation _ ws i = postscanl xorWord (partWord ws i)  ws 
                         where
                             partWord w1s index = xorWord (subWord (rotWord (last w1s)))   (_Rcon alg !! index)
     cipher ∷ Proxy AES192 → InType AES192 → WType AES192 → OutType AES192
-    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes (rounds alg input w1s))) (last (wInWords w1s))
+    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes(rounds alg input w1s))) (last (wInWords w1s))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
-            rounds _ input1 ws = foldl mutation (addRoundKey input1 (head (wInWords ws))) (init (tail (wInWords ws)))
+            rounds _ input1 ws = foldl mutation (addRoundKey  input1 (head (wInWords ws))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords = unconcat (SNat ∷ SNat (Nb alg ))
             -- Algorithm 1 codeline 5-8 as a function
@@ -120,23 +121,23 @@ instance AESFunctions AES192 where
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
 
     invCipher ∷ Proxy AES192 → InType AES192 → WType AES192 → OutType AES192
-    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input (reverse ws)))) (last (wInWords (reverse ws)))
+    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat ∷ SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
 
     eqInvCipher ∷ Proxy AES192 → InType AES192 → WType AES192 → OutType AES192
-    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 (reverse ws)))) (last (wInWords (reverse ws)))
+    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat :: SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))
@@ -153,22 +154,22 @@ instance AESFunctions AES256 where
     keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
         where 
             keyExpansionInBlocks ∷ Proxy AES256 → KeyType AES256 → Vec (Nk AES256 * (Nr AES256 + 3) * (Nr AES256 + 3)) (WordType AES256)
-            keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 1))
+            keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 0))
                 where
                 middelCalculation ∷ Proxy AES256 → KeyType AES256 → Integer → KeyType AES256
                 middelCalculation _ w1s i = firstPart w1s i ++ secondPart w1s i
                     where
-                        firstPart ws i1 = zipWith xorWord ((+>>) (partWord (firstSplit ws) i1) (firstSplit ws)) (firstSplit ws)
+                        firstPart ws i1 = postscanl xorWord (partWord ws i1) (firstSplit ws)-- - zipWith xorWord ((+>>) (partWord ws i) ws) ws /// postscanl xorWord (partWord ws i)  ws
                         firstSplit = takeI @(Nk AES256 `Div` 2)
-                        secondPart ws i1 = zipWith xorWord ((+>>) (subWord (last (firstPart ws i1))) (secondSplit ws)) (secondSplit ws)
+                        secondPart ws i1 = postscanl xorWord (subWord (last (firstPart ws i1))) (secondSplit ws) 
                         secondSplit = dropI @(Nk AES256 `Div` 2)
                         partWord ws index = xorWord (subWord (rotWord (last ws)))   (_Rcon alg !! index)
 
     cipher ∷ Proxy AES256 → InType AES256 → WType AES256 → OutType AES256
-    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes (rounds alg input w1s))) (last (wInWords w1s))
+    cipher (alg ∷ Proxy alg) input w1s = addRoundKey (shiftRows (subBytes(rounds alg input w1s))) (last (wInWords w1s))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
-            rounds _ input1 ws = foldl mutation (addRoundKey input1 (head (wInWords ws))) (init (tail (wInWords ws)))
+            rounds _ input1 ws = foldl mutation (addRoundKey  input1 (head (wInWords ws))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
             wInWords = unconcat (SNat ∷ SNat (Nb alg ))
             -- Algorithm 1 codeline 5-8 as a function
@@ -176,23 +177,23 @@ instance AESFunctions AES256 where
             mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
 
     invCipher ∷  Proxy AES256 → InType AES256 → WType AES256 → OutType AES256
-    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input (reverse ws)))) (last (wInWords (reverse ws)))
+    invCipher (alg ∷ Proxy alg) input ws = invAddRoundKey (invSubBytes (invShiftRows (rounds alg input ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat ∷ SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
 
     eqInvCipher ∷ Proxy AES256 → InType AES256 → WType AES256 → OutType AES256
-    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 (reverse ws)))) (last (wInWords (reverse ws)))
+    eqInvCipher (alg ∷ Proxy alg) input1 ws = invAddRoundKey (invShiftRows (invSubBytes (rounds alg input1 ws))) (last (wInWords ws))
         where 
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords = unconcat (SNat :: SNat (Nb alg ))
+            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))

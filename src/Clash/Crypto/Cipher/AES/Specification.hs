@@ -47,7 +47,7 @@ module Clash.Crypto.Cipher.AES.Specification
     -- Constants
     mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
     --
-    ,try
+    ,try, try1, try2, in1AES128, w1AES128, key1AES128
   ) where
 import Clash.Prelude
 import Data.Proxy (Proxy(..))
@@ -58,20 +58,47 @@ import Clash.Crypto.Cipher.AES.Specification.Constants
 import Clash.Crypto.Cipher.AES.Specification.Definitions
 import Clash.Crypto.Cipher.AES.Specification.Types
 
-aesFunctional ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ Proxy alg →  InType alg → KeyType alg → OutType alg    
-aesFunctional (alg ∷ Proxy alg) input key 
-  | AESFacts{} ← knownAES @alg
+aesFunctional ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ InType alg → KeyType alg → OutType alg    
+aesFunctional input key 
+  | AESFacts alg ← knownAES @alg
   = cipher alg input (keyExpansion alg key)
 
+key1AES128 ∷ KeyType AES128
+key1AES128 = (0x2b:> 0x7e:> 0x15:> 0x16:>Nil) :> (0x28:> 0xae:> 0xd2:> 0xa6:> Nil) :> (0xab:> 0xf7:> 0x15:> 0x88:> Nil) :> (0x09:> 0xcf:> 0x4f:> 0x3c:> Nil) :> Nil
+in1AES128 ∷ InType AES128
+in1AES128 = (0x32:> 0x43:> 0xf6:> 0xa8:>Nil) :> (0x88:> 0x5a:> 0x30:> 0x8d:> Nil) :> (0x31:> 0x31 :> 0x98:> 0xa2:> Nil) :> (0xe0 :> 0x37:> 0x07:> 0x34:> Nil) :> Nil
+w1AES128 ∷ WType AES128
+w1AES128 = keyExpansion (Proxy @(AES128 :: AES)) key1AES128
 
-key1AES192 ∷ KeyType AES192
-key1AES192 = (0x8e:> 0x73:> 0xb0:> 0xf7:>Nil) :> (0xda:> 0x0e:> 0x64:> 0x52:> Nil) :> (0xc8:> 0x10:> 0xf3:> 0x2b:> Nil) :> (0x80:> 0x90:> 0x79:> 0xe5:>Nil) :> (0x62:> 0xf8:> 0xea:> 0xd2:> Nil) :> (0x52:> 0x2c:> 0x6b:> 0x7b:> Nil) :> Nil
+try1 ∷ OutType AES128
+try1 = aesFunctional  @(AES128 ∷ AES) in1AES128 key1AES128 
+try ∷  InType AES128 → KeyType AES128 → OutType AES128
+try input key = cipher  (Proxy @(AES128:: AES)) input (keyExpansion  (Proxy @(AES128:: AES)) key)
 
-try ∷ WType AES192
-try = keyExpansion (Proxy @(AES192 ∷ AES)) key1AES192
+key1AES256 ∷  KeyType AES256
+key1AES256 = (0x60:> 0x3d:> 0xeb:> 0x10:>Nil) :> (0x15:> 0xca:> 0x71:> 0xbe:> Nil) :> (0x2b:> 0x73:> 0xae:> 0xf0:> Nil) :> (0x85:> 0x7d:> 0x77:> 0x81:>Nil) :> (0x1f:> 0x35:> 0x2c:> 0x07:>Nil) :> (0x3b:> 0x61:> 0x08:> 0xd7:> Nil) :> (0x2d:> 0x98:> 0x10:> 0xa3:> Nil) :> (0x09:> 0x14:> 0xdf:> 0xf4:>Nil)  :> Nil
 
-try1 ∷ WType AES192
-try1 = aesKeyExpansion  @(AES192 ∷ AES) key1AES192
+-- try ∷ StateType AES128
+-- try = addRoundKey (shiftRows (subBytes (foldl mutation (addRoundKey  in1AES128 (head (wInWords w1AES128))) (init (tail (wInWords w1AES128)))))) (last (wInWords w1AES128))
+--   where 
+--     wInWords ∷ WType AES128 → Vec (Nr AES128 + 1) (RoundWType AES128)
+--     wInWords = unconcat (SNat ∷ SNat (Nb AES128 ))
+--     mutation ∷ StateType alg → RoundWType alg → StateType alg
+--     mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
+
+
+
+try2 ∷ Proxy AES128 → InType AES128 → WType AES128 → StateType AES128
+try2 _ input w1s= addRoundKey (shiftRows (subBytes (rounds input w1s))) (last (wInWords w1s))
+  where 
+    rounds ∷ InType AES128 → WType AES128 → StateType AES128
+    rounds input1 ws = foldl mutation (addRoundKey  input1 (head (wInWords ws))) (init (tail (wInWords ws)))
+    wInWords ∷ WType AES128 → Vec (Nr AES128 + 1) (RoundWType AES128)
+    wInWords = unconcat (SNat ∷ SNat (Nb AES128 ))
+    mutation ∷ StateType alg → RoundWType alg → StateType alg
+    mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
+-- try1 ∷ WType AES256
+-- try1 = aesKeyExpansion  @(AES256 ∷ AES) key1AES256
 
 aesKeyExpansion ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ KeyType alg → WType alg    
 aesKeyExpansion  key 

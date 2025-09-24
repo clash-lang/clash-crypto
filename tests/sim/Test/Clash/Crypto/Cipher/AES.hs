@@ -202,7 +202,7 @@ testAESPure input key
     keyAsInType = unconcatI keyAsVBv8
 
     resultDigestAsBv ∷ OutType alg
-    resultDigestAsBv = Spec.aesFunctional alg inputAsInType keyAsInType
+    resultDigestAsBv = Spec.aesFunctional @alg inputAsInType keyAsInType
 
     resultDigestAsVBv8 ∷ Vec (Nb alg * WordSize alg) (BitVector 8)
     resultDigestAsVBv8 = concat resultDigestAsBv
