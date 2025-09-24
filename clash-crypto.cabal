@@ -109,7 +109,8 @@ test-suite simulation
   ghc-options: -threaded
   main-is: Main.hs
   other-modules:
-    Test.Clash.Crypto.Cipher.AES.Specifications.Definitions
+    Test.Clash.Crypto.Cipher.AES.Specification.Definitions
+    Test.Clash.Crypto.Cipher.AES.Specification.Algorithm
     Test.Clash.Crypto.Cipher.AES
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.MAC.HMAC
