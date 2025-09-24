@@ -9,7 +9,6 @@ Algorithmic reference implementation of FIPS 197 using a purely
 functional description.
 -}
 {-# LANGUAGE UnicodeSyntax #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE NoStarIsType #-}
 {-# LANGUAGE UndecidableInstances #-}

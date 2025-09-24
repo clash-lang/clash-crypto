@@ -11,7 +11,7 @@ functional description.
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE NoTemplateHaskell #-}
 {-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
+
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 
