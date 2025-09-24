@@ -14,6 +14,7 @@ around the syntactic restrictions of Haskell. To keep the notation
 consistent, the symbol is added to some function names starting with a
 small letter as well.
 -}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UnicodeSyntax #-}
 module Clash.Crypto.Cipher.AES.Specification
   ( -- All functions that are present in the FIPS.
@@ -34,10 +35,10 @@ module Clash.Crypto.Cipher.AES.Specification
     shiftRows, invShiftRows,
     addRoundKey, invAddRoundKey,
     -- Constants
-    mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
+    mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox, try
   ) where
-
-import Data.Proxy (Proxy)
+import Clash.Prelude
+import Data.Proxy (Proxy(..))
 import Clash.Crypto.Cipher.AES.Specification.Properties
 import Clash.Crypto.Cipher.AES.Specification.Algorithm
 import Clash.Crypto.Cipher.AES.Specification.Constants
@@ -48,3 +49,19 @@ aesFunctional ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ Proxy alg →  InType alg
 aesFunctional (alg ∷ Proxy alg) input key 
   | AESFacts{} ← knownAES @alg
   = cipher alg input (keyExpansion alg key)
+
+
+key1AES128 ∷ KeyType AES128
+key1AES128 = (0x2b:> 0x7e:> 0x15:> 0x16:>Nil) :> (0x28:> 0xae:> 0xd2:> 0xa6:> Nil) :> (0xab:> 0xf7:> 0x15:> 0x88:> Nil) :> (0x09:> 0xcf:> 0x4f:> 0x3c:> Nil) :> Nil
+
+try ∷ WType AES128
+try = keyExpansion (Proxy @(AES128 ∷ AES)) key1AES128
+
+try1 ∷ WType AES128
+try1 = aesKeyExpansion  @(AES128 ∷ AES) key1AES128
+
+aesKeyExpansion ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ KeyType alg → WType alg    
+aesKeyExpansion  key 
+  | AESFacts alg ← knownAES @alg
+  = keyExpansion alg key
+ 

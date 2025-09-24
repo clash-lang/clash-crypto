@@ -8,7 +8,6 @@ Portability : POSIX
 Basic definitions covering the fundamentals of FIPS 197.
 -}
 {-# LANGUAGE UnicodeSyntax #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NoStarIsType #-}
