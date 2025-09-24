@@ -38,7 +38,7 @@ data AESFacts (alg ∷ AES) where
     , 1 ≤ BlockSize alg `Div` 8
     -- , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
-    , 4 ≤ Nk alg -- due to the expansion algorithm
+    , 1 ≤ Nk alg -- due to the expansion algorithm
     -- , 1 ≤ MessageDigestSize alg
     -- , 1 ≤ HashValueWords alg * WordSize alg
     -- , 2 ^ SizeBits alg

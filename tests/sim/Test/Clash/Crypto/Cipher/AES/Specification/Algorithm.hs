@@ -43,8 +43,7 @@ import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification.Algorithm"
-  [localOption (HedgehogTestLimit (Just 10)) $ -- Purpose is mainly to get familiar with testing.
-      testProperty "Test verify keyExpansion AES128 with Appendix A.1 FIPS 197" $ property $ do
+  [  testProperty "Test verify keyExpansion AES128 with Appendix A.1 FIPS 197" $ property $ do
         testKeyExpansionAES128, 
       testProperty "Test verify keyExpansion AES192 with Appendix A.2 FIPS 197" $ property $ do
         testKeyExpansionAES192, 
@@ -53,8 +52,35 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification.Algorithm"
       testProperty "Test verify cipher AES128 with Appendix B.1 FIPS 197" $ property $ do
         testCipherAES128,
       testProperty "Test verify invcipher AES128 with Appendix B.1 FIPS 197" $ property $ do
-        testInvCipherAES128
+        testInvCipherAES128,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test verify inverse cipher and invcipher AES128 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES128) (genVec @(WordSize Spec.AES128) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES128) (genVec @(WordSize Spec.AES128) genDefinedBitVector) 
+        testInverseAES128 input key,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test verify inverse cipher and invcipher AES192 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES192) (genVec @(WordSize Spec.AES192) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES192) (genVec @(WordSize Spec.AES192) genDefinedBitVector) 
+        testInverseAES192 input key,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test verify inverse cipher and invcipher AES256 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES256) (genVec @(WordSize Spec.AES256) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES256) (genVec @(WordSize Spec.AES256) genDefinedBitVector) 
+        testInverseAES256 input key,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test equivalent inverse cipher AES128 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES128) (genVec @(WordSize Spec.AES128) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES128) (genVec @(WordSize Spec.AES128) genDefinedBitVector) 
+        testEquivalentAES128 input key,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test equivalent inverse cipher AES192 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES192) (genVec @(WordSize Spec.AES192) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES192) (genVec @(WordSize Spec.AES192) genDefinedBitVector) 
+        testEquivalentAES192 input key,
+    localOption (HedgehogTestLimit (Just 10)) $ testProperty "Test equivalent inverse cipher AES256 " $ property $ do
+        input ← forAll $ genVec @(Nb Spec.AES256) (genVec @(WordSize Spec.AES256) genDefinedBitVector) 
+        key ← forAll $ genVec @(Nk Spec.AES256) (genVec @(WordSize Spec.AES256) genDefinedBitVector) 
+        testEquivalentAES256 input key
   ]
+--------------------------------------------------------------
+-- AES128
+--------------------------------------------------------------
 key1AES128 ∷ Spec.KeyType Spec.AES128
 key1AES128 = (0x2b:> 0x7e:> 0x15:> 0x16:>Nil) :> (0x28:> 0xae:> 0xd2:> 0xa6:> Nil) :> (0xab:> 0xf7:> 0x15:> 0x88:> Nil) :> (0x09:> 0xcf:> 0x4f:> 0x3c:> Nil) :> Nil
 in1AES128 ∷ Spec.InType Spec.AES128
@@ -74,6 +100,15 @@ testInvCipherAES128 ∷ PropertyT IO ()
 testInvCipherAES128 = invCipher (Proxy @(Spec.AES128 ∷ Spec.AES))  out1AES128  w1AES128 === in1AES128
 
 
+testInverseAES128 ∷ (Monad m) ⇒ InType Spec.AES128 → KeyType Spec.AES128 → PropertyT m ()
+testInverseAES128 input key = input === invCipher (Proxy @(Spec.AES128 ∷ Spec.AES)) (cipher  (Proxy @(Spec.AES128 ∷ Spec.AES)) input (keyExpansion  (Proxy @(Spec.AES128 ∷ Spec.AES)) key)) (keyExpansion  (Proxy @(Spec.AES128 ∷ Spec.AES)) key)
+
+
+testEquivalentAES128 ∷ (Monad m) ⇒ InType Spec.AES128 → KeyType Spec.AES128 → PropertyT m ()
+testEquivalentAES128 input key = invCipher (Proxy @(Spec.AES128 ∷ Spec.AES))  input  (keyExpansion  (Proxy @(Spec.AES128 ∷ Spec.AES)) key) ===  eqInvCipher (Proxy @(Spec.AES128 ∷ Spec.AES))  input  (keyExpansionIEC  (Proxy @(Spec.AES128 ∷ Spec.AES)) key)
+--------------------------------------------------------------
+-- AES192
+--------------------------------------------------------------
 key1AES192 ∷ Spec.KeyType Spec.AES192
 key1AES192 = (0x8e:> 0x73:> 0xb0:> 0xf7:>Nil) :> (0xda:> 0x0e:> 0x64:> 0x52:> Nil) :> (0xc8:> 0x10:> 0xf3:> 0x2b:> Nil) :> (0x80:> 0x90:> 0x79:> 0xe5:>Nil) :> (0x62:> 0xf8:> 0xea:> 0xd2:> Nil) :> (0x52:> 0x2c:> 0x6b:> 0x7b:> Nil) :> Nil
 w1AES192 ∷ Spec.WType Spec.AES192
@@ -82,9 +117,23 @@ w1AES192 = (0x8e :> 0x73 :> 0xb0 :> 0xf7 :>  Nil) :> (0xda :> 0x0e :> 0x64 :> 0x
 testKeyExpansionAES192 ∷ PropertyT IO ()
 testKeyExpansionAES192 = keyExpansion (Proxy @(Spec.AES192 :: Spec.AES)) key1AES192 === w1AES192
 
+testInverseAES192 ∷ (Monad m) ⇒ InType Spec.AES192 → KeyType Spec.AES192 → PropertyT m ()
+testInverseAES192 input key = input === invCipher (Proxy @(Spec.AES192 ∷ Spec.AES)) (cipher  (Proxy @(Spec.AES192 ∷ Spec.AES)) input (keyExpansion  (Proxy @(Spec.AES192 ∷ Spec.AES)) key)) (keyExpansion  (Proxy @(Spec.AES192 ∷ Spec.AES)) key)
+
+testEquivalentAES192 ∷ (Monad m) ⇒ InType Spec.AES192 → KeyType Spec.AES192 → PropertyT m ()
+testEquivalentAES192 input key = invCipher (Proxy @(Spec.AES192 ∷ Spec.AES))  input  (keyExpansion  (Proxy @(Spec.AES192 ∷ Spec.AES)) key) ===  eqInvCipher (Proxy @(Spec.AES192 ∷ Spec.AES))  input  (keyExpansionIEC  (Proxy @(Spec.AES192 ∷ Spec.AES)) key)
+--------------------------------------------------------------
+-- AES256
+--------------------------------------------------------------
 key1AES256 ∷ Spec.KeyType Spec.AES256
 key1AES256 = (0x60:> 0x3d:> 0xeb:> 0x10:>Nil) :> (0x15:> 0xca:> 0x71:> 0xbe:> Nil) :> (0x2b:> 0x73:> 0xae:> 0xf0:> Nil) :> (0x85:> 0x7d:> 0x77:> 0x81:>Nil) :> (0x1f:> 0x35:> 0x2c:> 0x07:>Nil) :> (0x3b:> 0x61:> 0x08:> 0xd7:> Nil) :> (0x2d:> 0x98:> 0x10:> 0xa3:> Nil) :> (0x09:> 0x14:> 0xdf:> 0xf4:>Nil)  :> Nil
 w1AES256 ∷ Spec.WType Spec.AES256
 w1AES256 = (0x60 :> 0x3d :> 0xeb :> 0x10 :>  Nil) :> (0x15 :> 0xca :> 0x71 :> 0xbe :>  Nil) :> (0x2b :> 0x73 :> 0xae :> 0xf0 :>  Nil) :> (0x85 :> 0x7d :> 0x77 :> 0x81 :>  Nil) :> (0x1f :> 0x35 :> 0x2c :> 0x07 :>  Nil) :> (0x3b :> 0x61 :> 0x08 :> 0xd7 :>  Nil) :> (0x2d :> 0x98 :> 0x10 :> 0xa3 :>  Nil) :> (0x09 :> 0x14 :> 0xdf :> 0xf4 :>  Nil) :> (0x9b :> 0xa3 :> 0x54 :> 0x11 :>  Nil) :> (0x8e :> 0x69 :> 0x25 :> 0xaf :>  Nil) :> (0xa5 :> 0x1a :> 0x8b :> 0x5f :>  Nil) :> (0x20 :> 0x67 :> 0xfc :> 0xde :>  Nil) :> (0xa8 :> 0xb0 :> 0x9c :> 0x1a :>  Nil) :> (0x93 :> 0xd1 :> 0x94 :> 0xcd :>  Nil) :> (0xbe :> 0x49 :> 0x84 :> 0x6e :>  Nil) :> (0xb7 :> 0x5d :> 0x5b :> 0x9a :>  Nil) :> (0xd5 :> 0x9a :> 0xec :> 0xb8 :>  Nil) :> (0x5b :> 0xf3 :> 0xc9 :> 0x17 :>  Nil) :> (0xfe :> 0xe9 :> 0x42 :> 0x48 :>  Nil) :> (0xde :> 0x8e :> 0xbe :> 0x96 :>  Nil) :> (0xb5 :> 0xa9 :> 0x32 :> 0x8a :>  Nil) :> (0x26 :> 0x78 :> 0xa6 :> 0x47 :>  Nil) :> (0x98 :> 0x31 :> 0x22 :> 0x29 :>  Nil) :> (0x2f :> 0x6c :> 0x79 :> 0xb3 :>  Nil) :> (0x81 :> 0x2c :> 0x81 :> 0xad :>  Nil) :> (0xda :> 0xdf :> 0x48 :> 0xba :>  Nil) :> (0x24 :> 0x36 :> 0x0a :> 0xf2 :>  Nil) :> (0xfa :> 0xb8 :> 0xb4 :> 0x64 :>  Nil) :> (0x98 :> 0xc5 :> 0xbf :> 0xc9 :>  Nil) :> (0xbe :> 0xbd :> 0x19 :> 0x8e :>  Nil) :> (0x26 :> 0x8c :> 0x3b :> 0xa7 :>  Nil) :> (0x09 :> 0xe0 :> 0x42 :> 0x14 :>  Nil) :> (0x68 :> 0x00 :> 0x7b :> 0xac :>  Nil) :> (0xb2 :> 0xdf :> 0x33 :> 0x16 :>  Nil) :> (0x96 :> 0xe9 :> 0x39 :> 0xe4 :>  Nil) :> (0x6c :> 0x51 :> 0x8d :> 0x80 :>  Nil) :> (0xc8 :> 0x14 :> 0xe2 :> 0x04 :>  Nil) :> (0x76 :> 0xa9 :> 0xfb :> 0x8a :>  Nil) :> (0x50 :> 0x25 :> 0xc0 :> 0x2d :>  Nil) :> (0x59 :> 0xc5 :> 0x82 :> 0x39 :>  Nil) :> (0xde :> 0x13 :> 0x69 :> 0x67 :>  Nil) :> (0x6c :> 0xcc :> 0x5a :> 0x71 :>  Nil) :> (0xfa :> 0x25 :> 0x63 :> 0x95 :>  Nil) :> (0x96 :> 0x74 :> 0xee :> 0x15 :>  Nil) :> (0x58 :> 0x86 :> 0xca :> 0x5d :>  Nil) :> (0x2e :> 0x2f :> 0x31 :> 0xd7 :>  Nil) :> (0x7e :> 0x0a :> 0xf1 :> 0xfa :>  Nil) :> (0x27 :> 0xcf :> 0x73 :> 0xc3 :>  Nil) :> (0x74 :> 0x9c :> 0x47 :> 0xab :>  Nil) :> (0x18 :> 0x50 :> 0x1d :> 0xda :>  Nil) :> (0xe2 :> 0x75 :> 0x7e :> 0x4f :>  Nil) :> (0x74 :> 0x01 :> 0x90 :> 0x5a :>  Nil) :> (0xca :> 0xfa :> 0xaa :> 0xe3 :>  Nil) :> (0xe4 :> 0xd5 :> 0x9b :> 0x34 :>  Nil) :> (0x9a :> 0xdf :> 0x6a :> 0xce :>  Nil) :> (0xbd :> 0x10 :> 0x19 :> 0x0d :>  Nil) :> (0xfe :> 0x48 :> 0x90 :> 0xd1 :>  Nil) :> (0xe6 :> 0x18 :> 0x8d :> 0x0b :>  Nil) :> (0x04 :> 0x6d :> 0xf3 :> 0x44 :>  Nil) :> (0x70 :> 0x6c :> 0x63 :> 0x1e :>  Nil) :> Nil
 testKeyExpansionAES256 ∷ PropertyT IO ()
 testKeyExpansionAES256 = keyExpansion (Proxy @(Spec.AES256 :: Spec.AES)) key1AES256 === w1AES256
+
+testInverseAES256 ∷ (Monad m) ⇒ InType Spec.AES256 → KeyType Spec.AES256 → PropertyT m ()
+testInverseAES256 input key = input === invCipher (Proxy @(Spec.AES256 ∷ Spec.AES)) (cipher  (Proxy @(Spec.AES256 ∷ Spec.AES)) input (keyExpansion  (Proxy @(Spec.AES256 ∷ Spec.AES)) key)) (keyExpansion  (Proxy @(Spec.AES256 ∷ Spec.AES)) key)
+
+testEquivalentAES256 ∷ (Monad m) ⇒ InType Spec.AES256 → KeyType Spec.AES256 → PropertyT m ()
+testEquivalentAES256 input key = invCipher (Proxy @(Spec.AES256 ∷ Spec.AES))  input  (keyExpansion  (Proxy @(Spec.AES256 ∷ Spec.AES)) key) ===  eqInvCipher (Proxy @(Spec.AES256 ∷ Spec.AES))  input  (keyExpansionIEC  (Proxy @(Spec.AES256 ∷ Spec.AES)) key)

@@ -57,7 +57,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification.Definitions"
         testMixColumns a,
    localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Functional with shiftRows" $ property $ do
-        a ← forAll $ genVec (genVec  genDefinedBitVector) 
+        a ← forAll $ genVec (genVec genDefinedBitVector) 
         testShiftRows a,
   localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Generic functional with addRoundKey fully" $ property $ do

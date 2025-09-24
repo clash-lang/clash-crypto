@@ -76,43 +76,46 @@ tastyTestsAESSpecification = testGroup "Clash.Crypto.Cipher.AES.Specification"
   [ localOption (HedgehogTestLimit (Just 10)) $
       testGroup "Specification Sanity Checks against haskell crypton AES128"
         [ 
-          -- testProperty "AES128" $
-          --   property $ do
-          --     key <- forAll (genKeyFor (Proxy @Spec.AES128))
-          --     input <- forAll genInputBlock
-          --     testAESPure @Spec.AES128 key input,
-        -- testProperty "AES-128, specific key" $
-        --     property $ do
-        --       testAESPure @Spec.AES128 key1AES128 input1AES128
-        -- ]
-        -- ,
+          testProperty "AES128" $
+            property $ do
+              key <- forAll $ genKeyFor @(Spec.AES128 ∷ Spec.AES)
+              input <- forAll $ genInputBlock @(Spec.AES128 ∷ Spec.AES)
+              testAESPure @Spec.AES128 key input,
+        testProperty "AES-128, specific key" $
+            property $ do
+              testAESPure @Spec.AES128 in1AES128 key1AES128 
+        ]
+        ,
         testGroup "Specification Sanity Checks against haskell crypton AES" $
         [ testProperty ("AES-" <> algName) $
             property $ do
-              key <- forAll (genKeyFor proxyAlg)
-              input <- forAll (genInputBlock)
+              key <- forAll $ genKeyFor @(Spec.AES192 ∷ Spec.AES)
+              input <- forAll $ genInputBlock @(Spec.AES192 ∷ Spec.AES)
               aesPure key input
         | (aesPure, algName, proxyAlg) <-
             [ (testAESPure @Spec.AES192, "192", Proxy @Spec.AES192)
             ]
         ]
-        -- ,
-        -- testGroup "Specification Sanity Checks against haskell crypton AES256" $
-        -- [ testProperty ("AES-" <> algName) $
-        --     property $ do
-        --       key <- forAll (genKeyFor (Proxy @Spec.AES256))
-        --       input <- forAll (genInputBlock)
-        --       aesPure key input
-        -- | (aesPure, algName) <-
-        --     [ (testAESPure @Spec.AES256, "256")
-        --     ]
+        ,
+        testGroup "Specification Sanity Checks against haskell crypton AES256" $
+        [ testProperty ("AES-" <> algName) $
+            property $ do
+              key <- forAll $ genKeyFor @(Spec.AES256 ∷ Spec.AES)
+              input <- forAll $ genInputBlock @(Spec.AES256 ∷ Spec.AES)
+              aesPure key input
+        | (aesPure, algName) <-
+            [ (testAESPure @Spec.AES256, "256")
+            ]
         ]
   ]
-genInputBlock :: Gen ByteString
-genInputBlock = BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nb Spec.AES128 * Spec.WordSize Spec.AES128)))) Gen.enumBounded
-genKeyFor :: ∀ alg. KnownAES alg => Proxy alg -> Gen ByteString
-genKeyFor alg = do
-  BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nk Spec.AES128 * Spec.WordSize Spec.AES128)))) Gen.enumBounded
+genInputBlock ∷ ∀ (alg ∷ Spec.AES). Spec.KnownAES alg => Gen ByteString
+genInputBlock 
+    | AESFacts _ ← knownAES @alg =
+    BS.pack <$> Gen.list (Range.singleton (snatToNum (SNat @(Spec.Nb alg * Spec.WordSize alg)))) Gen.enumBounded
+genKeyFor :: ∀ (alg ∷ Spec.AES). Spec.KnownAES alg => Gen ByteString
+genKeyFor   
+  | AESFacts _ ← knownAES @alg = do
+  BS.pack <$> Gen.list (Range.singleton (natToNum @( Spec.WordSize alg  * Spec.Nk alg ))) Gen.enumBounded
 
 type TestLen = 8
 testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m ()
@@ -120,19 +123,19 @@ testOplus a b = a ⊕ b === xor a b
 
 
 -- | Not required, but most general implementation
--- A function to pad the data to be a multiple of the block size (AES block size is 16 bytes)
+-- -- A function to pad the data to be a multiple of the block size (AES block size is 16 bytes)
 padData :: ByteString -> ByteString
 padData bs = BS.take 16 (bs `BS.append` BS.replicate 16 0)  -- Simple padding to 16 bytes
--- Encrypt function using AES in ECB mode
-encryptECB :: ByteString -> ByteString -> ByteString
-encryptECB key plainText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 (padData plainText)
--- Decrypt function using AES in ECB mode
-decryptECB ∷ ByteString -> ByteString -> ByteString
-decryptECB key cipherText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 (padData cipherText)
+-- -- Encrypt function using AES in ECB mode
+-- encryptECB :: ByteString -> ByteString -> ByteString
+-- encryptECB key plainText = case cipherInit key of
+--     CryptoFailed _ -> error "Cipher initialization failed"
+--     CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 plainText
+-- -- Decrypt function using AES in ECB mode
+-- decryptECB ∷ ByteString -> ByteString -> ByteString
+-- decryptECB key cipherText = case cipherInit key of
+--     CryptoFailed _ -> error "Cipher initialization failed"
+--     CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 cipherText
 
 -- Typeclass over all AES block cipher algorithms
 class CryptoAES (alg ∷ Spec.AES) where
@@ -141,40 +144,43 @@ class CryptoAES (alg ∷ Spec.AES) where
 instance CryptoAES Spec.AES128      where 
   encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   encryptoECB _ key plainText = case cipherInit key of
-    CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 (padData plainText)
-    -- CryptoFailed _ -> error "Cipher initialization failed"
+    CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  decryptoECB _ key cipherText = case cipherInit key of
+    CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 cipherText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
+
+
+instance CryptoAES Spec.AES192    where
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  encryptoECB _ key plainText = case cipherInit key of
+    CryptoPassed (cipher1 :: AES192) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  decryptoECB _ key cipherText = case cipherInit key of
+    CryptoFailed _ -> error "Cipher initialization failed"
+    CryptoPassed (cipher1 ∷ AES192)-> ecbDecrypt cipher1 cipherText
+
+instance CryptoAES Spec.AES256    where 
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  encryptoECB _ key plainText = case cipherInit key of
+    CryptoPassed (cipher1 :: AES256) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
 
   decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
   decryptoECB _ key cipherText = case cipherInit key of
     CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 (padData cipherText)
-instance CryptoAES Spec.AES192    where
-  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  encryptoECB _ key plainText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 :: AES192) -> ecbEncrypt cipher1 (padData plainText)
-  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  decryptoECB _ key cipherText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES192)-> ecbDecrypt cipher1 (padData cipherText)
-instance CryptoAES Spec.AES256    where 
-  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  encryptoECB _ key plainText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 :: AES256) -> ecbEncrypt cipher1 (padData plainText)
-  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  decryptoECB _ key cipherText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES256)-> ecbDecrypt cipher1 (padData cipherText)
+    CryptoPassed (cipher1 ∷ AES256)-> ecbDecrypt cipher1 cipherText
 
 testAESPure ∷ ∀ (alg ∷ Spec.AES) m.
   (Monad m, KnownAES alg, CryptoAES alg) ⇒
   ByteString →
-  -- ^ key data
-    ByteString →
   -- ^ input data
+    ByteString →
+  -- ^ key data
   PropertyT m ()
-testAESPure input key
+testAESPure key input
   | AESFacts alg ← knownAES @alg
   -- , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = do
@@ -197,7 +203,6 @@ testAESPure input key
 
     keyAsVBv8 ∷ Vec (Nk alg * WordSize alg)  (BitVector 8)
     keyAsVBv8 = unsafeFromList @(Nk alg * WordSize alg) keyAsBv8
-
     keyAsInType ∷ KeyType alg
     keyAsInType = unconcatI keyAsVBv8
 
@@ -209,16 +214,16 @@ testAESPure input key
 
     dut = toList $ unpack <$> resultDigestAsVBv8
     ref = BS.unpack $ encryptoECB alg key input
-
+  -- inputAsInType === test_in1AES128
+  -- resultDigestAsBv === test_out1AES128
   ref === dut
 
 
 -- | Some example input for unit testing.
--- input1AES128 ∷ ByteString
--- input1AES128 = [ 255, 23, 42, 38, 29, 48, 244, 65, 2, 99 ]
-
--- key1AES128 ∷ ByteString
--- key1AES128 = [ 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c ]
+in1AES128 ∷ ByteString
+in1AES128 = [0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34]
+key1AES128 ∷ ByteString
+key1AES128 = [ 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c ]
 -- -- key1AES128 ∷ KeyType Spec.AES128
 -- -- key1AES128 = (0x2b:> 0x7e:> 0x15:> 0x16:>Nil) :> (0x28:> 0xae:> 0xd2:> 0xa6:> Nil) :> (0xab:> 0xf7:> 0x15:> 0x88:> Nil) :> (0x09:> 0xcf:> 0x4f:> 0x3c:> Nil) :> Nil
 -- key1AsBv8 ∷ [BitVector 8]
@@ -236,9 +241,14 @@ testAESPure input key
 --             :> (:> :> :> :>Nil)
 --             :>Nil
 --             )
--- key1AES192 ∷ ByteString
--- key1AES192 = [ 0x8e, 0x73, 0xb0, 0xf7, 0xda, 0x0e, 0x64, 0x52, 0xc8, 0x10, 0xf3, 0x2b, 0x80, 0x90, 0x79, 0xe5, 0x62, 0xf8, 0xea, 0xd2, 0x52, 0x2c, 0x6b, 0x7b]
-
+key1AES192 ∷ ByteString
+key1AES192 = [ 0x8e, 0x73, 0xb0, 0xf7, 
+               0xda, 0x0e, 0x64, 0x52,
+               0xc8, 0x10, 0xf3, 0x2b,
+               0x80, 0x90, 0x79, 0xe5,
+               0x62, 0xf8, 0xea, 0xd2,
+               0x52, 0x2c, 0x6b, 0x7b]
+-- t = encryptoECB key1AES192 in1AES128
 -- key1AES256 ∷ ByteString
 -- key1AES256 = [0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81, 0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4]
 
