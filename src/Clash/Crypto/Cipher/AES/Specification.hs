@@ -35,7 +35,7 @@ module Clash.Crypto.Cipher.AES.Specification
     -- Verification
     KnownAES(..), AESFacts(..),
     -- Types
-    InType, OutType, StateType,
+    InType, OutType, StateType, WType, 
     WordType, KeyType, Nr, Nk, Nb, WordSize,
 
     -- Definitions
@@ -64,14 +64,14 @@ aesFunctional (alg ∷ Proxy alg) input key
   = cipher alg input (keyExpansion alg key)
 
 
-key1AES128 ∷ KeyType AES128
-key1AES128 = (0x2b:> 0x7e:> 0x15:> 0x16:>Nil) :> (0x28:> 0xae:> 0xd2:> 0xa6:> Nil) :> (0xab:> 0xf7:> 0x15:> 0x88:> Nil) :> (0x09:> 0xcf:> 0x4f:> 0x3c:> Nil) :> Nil
+key1AES192 ∷ KeyType AES192
+key1AES192 = (0x8e:> 0x73:> 0xb0:> 0xf7:>Nil) :> (0xda:> 0x0e:> 0x64:> 0x52:> Nil) :> (0xc8:> 0x10:> 0xf3:> 0x2b:> Nil) :> (0x80:> 0x90:> 0x79:> 0xe5:>Nil) :> (0x62:> 0xf8:> 0xea:> 0xd2:> Nil) :> (0x52:> 0x2c:> 0x6b:> 0x7b:> Nil) :> Nil
 
-try ∷ WType AES128
-try = keyExpansion (Proxy @(AES128 ∷ AES)) key1AES128
+try ∷ WType AES192
+try = keyExpansion (Proxy @(AES192 ∷ AES)) key1AES192
 
-try1 ∷ WType AES128
-try1 = aesKeyExpansion  @(AES128 ∷ AES) key1AES128
+try1 ∷ WType AES192
+try1 = aesKeyExpansion  @(AES192 ∷ AES) key1AES192
 
 aesKeyExpansion ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ KeyType alg → WType alg    
 aesKeyExpansion  key 

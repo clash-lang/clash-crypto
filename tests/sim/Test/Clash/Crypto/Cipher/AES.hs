@@ -42,7 +42,8 @@ import Data.Proxy (Proxy(..))
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import qualified Test.Clash.Crypto.Cipher.AES.Specifications.Definitions as Def
+import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
+import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
 -- Test AES128
 import Crypto.Cipher.AES as Reference (AES128, AES192, AES256) 
 import Crypto.Cipher.Types
@@ -63,10 +64,10 @@ import qualified Data.ByteString.Char8 as C8
 -- import Data.Word (Word8)
 
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
-import qualified Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
+
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES"
-  [Def.tastyTests,
+  [Def.tastyTests, Alg.tastyTests,
   tastyTestsAESSpecification] 
 
 
