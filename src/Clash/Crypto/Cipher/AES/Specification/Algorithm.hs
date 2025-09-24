@@ -102,10 +102,10 @@ instance AESFunctions AES192 where
     keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
         where 
             keyExpansionInBlocks ∷ Proxy AES192 → KeyType AES192 → Vec (Nk AES192 * Nr AES192) (WordType AES192)
-            keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 1))
+            keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 0))
                 where
                 middelCalculation ∷ Proxy AES192 → KeyType AES192 → Integer → KeyType AES192
-                middelCalculation _ ws i = zipWith xorWord ((+>>) (partWord ws i) ws) ws
+                middelCalculation _ ws i = postscanl xorWord (partWord ws i)  ws -- zipWith xorWord ((+>>) (partWord ws i) ws) ws
                         where
                             partWord w1s index = xorWord (subWord (rotWord (last w1s)))   (_Rcon alg !! index)
     cipher ∷ Proxy AES192 → InType AES192 → WType AES192 → OutType AES192
