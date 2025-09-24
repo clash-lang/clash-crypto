@@ -16,6 +16,16 @@ small letter as well.
 -}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UnicodeSyntax #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE NoStarIsType #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+
+{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+
 module Clash.Crypto.Cipher.AES.Specification
   ( -- All functions that are present in the FIPS.
     AESFunctions(..),
@@ -35,10 +45,13 @@ module Clash.Crypto.Cipher.AES.Specification
     shiftRows, invShiftRows,
     addRoundKey, invAddRoundKey,
     -- Constants
-    mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox, try
+    mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
+    --
+    ,try
   ) where
 import Clash.Prelude
 import Data.Proxy (Proxy(..))
+
 import Clash.Crypto.Cipher.AES.Specification.Properties
 import Clash.Crypto.Cipher.AES.Specification.Algorithm
 import Clash.Crypto.Cipher.AES.Specification.Constants
@@ -64,4 +77,9 @@ aesKeyExpansion ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ KeyType alg → WType a
 aesKeyExpansion  key 
   | AESFacts alg ← knownAES @alg
   = keyExpansion alg key
- 
+-- try ∷ WordType AES128
+-- try = 0x09:> 0xcf:> 0x4f:> 0x3c:> Nil
+-- -- subtry = xorWord (subWord (rotWord (Clash.Prelude.last key1AES128)))   (_Rcon (Proxy @(AES128 ∷ AES)) Clash.Prelude.!! 0)
+-- subtry = subWord (rotWord (Clash.Prelude.last key1AES128))
+-- t = (_Rcon (Proxy @(AES128 ∷ AES)) Clash.Prelude.!! 0)
+-- xorT = xorWord subtry t

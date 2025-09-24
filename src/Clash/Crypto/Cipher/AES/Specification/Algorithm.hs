@@ -52,7 +52,7 @@ instance AESFunctions AES128 where
     keyExpansion alg key = concat (scanl middelCalculation key (iterateI (+1) 0))
         where
         middelCalculation ∷ KeyType AES128 → Integer → KeyType AES128
-        middelCalculation ws i = zipWith xorWord ((+>>) (partWord ws i) ws) ws
+        middelCalculation ws i = postscanl xorWord (partWord ws i)  ws
                 where
                     partWord w1s index = xorWord (subWord (rotWord (last w1s)))   (_Rcon alg !! index)
 

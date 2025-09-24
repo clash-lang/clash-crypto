@@ -183,7 +183,7 @@ class AESConstants (alg ∷ AES) where
 
 instance AESConstants AES128 where
     _Rcon¹ _ = 0x01:>0x00:>0x00:>0x00:>Nil
-    _Rcon alg = transpose (fmap (generateI xTimes) (_Rcon¹ alg))
+    _Rcon alg = transpose (fmap (iterateI xTimes) (_Rcon¹ alg))
 deriving via AES128 instance AESConstants AES192
 deriving via AES128 instance AESConstants AES256
 
