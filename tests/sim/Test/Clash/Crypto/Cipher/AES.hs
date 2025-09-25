@@ -1,5 +1,5 @@
 {-|
-Module      : Test.Clash.Crypto.ECDSA.InverseModulo
+Module      : Test.Clash.Crypto.Cipher.AES
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
@@ -26,7 +26,6 @@ import Clash.Prelude
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 import Clash.Sized.Vector (unsafeFromList)
--- import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
 import Hedgehog
@@ -35,10 +34,8 @@ import qualified Hedgehog.Gen as Gen
 import Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
--- import qualified Data.List as List
--- import qualified Hedgehog.Range as Range
+
 import Data.Proxy (Proxy(..))
--- Generate BitVecor and Vector
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
@@ -57,11 +54,8 @@ import Crypto.Cipher.AES
 import Crypto.Cipher.Types 
 import Crypto.Random (getRandomBytes)
 import Crypto.Error (throwCryptoError)
--- import Data.ByteArray (convert)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
--- import Data.ByteString.Lazy (toStrict, fromStrict)
--- import Data.Word (Word8)
 
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
 
@@ -122,22 +116,6 @@ testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m
 testOplus a b = a ⊕ b === xor a b 
 
 
--- | Not required, but most general implementation
--- -- A function to pad the data to be a multiple of the block size (AES block size is 16 bytes)
-padData :: ByteString -> ByteString
-padData bs = BS.take 16 (bs `BS.append` BS.replicate 16 0)  -- Simple padding to 16 bytes
--- -- Encrypt function using AES in ECB mode
--- encryptECB :: ByteString -> ByteString -> ByteString
--- encryptECB key plainText = case cipherInit key of
---     CryptoFailed _ -> error "Cipher initialization failed"
---     CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 plainText
--- -- Decrypt function using AES in ECB mode
--- decryptECB ∷ ByteString -> ByteString -> ByteString
--- decryptECB key cipherText = case cipherInit key of
---     CryptoFailed _ -> error "Cipher initialization failed"
---     CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 cipherText
-
--- Typeclass over all AES block cipher algorithms
 class CryptoAES (alg ∷ Spec.AES) where
   encryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
   decryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString

@@ -1,5 +1,5 @@
 {-|
-Module      :  Test.Clash.Crypto.Cipher.AES.Specifications.Defintions
+Module      :  Test.Clash.Crypto.Cipher.AES.Specification.Defintions
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
