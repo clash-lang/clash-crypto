@@ -52,7 +52,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification.Definitions"
         a ← forAll $ genVec (genVec  genDefinedBitVector)
         testsubBytes a,
    localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "Functional with subBytes" $ property $ do
+      testProperty "Functional with mixColumns" $ property $ do
         a ← forAll $ genVec (genVec  genDefinedBitVector)
         testMixColumns a,
    localOption (HedgehogTestLimit (Just 10)) $
