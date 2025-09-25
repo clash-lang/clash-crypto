@@ -72,6 +72,7 @@ library
   exposed-modules:
     Clash.Crypto.Cipher.AES
     Clash.Crypto.Cipher.AES.Streaming
+    Clash.Crypto.Cipher.AES.Streaming.Combinatorial
     Clash.Crypto.Cipher.AES.Specification
     Clash.Crypto.Cipher.AES.Specification.Properties
     Clash.Crypto.Cipher.AES.Specification.Algorithm
