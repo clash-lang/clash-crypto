@@ -21,7 +21,13 @@ import Data.Proxy (Proxy)
 -- import GHC.TypeNats.Proof (Rewrite(..), using)
 
 import Clash.Crypto.Cipher.AES.Specification
+-- Interface liberies:
+import Clash.Prelude
+import Clash.Signal.Channel
+import Clash.Signal.DataStream
+import Clash.Signal.Extra (apWhen, regEnN)
 
+import Data.Constraint.Nat.Extra (CancelMultiple, KeepsPositiveIfMultiple)
 aesCipher ∷ ∀ (alg ∷ AES) . KnownAES alg ⇒ Proxy alg →  InType alg → KeyType alg → OutType alg    
 aesCipher (alg ∷ Proxy alg) input key 
   | AESFacts{} ← knownAES @alg

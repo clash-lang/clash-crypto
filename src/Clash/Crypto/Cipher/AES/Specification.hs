@@ -46,8 +46,6 @@ module Clash.Crypto.Cipher.AES.Specification
     addRoundKey, invAddRoundKey,
     -- Constants
     mX, aMixColumns, aInvMixColumns, xySBox, xyInvSBox
-    --
-    ,try, try1, try2, in1AES128, w1AES128, key1AES128
   ) where
 import Clash.Prelude
 import Data.Proxy (Proxy(..))
@@ -77,14 +75,6 @@ try input key = cipher  (Proxy @(AES128:: AES)) input (keyExpansion  (Proxy @(AE
 
 key1AES256 ∷  KeyType AES256
 key1AES256 = (0x60:> 0x3d:> 0xeb:> 0x10:>Nil) :> (0x15:> 0xca:> 0x71:> 0xbe:> Nil) :> (0x2b:> 0x73:> 0xae:> 0xf0:> Nil) :> (0x85:> 0x7d:> 0x77:> 0x81:>Nil) :> (0x1f:> 0x35:> 0x2c:> 0x07:>Nil) :> (0x3b:> 0x61:> 0x08:> 0xd7:> Nil) :> (0x2d:> 0x98:> 0x10:> 0xa3:> Nil) :> (0x09:> 0x14:> 0xdf:> 0xf4:>Nil)  :> Nil
-
--- try ∷ StateType AES128
--- try = addRoundKey (shiftRows (subBytes (foldl mutation (addRoundKey  in1AES128 (head (wInWords w1AES128))) (init (tail (wInWords w1AES128)))))) (last (wInWords w1AES128))
---   where 
---     wInWords ∷ WType AES128 → Vec (Nr AES128 + 1) (RoundWType AES128)
---     wInWords = unconcat (SNat ∷ SNat (Nb AES128 ))
---     mutation ∷ StateType alg → RoundWType alg → StateType alg
---     mutation state = addRoundKey (mixColumns ( shiftRows (subBytes state))) 
 
 
 
