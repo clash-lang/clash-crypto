@@ -26,17 +26,12 @@ module Test.Clash.Crypto.Cipher.AES.Specification.Algorithm (tastyTests) where
 import Clash.Crypto.Cipher.AES
 import Clash.Prelude
 import Clash.Sized.Vector (unsafeFromList)
--- import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
 import Hedgehog
--- import Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
--- import qualified Data.List as List
--- import qualified Hedgehog.Range as Range
 import Data.Proxy (Proxy(..))
--- Generate BitVecor and Vector
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
