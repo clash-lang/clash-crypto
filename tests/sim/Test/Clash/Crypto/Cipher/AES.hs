@@ -48,7 +48,6 @@ import Crypto.Error
 
 import qualified Crypto.Random.Types as CRT
 
-import Data.ByteArray ( ByteArray, convert )
 import Data.ByteString (ByteString) 
 import Crypto.Cipher.AES 
 import Crypto.Cipher.Types 

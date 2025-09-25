@@ -126,7 +126,6 @@ test-suite simulation
     --
     --AES
     , crypton >= 1.0.4
-    , memory
     ---
     , ghc-typelits-proof-assist
     , hedgehog >= 1.0
