@@ -30,11 +30,9 @@ import Clash.Sized.Vector (unsafeFromList)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
 import Hedgehog
--- import Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
--- import qualified Data.List as List
--- import qualified Hedgehog.Range as Range
+
 import Data.Proxy (Proxy(..))
 -- Generate BitVecor and Vector
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
