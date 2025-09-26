@@ -207,4 +207,6 @@ executable shake
   main-is: Main.hs
   other-modules:
     Shake
+    Development.Shake.Clash.ECP5
+    Development.Shake.Command.Extra
     Development.Shake.Config.Extra

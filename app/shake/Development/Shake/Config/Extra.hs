@@ -5,21 +5,27 @@ module Development.Shake.Config.Extra
   , getConfig
   , getConfigFile
   , getProjectRootDir
+  , configLookup
+  , configLookupMaybe
+  , getConfigFiles
+  , getConfigParameter
+  , getConfigCmd
   ) where
 
 import Control.Applicative ((<|>))
-import Control.Monad (forM, void)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad (forM, void, when)
+import Control.Monad.IO.Class (liftIO, MonadIO)
 
 import Development.Shake
   (RuleResult, Rules, Action, newCache, need, addOracle, askOracle)
 import Development.Shake.Classes (Typeable, Hashable, Binary, NFData)
 import Development.Shake.Config (readConfigFile, readConfigFileWithEnv)
 
-import System.Directory (doesFileExist, getCurrentDirectory)
+import System.Directory (doesFileExist, getCurrentDirectory, findExecutable, withCurrentDirectory)
 import System.FilePath ((</>), isDrive, takeDirectory)
 
 import qualified Data.HashMap.Strict as HashMap (lookup)
+import Data.Maybe (catMaybes, fromJust)
 
 newtype Config = Config String
   deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
@@ -28,7 +34,6 @@ newtype ConfigFile = ConfigFile String
 
 type instance RuleResult Config = Maybe String
 type instance RuleResult ConfigFile = Maybe String
-
 
 -- | An extension of 'Development.Shake.Command.usingConfigFile',
 -- which supports more than a single configuration file. If a key is
@@ -75,3 +80,59 @@ getProjectRootDir = getCurrentDirectory >>= findFile
         >>= \case True -> return $ Just path
                   _    -> findFile $ takeDirectory path
   projectFilename = "cabal.project"
+
+-- | Reads the config value of @key@ from the configuration
+-- files. This lookup does not interfer with the shake build system
+-- and is intended to be used by external APIs that need access to the
+-- configuration variables as well. The method fails with an error if
+-- the requested key does not exist. Use 'configLookupMaybe' for safe
+-- alternatives.
+configLookup :: IO (String -> String)
+configLookup = configLookupMaybe >>= \lkup ->
+  return $ \key -> case lkup key of
+    Nothing -> fail $ "Cannot find " <> key <> " in your 'build.cfg(.local).'"
+    Just x  -> x
+
+-- | A more safe version of 'configLookup'.
+configLookupMaybe :: IO (String -> Maybe String)
+configLookupMaybe = do
+  aprPath <- liftIO getProjectRootDir >>= \case
+    Nothing -> fail "Cannot find cabal.project"
+    Just x -> return x
+
+  withCurrentDirectory aprPath
+    $ getConfigFiles >>= configsLookup
+ where
+  configsLookup [] = return (const Nothing)
+  configsLookup (c:cr) = do
+    hm <- readConfigFile c
+    lkup <- configsLookup cr
+    return $ \key ->
+      HashMap.lookup key hm <|> lkup key
+
+getConfigFiles :: MonadIO m => m [FilePath]
+getConfigFiles = liftIO $ do
+  cfgs <- fmap catMaybes $ forM [local, shared] $ \x ->
+    liftIO $ doesFileExist x >>= \case
+      True  -> return $ Just x
+      False -> return Nothing
+
+  when (null cfgs) $ fail "Missing 'build.cfg(.local)'"
+  return cfgs
+ where
+  shared = "build.cfg"
+  local  = "build.cfg.local"
+
+getConfigParameter :: String -> Action String
+getConfigParameter key = getConfig key >>= \case
+  Nothing -> fail $ "Cannot find " <> key <> " in your 'build.cfg(.local).'"
+  Just x  -> return x
+
+getConfigCmd :: String -> Action FilePath
+getConfigCmd key = do
+  cmdName <- getConfigParameter key
+  liftIO (findExecutable cmdName) >>= \case
+    Just x  -> return x
+    Nothing -> getConfigFile key >>= \mFile -> fail
+      $ "Cannot find executable '" <> cmdName <> "' set via " <> key <>
+        " in '" <> fromJust mFile <> "'"
