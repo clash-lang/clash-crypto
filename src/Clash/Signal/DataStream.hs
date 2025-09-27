@@ -78,7 +78,7 @@ data Frame s e a where
   Middle ∷ a → Frame s e a
   -- | The 'End' frame completes the transfer of a message. It hold
   -- the final data chunk of the message and some additional data (if
-  -- useful for the application). Choose @s@ to be an empty data type,
+  -- useful for the application). Choose @e@ to be an empty data type,
   -- if not required.
   End ∷ e → a → Frame s e a
   deriving (Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX)
@@ -122,8 +122,8 @@ instance HasField "atStartFrame" (DataStream dom s e a) (Signal dom Bool) where
 -- | Checks whether the given frame is a 'Middle' frame.
 isMiddleFrame ∷ Frame s e a → Bool
 isMiddleFrame = \case
-  Start{} → True
-  _       → False
+  Middle{} → True
+  _        → False
 
 instance HasField "isMiddleFrame" (Frame s e a) Bool where
   getField = isMiddleFrame
@@ -148,7 +148,7 @@ instance HasField "atEndFrame" (DataStream dom s e a) (Signal dom Bool) where
 -- the second argument.
 --
 -- The function works similar to 'Data.Maybe.maybe' for the
--- 'Data.Maybe.Maybe' type, which is also the reason for it's
+-- 'Data.Maybe.Maybe' type, which is also the reason for its
 -- particular name.
 mayD ∷ b → (a → b) → Frame s e a → b
 mayD x f = \case

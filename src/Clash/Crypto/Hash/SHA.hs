@@ -43,7 +43,7 @@ import Clash.Crypto.Hash.SHA.Streaming.Padding
 -- @n@. Note that the first bit of the end frame is always part of the
 -- message.
 --
--- The digset relased on the channel is calculated according to the
+-- The digest relased on the channel is calculated according to the
 -- selected hash algorithm. It is released after the arrival of a
 -- message's end frame and the calculation of the hash.
 sha ∷

@@ -61,7 +61,10 @@ import GHC.Records (HasField(..))
 -- | An extended option type that allows to differentiate between
 -- old and fresh data.
 data Content a = None | Fresh a | Old a
-  deriving (Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX, Functor)
+  deriving
+    ( Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX
+    , Functor, Traversable
+    )
 
 instance Semigroup a ⇒ Semigroup (Content a) where
   None    <> p       = p
@@ -73,6 +76,19 @@ instance Semigroup a ⇒ Semigroup (Content a) where
 
 instance Semigroup a ⇒ Monoid (Content a) where
   mempty = None
+
+instance Foldable Content where
+  foldMap f = \case
+    Fresh a → f a
+    _       → mempty
+
+  foldr f z = \case
+    Fresh x → f x z
+    _       → z
+
+  foldl f z = \case
+    Fresh x → f z x
+    _       → z
 
 instance Applicative Content where
   pure = Old
@@ -120,19 +136,10 @@ instance Alternative (Channel dom) where
 
 instance Foldable (Channel dom) where
   foldMap f = fold . fmap f
-
-  fold (Channel s) = case fold s of
-    None    → mempty
-    Fresh x → x
-    Old x   → x
+  fold = fold . fmap fold . getContent
 
 instance Traversable (Channel dom) where
-  traverse f = fmap Channel . traverse g . getContent
-   where
-     g = \case
-       None    → pure None
-       Fresh x → Fresh <$> f x
-       Old x   → Old <$> f x
+  traverse f = fmap Channel . traverse (traverse f) . getContent
 
 -- | A safe control interface for maintaining a 'Channel'.
 data ProviderAction = Keep | Release | Clear
@@ -419,12 +426,12 @@ zipRecent ∷
   -- | output channel
   Channel dom c
 zipRecent f (Channel x) (Channel y) =
-  Channel $ mealy (~~>) False $ bundle (x, y)
+  Channel $ mealy (~~>) (0 ∷ Unsigned 1) $ bundle (x, y)
  where
-  _     ~~> (None   , _      ) = (False, None         )
-  _     ~~> (_      , None   ) = (False, None         )
-  _     ~~> (Fresh u, Fresh v) = (True , Fresh $ f u v)
-  _     ~~> (Old u  , Fresh v) = (True , Fresh $ f u v)
-  False ~~> (_      , Old _  ) = (False, None         )
-  _     ~~> (Old u  , Old v  ) = (True , Old $ f u v  )
-  _     ~~> (Fresh _, Old _  ) = (False, None         )
+  _ ~~> (None   , _      ) = (0, None         )
+  _ ~~> (_      , None   ) = (0, None         )
+  _ ~~> (Fresh u, Fresh v) = (1, Fresh $ f u v)
+  _ ~~> (Old u  , Fresh v) = (1, Fresh $ f u v)
+  0 ~~> (_      , Old _  ) = (0, None         )
+  _ ~~> (Old u  , Old v  ) = (1, Old $ f u v  )
+  _ ~~> (Fresh _, Old _  ) = (0, None         )

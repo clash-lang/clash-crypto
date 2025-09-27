@@ -65,7 +65,7 @@ computeModuloUnsigned ∷
 computeModuloUnsigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (shifts + 1))
-  get _ (n, _) = Mod @m $ bitCoerce $ resize n
+  get _ = Mod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
 
@@ -82,7 +82,7 @@ computeModuloSigned ∷
 computeModuloSigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (shifts + 2))
-  get _ (n, _) = Mod @m $ bitCoerce $ resize $ signedToUnsigned n
+  get _ = Mod @m . bitCoerce . resize . signedToUnsigned . fst
   compute _ (n, j) = ((next n j, if j > 0 then j - 1 else j), j > 0)
   -- ^ using `satPred SatBound j` instead does not work here because of
   -- https://github.com/clash-lang/ghc-typelits-natnormalise/issues/94
@@ -107,7 +107,7 @@ moduloShift ∷
 moduloShift = enhance put get compute
  where
   put (n, _) = (extend $ bitCoerce n, maxBound ∷ Index maxShifts)
-  get _ (n, _) = bitCoerce $ truncateB n
+  get _ = bitCoerce . truncateB . fst
   compute (_, s) (n, j)
     | j > 0     = Computing (next s n j, satPred SatBound j)
     | otherwise = Releasing (n, j)

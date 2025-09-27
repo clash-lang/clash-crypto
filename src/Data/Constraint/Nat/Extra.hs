@@ -244,8 +244,7 @@ class
 instance HalfIsLess n ⇒ QED (HalfIsLess n)
 
 instance
-  ( 1 <= n
-  , 2 <= n
+  ( 2 <= n
   ) ⇒ CLog2KeepsPositive n
 class
   ( 1 <= CLog2 n

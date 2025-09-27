@@ -15,7 +15,6 @@ import Clash.Prelude
 import Clash.Signal.Channel
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
---import Data.Maybe (catMaybes, listToMaybe)
 
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Hedgehog

@@ -25,8 +25,8 @@ import Clash.XException (NFDataX(..))
 import Control.Applicative (Applicative(..), (<$>))
 import Data.Function ((.), id)
 
--- | Updates a value inside an 'Applicative' context if an only if a
--- the given Boolean condition evaluates positively in the same
+-- | Updates a value inside an 'Applicative' context if and only if
+-- the given Boolean condition evaluates to 'True' in the same
 -- context.
 apWhen ∷ Applicative f ⇒ f Bool → (a → a) → f a → f a
 apWhen cond upd x = mux cond (upd <$> x) x
