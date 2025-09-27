@@ -1,9 +1,12 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 module SHA (topEntity) where
 
 import Clash.Prelude
+import Clash.Signal.Channel (newsfeed)
+import Clash.Signal.DataStream (DataStream, Frame(..))
 import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
@@ -33,30 +36,30 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ sha @SHAX . descape
+  $ newsfeed . sha @SHAX . descape
 
 -- | We use `0x00` as an escape symbol to mark the end of the input
 --
 -- > 0x00 0b00000000   denotes `0x00` (no end marker)
--- > 0x00 0b???????1   marks the last byte with 7 bits used
--- > 0x00 0b??????10   marks the last byte with 6 bits used
--- > 0x00 0b?????100   marks the last byte with 5 bits used
--- > 0x00 0b????1000   marks the last byte with 4 bits used
--- > 0x00 0b???10000   marks the last byte with 3 bits used
--- > 0x00 0b??100000   marks the last byte with 2 bits used
--- > 0x00 0b?1000000   marks the last byte with 1 bits used
--- > 0x00 0b10000000   marks the previous byte to be the last byte
+-- > 0x00 0b???????1   marks the next byte to be the last byte with 8 bits used
+-- > 0x00 0b??????10   marks the next byte to be the last byte with 7 bits used
+-- > 0x00 0b?????100   marks the next byte to be the last byte with 6 bits used
+-- > 0x00 0b????1000   marks the next byte to be the last byte with 5 bits used
+-- > 0x00 0b???10000   marks the next byte to be the last byte with 4 bits used
+-- > 0x00 0b??100000   marks the next byte to be the last byte with 3 bits used
+-- > 0x00 0b?1000000   marks the next byte to be the last byte with 2 bits used
+-- > 0x00 0b10000000   marks the next byte to be the last byte with 1 bit used
 descape ∷
   HiddenClockResetEnable dom ⇒
   Signal dom (Maybe Byte) →
-  Signal dom (Maybe (Byte, Maybe (Index 9)))
-descape = mealy (~~>) False
+  DataStream dom () (Index (BitSize Byte)) Byte
+descape = mealy (~~>) (False, S ∷ NextExpectedDataFrame)
  where
-  esc   ~~> Nothing   = (esc, Nothing)
-  False ~~> Just 0x00 = (True, Nothing)
-  False ~~> Just byte = (False, Just (byte, Nothing))
-  True  ~~> Just 0x00 = (False, Just (0x00, Nothing))
-  True  ~~> Just byte = (False, Just (byte, Just $ trailingZeros + 1))
+  (esc,   nef) ~~> Nothing   = ((esc,   nef            ), emptyFrame nef)
+  (False, nef) ~~> Just 0x00 = ((True,  nef            ), emptyFrame nef)
+  (False, nef) ~~> Just byte = ((False, next nef       ), frame nef byte)
+  (True,  nef) ~~> Just 0x00 = ((False, next nef       ), frame nef 0x00)
+  (True,  nef) ~~> Just byte = ((False, E trailingZeros), emptyFrame nef)
    where
     trailingZeros
       | testBit byte 0 = 0
@@ -68,5 +71,21 @@ descape = mealy (~~>) False
       | testBit byte 6 = 6
       | testBit byte 7 = 7
       | otherwise      = 8
+
+  emptyFrame = \case
+    S → Idle
+    _ → NoData
+
+  frame = \case
+    S   → Start ()
+    M   → Middle
+    E e → End e
+
+  next = \case
+    E{} → S
+    _   → M
+
+data NextExpectedDataFrame = S | M | E (Index (BitSize Byte))
+  deriving (Generic, NFDataX)
 
 makeTopEntity 'topEntity

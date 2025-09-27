@@ -35,7 +35,7 @@ import Text.Printf (printf)
 import Text.Read (readMaybe)
 
 import qualified Data.ByteString as BS
-  (concatMap, empty, null, uncons, pack, length, replicate)
+  (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
 import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
 import qualified Hedgehog.Gen    as Gen (bytes, integral)
@@ -278,18 +278,17 @@ runHitltHMACSHA sem dev settings key msg
   | SHAFacts alg ← knownSHA @alg
   = let
       n = natToNum @(BlockSize alg `Div` 8)
-      bs = raiseIsKey
+      bs = withKeySize (BS.length key)
         <> escape key
-        <> lowerIsKey
         <> escape (BS.replicate (n - BS.length key) 0xFF)
-        <> escape msg
-        <> raiseIsKey
+        <> escapeAndTerminate msg
       eq = HMAC.hmac (cryptoHash alg) n key msg
     in
       runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
  where
-  raiseIsKey = BS.pack [ 0x00, maxBound ]
-  lowerIsKey = BS.pack [ 0x00, 1 ]
+  withKeySize n
+    | n > 0x00 && n < 0xFF = BS.pack [ 0x00, toEnum n ]
+    | otherwise            = error $ "Invalid key size: " <> show n
 
 upload ∷
   ([String] → IO ()) →
@@ -370,7 +369,9 @@ escapeAndTerminate ∷ ByteString → ByteString
 escapeAndTerminate = terminate . escape
 
 terminate ∷ ByteString → ByteString
-terminate = (`append` pack [0x00, 0x80])
+terminate bs = case BS.unsnoc bs of
+  Nothing       → BS.empty
+  Just (bs0, c) → bs0 `append` pack [0x00, 0xFF, c]
 
 escape ∷ ByteString → ByteString
 escape = BS.concatMap $ \case

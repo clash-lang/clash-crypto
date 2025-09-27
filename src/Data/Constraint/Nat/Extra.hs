@@ -1,6 +1,6 @@
 {-|
 Module      : Data.Constraint.Nat.Extra
-Copyright   : Copyright © 2024 QBayLogic B.V.
+Copyright   : Copyright © 2024-2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -16,7 +16,9 @@ Some extra type families and properties for type level naturals.
 {-# OPTIONS_GHC -fplugin-opt=GHC.TypeNats.Proof.Plugin:VerifyProofs=False #-}
 
 module Data.Constraint.Nat.Extra
-  ( DDiv
+  ( -- * Type Families
+    DDiv
+    -- * Proven Evidience
   , TimesMod
   , LeTrans
   , ModBound
@@ -56,15 +58,16 @@ type family DDiv n m where
           )
       )
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ. c > 0 → (a · b) mod c ≡ ((a mod c) · (b mod c)) mod c
 instance
   ( 1 <= c
   ) ⇒ TimesMod a b c
 class
   ( a * b `Mod` c ~ (a `Mod` c) * (b `Mod` c) `Mod` c
   ) ⇒ TimesMod a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. c > 0 → (a · b) mod c ≡ ((a mod c) · (b mod c)) mod c
+--
 {-/ Proof (Coq): TimesMod
   Require Import Arith.
   Import Nat.
@@ -76,34 +79,36 @@ class
 /-}
 instance TimesMod a b c ⇒ QED (TimesMod a b c)
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ. a ≤ b ∧ b ≤ c → a ≤ c
 instance
   ( a <= b, b <= c
   ) ⇒ LeTrans a b c
 class
   ( a <= c
   ) ⇒ LeTrans a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. a ≤ b ∧ b ≤ c → a ≤ c
+--
 {-/ Proof (Coq): LeTrans
   Require Import Arith.
   intros a b c H0 H1.
   apply (Nat.le_trans a b c H0 H1).
 /-}
-instance LeTrans a b c ⇒ QED (LeTrans a b c)
 -- {-/ Proof (Agda): LeTrans
 -- LeTrans _ _ _ = ≤-trans
 -- /-}
+instance LeTrans a b c ⇒ QED (LeTrans a b c)
 
--- | Evidence for
---
--- prop> ∀ m n ∈ ℕ. n > 0 → m mod n ≤ n
 instance
   ( 1 <= n
   ) ⇒ ModBound m n
 class
   ( m `Mod` n <= n
   ) ⇒ ModBound m n
+-- ^ Evidence for
+--
+-- prop> ∀ m n ∈ ℕ. n > 0 → m mod n ≤ n
+--
 {-/ Proof (Coq): ModBound
   Require Import Arith.
   Import Nat.
@@ -114,15 +119,15 @@ class
 /-}
 instance ModBound m n ⇒ QED (ModBound m n)
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ. a > 0 ∧ b ≤ c → b ≤ a · c
 instance
   ( 1 <= a, b <= c
   ) ⇒ TimesMonotoneRight a b c
 class
   ( b <= a * c
   ) ⇒ TimesMonotoneRight a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. a > 0 ∧ b ≤ c → b ≤ a · c
 {-/ Proof (Coq): TimesMonotoneRight
   Require Import Arith.
   Import Nat.
@@ -136,15 +141,16 @@ class
 /-}
 instance TimesMonotoneRight a b c ⇒ QED (TimesMonotoneRight a b c)
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ, x ∈ 𝔹. a ≤ b ∧ a ≤ c → a ≤ x ? b : c
 instance
   ( a <= b, a <= c
   ) ⇒ CondMonotoneGE a b c x
 class
   ( a <= If x b c
   ) ⇒ CondMonotoneGE a b c x
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ, x ∈ 𝔹. a ≤ b ∧ a ≤ c → a ≤ x ? b : c
+--
 {-/ Proof (Coq): CondMonotoneGE
   intros a b c x Hb Hc.
   case x.
@@ -153,15 +159,16 @@ class
 /-}
 instance CondMonotoneGE a b c x => QED (CondMonotoneGE a b c x)
 
--- | Evidence for
---
--- prop> ∀ a b ∈ ℕ. a mod b ≡ 0 → (a div b) · b ≡ a
 instance
   ( 1 <= b, a `Mod` b ~ 0
   ) ⇒ CancelMultiple a b
 class
   ( (a `Div` b) * b ~ a
   ) ⇒ CancelMultiple a b
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. a mod b ≡ 0 → (a div b) · b ≡ a
+--
 {-/ Proof (Coq): CancelMultiple
   Require Import Arith.
   Import Nat.
@@ -173,15 +180,16 @@ class
 /-}
 instance CancelMultiple a b ⇒ QED (CancelMultiple a b)
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ. a mod (c * b) ≡ 0 → (a div (c · b)) · c ≡ a div b
 instance
   ( 1 <= c * b, a `Mod` (c * b) ~ 0
   ) ⇒ CancelFactor a b c
 class
   ( a `Div` (c * b) * c ~ a `Div` b
   ) ⇒ CancelFactor a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. a mod (c · b) ≡ 0 → (a div (c · b)) · c ≡ a div b
+--
 {-/ Proof (Coq): CancelFactor
   Require Import Arith.
   Import Nat.
@@ -198,33 +206,35 @@ class
 /-}
 instance CancelFactor a b c ⇒ QED (CancelFactor a b c)
 
--- | Evidence for
---
--- prop> ∀ a b c ∈ ℕ. c ≤ a ∧ c ≤ b → c ≤ min a b
 instance
   ( c <= a, c <= b
   ) ⇒ MinOverLE a b c
 class
   ( c <= Min a b
   ) ⇒ MinOverLE a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. c ≤ a ∧ c ≤ b → c ≤ min a b
+--
 {-/ Proof (Coq): MinOverLE
   Require Import Arith.
   intros a b c H0 H1.
   apply Nat.min_glb. apply H0. apply H1.
 /-}
-instance MinOverLE a b c ⇒ QED (MinOverLE a b c)
 -- {-/ Proof (Agda): MinOverLE
 -- MinOverLE _ _ zero _ _ = z≤n
 -- MinOverLE _ _ (suc _) = ⊓-pres-m<
 -- /-}
+instance MinOverLE a b c ⇒ QED (MinOverLE a b c)
 
--- | Evidence for
---
--- prop> ∀ n ∈ ℕ. n div 2 ≤ n
 instance HalfIsLess n
 class
   ( n `Div` 2 <= n
   ) ⇒ HalfIsLess n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. n div 2 ≤ n
+--
 {-/ Proof (Coq): HalfIsLess
   Require Import Arith.
   intro n.
@@ -233,16 +243,16 @@ class
 /-}
 instance HalfIsLess n ⇒ QED (HalfIsLess n)
 
--- | Evidence for
---
--- prop> ∀ n ∈ ℕ. n > 0 → clog₂ n > 0
 instance
-  ( 1 <= n
-  , 2 <= n
+  ( 2 <= n
   ) ⇒ CLog2KeepsPositive n
 class
   ( 1 <= CLog2 n
   ) ⇒ CLog2KeepsPositive n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. n > 0 → clog₂ n > 0
+--
 {-/ Proof (Agda): CLog2KeepsPositive
 open import Relation.Nullary.Negation.Core using (contradiction)
 open import Data.Nat.Properties using (m+1+n≰m; ≤-trans; n≤1+n)
@@ -259,13 +269,14 @@ CLog2KeepsPositive n 2≤n = >-nonZero (lemma n 2≤n)
 /-}
 instance CLog2KeepsPositive n ⇒ QED (CLog2KeepsPositive n)
 
--- | Evidence for
---
--- prop> ∀ n ∈ ℕ. n div 2 ≤ n - (n div 2)
 instance Div2RoundsDown n
 class
   ( n `Div` 2 <= n - (n `Div` 2)
   ) ⇒ Div2RoundsDown n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. n div 2 ≤ n - (n div 2)
+--
 {-/ Proof (Coq): Div2RoundsDown
   Require Import Coq.Arith.Arith.
   Import Nat.
@@ -282,15 +293,16 @@ class
 /-}
 instance Div2RoundsDown n ⇒ QED (Div2RoundsDown n)
 
--- | Evidence for
---
--- prop> ∀ n m ∈ ℕ. n > 0 ∧ n mod m ≡ 0 → n div m > 0
 instance
   ( 1 <= n, 1 <= m, n `Mod` m ~ 0
   ) ⇒ KeepsPositiveIfMultiple n m
 class
   ( 1 <= n `Div` m
   ) ⇒ KeepsPositiveIfMultiple n m
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. n > 0 ∧ n mod m ≡ 0 → n div m > 0
+--
 {-/ Proof (Coq): KeepsPositiveIfMultiple
   Require Import Coq.Arith.Arith.
   Require Import Nat.
@@ -305,15 +317,16 @@ class
 /-}
 instance KeepsPositiveIfMultiple n m ⇒ QED (KeepsPositiveIfMultiple n m)
 
--- | Evidence for
---
--- prop> ∀ n m ∈ ℕ. n > 0 ∧ n mod m ≡ 0 → m ≤ n
 instance
   ( 1 <= n, 1 <= m, n `Mod` m ~ 0
   ) ⇒ DivisorIsLess n m
 class
   ( m <= n
   ) ⇒ DivisorIsLess n m
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. n > 0 ∧ n mod m ≡ 0 → m ≤ n
+--
 {-/ Proof (Coq): DivisorIsLess
   Require Import Arith.
   Import Nat.
@@ -331,15 +344,16 @@ class
 /-}
 instance DivisorIsLess n m ⇒ QED (DivisorIsLess n m)
 
--- | Evidence for
---
--- prop> ∀ a b c d ∈ ℕ. b ≤ a ∧ d ≤ c div a → d ≤ c div b
 instance
   ( 1 <= a, 1 <= b, b <= a, d <= c `Div` a
   ) ⇒ DivisorMonotoneInverse a b c d
 class
   ( d <= c `Div` b
   ) ⇒ DivisorMonotoneInverse a b c d
+-- ^ Evidence for
+--
+-- prop> ∀ a b c d ∈ ℕ. b ≤ a ∧ d ≤ c div a → d ≤ c div b
+--
 {-/ Proof (Coq): DivisorMonotoneInverse
   Require Import Arith.
   Import Nat.
@@ -357,30 +371,32 @@ class
 /-}
 instance DivisorMonotoneInverse a b c d ⇒ QED (DivisorMonotoneInverse a b c d)
 
--- | Evidence for
---
--- prop> ∀ n ∈ ℕ. 0 mod n ≡ 0
 instance
   ( 1 <= n
   ) ⇒ ModZero n
 class
   ( 0 `Mod` n ~ 0
   ) ⇒ ModZero n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. 0 mod n ≡ 0
+--
 {-/ Proof (Coq): ModZero
   Require Import Arith.
   intros. apply Nat.Div0.mod_0_l.
 /-}
 instance ModZero n ⇒ QED (ModZero n)
 
--- | Evidence for
---
--- prop> ∀ n m ∈ ℕ. m > 0 → clog₂ n ≤ n * m
 instance
   ( 1 <= m
   ) ⇒ CLog2IsLessProduct n m
 class
   ( CLog 2 n <= n * m
   ) ⇒ CLog2IsLessProduct n m
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. m > 0 → clog₂ n ≤ n · m
+--
 {-/ Proof (Agda): CLog2IsLessProduct
 open import Relation.Binary.PropositionalEquality.Core using (sym)
 open import Data.Nat.Properties using
@@ -410,15 +426,16 @@ CLog2IsLessProduct n (suc m)
 /-}
 instance CLog2IsLessProduct n m ⇒ QED (CLog2IsLessProduct n m)
 
--- | Evidence for
---
--- prop> ∀ a b ∈ ℕ. b > 0 → b ≤ a ? a div b + (b mod a ≡ 0 ? 0 : 1) : 1
 instance
   ( 1 <= b
   ) ⇒ PositiveResultCond0 a b
 class
   ( 1 <= If (b <=? a) (a `Div` b + If (b `Mod` a <=? 0) 0 1) 1
   ) ⇒ PositiveResultCond0 a b
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. b > 0 → b ≤ a ? a div b + (b mod a ≡ 0 ? 0 : 1) : 1
+--
 {-/ Proof (Coq): PositiveResultCond0
   Require Import Arith.
   Import Nat Div0.
@@ -451,10 +468,6 @@ class
 /-}
 instance PositiveResultCond0 a b ⇒ QED (PositiveResultCond0 a b)
 
--- | Evidence for
---
--- prop> ∀ a b ∈ ℕ. b > 0 →
---       clog₂ (2ᵃ div b) ≤ b * (b ≤ a ? a div b + (b mod a ≤ 0 ? 0 : 1) ? 1)
 instance
   ( 1 <= a, 1 <= b
   ) ⇒ CLog2LECond0 a b
@@ -462,6 +475,10 @@ class
   ( CLog 2 ((2 ^ a) `Div` b)
       <= b * (If (b <=? a) (a `Div` b + If (b `Mod` a <=? 0) 0 1) 1)
   ) ⇒ CLog2LECond0 a b
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. b > 0 → clog₂ (2ᵃ div b) ≤ b · (b ≤ a ? a div b + (b mod a ≤ 0 ? 0 : 1) ? 1)
+--
 {-/ Proof (Agda): CLog2LECond0
 open import Data.Nat.Properties
 open import Data.Nat.DivMod

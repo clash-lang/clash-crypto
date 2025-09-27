@@ -7,7 +7,7 @@ license:             CERN-OHL-P-2.0
 license-file:        LICENSE
 author:              QBayLogic B.V.
 maintainer:          devops@qbaylogic.com
-Copyright:           Copyright © 2024 QBayLogic B.V.
+Copyright:           Copyright © 2024-2025 QBayLogic B.V.
 Category:            Hardware
 
 common common-options
@@ -18,6 +18,7 @@ common common-options
     DerivingStrategies
     LambdaCase
     NoStarIsType
+    OverloadedRecordDot
     TypeFamilies
     UnicodeSyntax
     ViewPatterns
@@ -85,7 +86,10 @@ library
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
     Clash.Crypto.MAC.HMAC
+    Clash.Signal.Channel
     Clash.Signal.Delayed.Extra
+    Clash.Signal.DataStream
+    Clash.Signal.Extra
     Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode

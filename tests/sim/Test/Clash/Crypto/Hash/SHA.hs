@@ -10,11 +10,14 @@ Test suite for 'Clash.Crypto.Hash.SHA'.
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedLists #-}
 
 module Test.Clash.Crypto.Hash.SHA where
 
 import Clash.Prelude
+import Clash.Signal.Channel
+import Clash.Signal.DataStream
 import Clash.Sized.Vector (unsafeFromList)
 
 import Data.ByteString (ByteString)
@@ -52,7 +55,7 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
               $ property
               $ forAll (Gen.element inputs)
                   >>= hashPure
-          | let inputs = [input1, input2, input3, input4] :: [ByteString]
+          | let inputs = [input1, input2, input3, input4] ∷ [ByteString]
           , (hashPure, algName) ←
               [ (testHashPure @SHA1,      "1")
               , (testHashPure @SHA224,    "224")
@@ -66,9 +69,8 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
       [ testGroup "Contiguous Input (property based tests)"
           [ testProperty ("SHA-" <> algName)
               $ property
-              $ do b ← forAll Gen.bool
-                   xs ← forAll (Gen.bytes $ Range.linear 100 1000)
-                   hashStream b xs
+              $ do xs ← forAll (Gen.bytes $ Range.linear 100 1000)
+                   hashStream xs
           | (hashStream, algName) ←
               [ (testHashCStream @SHA1,      "1")
               , (testHashCStream @SHA224,    "224")
@@ -82,7 +84,7 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
           [ localOption (HedgehogTestLimit $ Just 1)
               $ testProperty "SHA-256 HITLT failure (reproducer)"
               $ property
-              $ testHashNCStream @SHA256 False
+              $ testHashNCStream @SHA256
               $ List.zip
                   (List.replicate 64 0)
                   (List.replicate 62 0 <> [64, 0])
@@ -90,15 +92,14 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
       , testGroup "Property Based Tests"
           [ testProperty ("SHA-" <> algName)
               $ property
-              $ do b ← forAll Gen.bool
-                   bs ← forAll
+              $ do bs ← forAll
                      $ Gen.bytes
                      $ Range.linear 80 100
                    xs ← forAll
                      $ Gen.list (Range.singleton $ BS.length bs)
                      $ Gen.integral @_ @Int
                      $ Range.linear 50 100
-                   hashStream b $ List.zip (pack <$> BS.unpack bs) xs
+                   hashStream $ List.zip (pack <$> BS.unpack bs) xs
           | (hashStream, algName) ←
               [ (testHashNCStream @SHA1,      "1")
               , (testHashNCStream @SHA224,    "224")
@@ -154,13 +155,11 @@ testHashCStream ∷
   ( Monad m, KnownSHA alg, CryptoHash alg
   , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
   ) ⇒
-  Bool →
-  -- ^ termination type selector
   ByteString →
   -- ^ input data
   PropertyT m ()
-testHashCStream t
-  = testHashNCStream @alg t
+testHashCStream
+  = testHashNCStream @alg
   . fmap ((, 0) . pack)
   . BS.unpack
 
@@ -170,27 +169,26 @@ testHashNCStream ∷
   ( Monad m, KnownSHA alg, CryptoHash alg
   , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
   ) ⇒
-  Bool →
-  -- ^ selector for the message termination type to be utilized. The
-  -- message is terminated with the last frame, if @True@, while one
-  -- more end-of-message frame indicator is used otherwise.
   [(BitVector 8, Int)] →
   -- ^ input data, where each byte in the first component is followed
   -- by the number of idle cycles stated in the second component. The
   -- list must be non-empty.
   PropertyT m ()
-testHashNCStream terminateWithLastByte xs
+testHashNCStream xs
   | SHAFacts alg ← knownSHA @alg
   , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
-      upd x (c, j) = Just (c, x) : List.replicate j Nothing
+      upd f (x, j) = f x : List.replicate j NoData
 
-      ncs = case List.unsnoc xs of
-        Nothing      → []
-        Just (ys, y) → List.concatMap (upd Nothing) ys
-                    <> upd (if terminateWithLastByte then Just 0 else Nothing) y
+      ncMessage = case List.unsnoc xs of
+        Nothing           → []
+        Just (ys, (y, _)) → case List.uncons ys of
+            Nothing      → [End 0 y]
+            Just (z, zs) → upd (Start ()) z
+                        <> List.concatMap (upd Middle) zs
+                        <> [End 0 y]
 
-      n = List.length ncs
+      n = List.length ncMessage
 
       sc = max
         (natToNum @(ScheduleCount alg))
@@ -199,24 +197,21 @@ testHashNCStream terminateWithLastByte xs
       requiredSamples =
         sc * (n `div` sc + if n `mod` sc > 0 then 3 else 2) + 4
 
-      inputPlusCtrl ∷ [Maybe (BitVector 8, Maybe (Index 9))]
-      inputPlusCtrl
-        = [ Nothing, Nothing, Nothing ]
-       <> ncs
-       <> [ Just (0, Just maxBound) | not terminateWithLastByte ]
-       <> List.repeat Nothing
+      input ∷ DataStream System () (Index 8) (BitVector 8)
+      input = fromList i
+       where
+        i = [Idle, Idle, Idle] <> ncMessage
+         <> List.replicate requiredSamples Idle <> i
 
-      inputAsSignal ∷ Signal System (Maybe (BitVector 8, Maybe (Index 9)))
-      inputAsSignal = fromList inputPlusCtrl
-
-      output = sampleN (n + requiredSamples) $ sha @alg inputAsSignal
+      output ∷ [Maybe (Digest alg)]
+      output = sampleN (2 * (n + requiredSamples)) $ newsfeed $ sha @alg input
 
       resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
-      resultDigestAsVBv8
-        = unconcatBitVector#
-        $ maybe 0 fst
-        $ List.uncons
-        $ catMaybes output
+      resultDigestAsVBv8 = case List.take 2 $ catMaybes output of
+        []                    → error "No response received."
+        [_]                   → error "Missing second response."
+        a : b : _ | a /= b    → error "Repeated hashs differ."
+                  | otherwise → unconcatBitVector# a
 
       ref = BS.unpack $ cryptoHash alg $ BS.pack $ fmap (unpack . fst) xs
       dut = toList $ unpack <$> resultDigestAsVBv8

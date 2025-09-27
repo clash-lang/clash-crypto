@@ -1,6 +1,6 @@
 {-|
 Module      : Clash.Crypto.Hash.SHA.Specification.Types
-Copyright   : Copyright © 2024 QBayLogic B.V.
+Copyright   : Copyright © 2024-2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -108,3 +108,6 @@ type HashValue (alg ∷ SHA) =
 
 -- | The "Message" type.
 type Message (ℓ ∷ Nat) = BitVector ℓ
+
+-- | The digest resulting from the applied hashing function.
+type Digest alg = BitVector (MessageDigestSize alg)

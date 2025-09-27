@@ -15,7 +15,9 @@ import Clash.Crypto.ECDSA.InverseModulo
   (bea, fastGcdSequential, fltCtmi, sictMiSequential, deriveSictPrecomp)
 import Clash.Crypto.ECDSA.Modulo
 import Clash.Prelude hiding (Mod)
-import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
+import Clash.Signal.Channel
+import Data.Maybe (fromMaybe)
+import Data.Monoid (First(..))
 
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Hedgehog
@@ -44,9 +46,8 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
 
 type InvModuloComponent m dom =
  HiddenClockResetEnable dom =>
- Signal dom Bool ->
- Signal dom (Mod m) ->
- Signal dom (Maybe (Mod m))
+ Channel dom (Mod m) ->
+ Channel dom (Mod m)
 
 invModuloProperty :: KnownDomain System => InvModuloComponent Q System -> Property
 invModuloProperty invModComp = property $ do
@@ -59,13 +60,15 @@ invModuloProperty invModComp = property $ do
  where
   moduloError =
     error "Since the modulo of the field is prime, the inverse always exists."
-  compute input =
-    let r = catMaybes $
-            sampleN @System 10000000 $
-            withClockResetEnable @System clockGen resetGen enableGen $
-            invModComp (fromList toggleInput) (fromList $ List.repeat input)
-    in case listToMaybe r of
-     Just a  -> a
-     Nothing -> error "The returned list was empty"
-
-  toggleInput = [False, False] <> List.repeat True
+  compute input
+    = fromMaybe (error "The returned list was empty")
+    $ getFirst
+    $ foldMap First
+    $ sampleN @System 10000000
+    $ withClockResetEnable @System clockGen resetGen enableGen
+    $ newsfeed
+    $ invModComp
+    $ channel
+    $ fmap (input, )
+    $ fromList
+    $ Keep : Keep : Release : List.repeat Keep
