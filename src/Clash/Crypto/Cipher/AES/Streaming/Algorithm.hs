@@ -18,13 +18,19 @@ Algorithm implementation of FIPS 197 using the enchance methode
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Clash.Crypto.Cipher.AES.Streaming.Algorithm where
+module Clash.Crypto.Cipher.AES.Streaming.Algorithm   
+( Clash.Crypto.Cipher.AES.Streaming.Algorithm.cipher
+  , Clash.Crypto.Cipher.AES.Streaming.Algorithm.invCipher
+  , Clash.Crypto.Cipher.AES.Streaming.Algorithm.eqInvCipher
+  , AESKeyExpansion(..)
+  ) where
+
 
 
 
 import Clash.Crypto.Cipher.AES.Specification.Types
 import Clash.Crypto.Cipher.AES.Specification.Definitions
-import Clash.Crypto.Cipher.AES.Specification
+import Clash.Crypto.Cipher.AES.Specification as Spec
 -- Interface liberies:
 import Clash.Prelude
 import Clash.Signal.Channel
@@ -36,7 +42,7 @@ data CipherMode
   = CipherStart | CipherRounds (Index 4) Integer | CipherLast (Index 3) | CipherFin | CipherEnd
   deriving (Generic, NFDataX, Show, Eq)
 cipher ∷ ∀ (alg ∷ AES) dom.
-    ( KnownAES alg, HiddenClockResetEnable dom) ⇒
+    ( Spec.KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
@@ -74,7 +80,7 @@ cipher  input
       CipherLast 0                       → ((addRoundKey state (last w),w),        CipherFin)
 
 eqInvCipher ∷ ∀ (alg ∷ AES) dom.
-    ( KnownAES alg, HiddenClockResetEnable dom) ⇒
+    ( Spec.KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
@@ -111,7 +117,7 @@ eqInvCipher  input
       CipherLast 1                       → ((invShiftRows state,w),                   CipherLast 0)
       CipherLast 0                       → ((invAddRoundKey state (last w),w),        CipherFin)
 invCipher ∷ ∀ (alg ∷ AES) dom.
-    ( KnownAES alg, HiddenClockResetEnable dom) ⇒
+    ( Spec.KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
@@ -151,28 +157,28 @@ data KeyMode
   = KeyStart | KeyNew (Index 2) Integer | KeyLast (Index 4) Integer | KeyFin | KeyEnd
   deriving (Generic, NFDataX, Show, Eq)
 class AESKeyExpansion (alg ∷ AES) where
-    keyExpansion ∷ (KnownAES alg, HiddenClockResetEnable dom) ⇒
+    keyExpansion ∷ (Spec.KnownAES alg, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType alg) →
       -- ^ input stream ^ key stream
       Channel dom (WType alg)
       -- ^ response channel
 instance AESKeyExpansion AES128 where
   keyExpansion ∷
-      (KnownAES AES128, HiddenClockResetEnable dom) ⇒
+      (Spec.KnownAES AES128, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES128) →
       -- ^ input stream ^ key stream
       Channel dom (WType AES128)
       -- ^ response channel
   keyExpansion = enhance put get compute
       where
-        put ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
+        put ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES128) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
           | AESFacts _ ← knownAES @alg
           = ((key, last key, repeat  @(((Nr alg + 1) * 4) -  Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
-        get ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
+        get ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES128) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
         get _ ((_, _, w), _) = w
-        compute ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
+        compute ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES128) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
         compute _ (s0@(state, lastState, w), mode0) 
           | AESFacts alg ← knownAES @alg
           = (, mode0 /= KeyEnd) $ case mode0 of
@@ -185,26 +191,26 @@ instance AESKeyExpansion AES128 where
           KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i)
           KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
           KeyNew 0 (-1)                      → (s0,                                                                             KeyFin)
-        shiftNewPart ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ WType alg → KeyType alg -> WType alg
+        shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES128) ⇒ WType alg → KeyType alg -> WType alg
         shiftNewPart w state = fst (shiftInAtN w state)
 instance AESKeyExpansion AES192 where
   keyExpansion ∷
-      (KnownAES AES192, HiddenClockResetEnable dom) ⇒
+      (Spec.KnownAES AES192, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES192) →
       -- ^ input stream ^ key stream
       Channel dom (WType AES192)
       -- ^ response channel
   keyExpansion = enhance put get compute
       where
-        put ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
+        put ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES192) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
           | AESFacts _ ← knownAES @alg
           -- TODO the solution shift too much.
           = ((key, last key, repeat @(((Nr alg + 1) * 4) -  Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
-        get ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
+        get ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES192) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
         get _ ((_, _, w), _) = w
-        compute ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
+        compute ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES192) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
         compute _ (s0@(state, lastState, w), mode0) 
           | AESFacts alg ← knownAES @alg
           = (, mode0 /= KeyEnd) $ case mode0 of
@@ -217,26 +223,26 @@ instance AESKeyExpansion AES192 where
           KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i)
           KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
           KeyNew 0 (-1)                      → (s0,                                                                             KeyFin)
-        shiftNewPart ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒ WType alg → KeyType alg -> WType alg
+        shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES192) ⇒ WType alg → KeyType alg -> WType alg
         shiftNewPart w state = fst (shiftInAtN w state)
 
 instance AESKeyExpansion AES256 where
   keyExpansion ∷
-      (KnownAES AES256, HiddenClockResetEnable dom) ⇒
+      (Spec.KnownAES AES256, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES256) →
       -- ^ input stream ^ key stream
       Channel dom (WType AES256)
       -- ^ response channel
   keyExpansion = enhance put get compute
       where
-        put ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
+        put ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
           | AESFacts _ ← knownAES @alg
           = ((key, last key, repeat  @(((Nr alg + 1) * 4) -  Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
-        get ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
+        get ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
         get _ ((_, _, w), _) = w
-        compute ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
+        compute ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
         compute _ (s0@(state, lastState, w), mode0) 
           | AESFacts alg ← knownAES @alg
           = (, mode0 /= KeyEnd) $ case mode0 of
@@ -250,7 +256,7 @@ instance AESKeyExpansion AES256 where
           KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i)
           KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
           KeyNew 0 (-1)                      → (s0,                                                                             KeyFin)
-        shiftNewPart ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒ WType alg → KeyType alg -> WType alg
+        shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ WType alg → KeyType alg -> WType alg
         shiftNewPart w state = fst (shiftInAtN w state)
 
 

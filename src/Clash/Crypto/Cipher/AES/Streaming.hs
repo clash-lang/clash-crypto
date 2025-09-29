@@ -12,14 +12,15 @@ Streaming based implementation of FIPS 197,
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.Cipher.AES.Streaming
-  ( aesCipher
+  ( AESFacts(..)
+  , KnownAES(..)
   ) where
 
 
 import Data.Proxy (Proxy)
 
 -- import GHC.TypeNats.Proof (Rewrite(..), using)
-
+import Clash.Crypto.Cipher.AES.Streaming.Properties
 import Clash.Crypto.Cipher.AES.Specification
 -- Interface liberies:
 import Clash.Prelude

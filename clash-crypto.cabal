@@ -73,6 +73,7 @@ library
     Clash.Crypto.Cipher.AES
     Clash.Crypto.Cipher.AES.Streaming
     Clash.Crypto.Cipher.AES.Streaming.Algorithm
+    Clash.Crypto.Cipher.AES.Streaming.Properties
     Clash.Crypto.Cipher.AES.Streaming.Combinatorial
     Clash.Crypto.Cipher.AES.Specification
     Clash.Crypto.Cipher.AES.Specification.Properties

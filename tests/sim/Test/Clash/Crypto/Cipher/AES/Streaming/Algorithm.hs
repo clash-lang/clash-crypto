@@ -81,3 +81,34 @@ cipherProperty cipherComp cipherComp1
             $ fmap (input, )
             $ fromList
             $ Keep : Keep : Release : List.repeat Keep
+
+type KeyExpansionComponent alg dom =
+ HiddenClockResetEnable dom =>
+ Channel dom (InType alg, WType alg) ->
+ Channel dom (OutType alg)
+type KeyExpansionRefComponent alg =
+  Proxy alg -> InType alg -> WType alg -> OutType alg
+keyExpansionProperty ∷ ∀ (alg ∷ AES). (KnownAES alg) ⇒ KnownDomain System ⇒  CipherComponent alg System → CipherRefComponent alg → Property
+keyExpansionProperty cipherComp cipherComp1
+  | AESFacts alg ← knownAES @alg
+  = property $ do
+    inputAsInType ← forAll $ genVec @(Nb alg) (genVec @(WordSize alg) genDefinedBitVector) 
+    wAsInType     ← forAll $ genVec @((Nr alg + 1) * 4) (genVec @(WordSize alg) genDefinedBitVector) 
+    let f' = compute (inputAsInType, wAsInType)
+    f' === cipherComp1 alg inputAsInType wAsInType
+    where
+    cipherError =
+        error "Since the modulo of the field is prime, the inverse always exists."
+    compute input
+        = fromMaybe (error "The returned list was empty")
+            $ getFirst
+            $ foldMap First
+            $ sampleN @System 10000000
+            $ withClockResetEnable @System clockGen resetGen enableGen
+            $ newsfeed
+            $ cipherComp
+            $ channel
+            $ fmap (input, )
+            $ fromList
+            $ Keep : Keep : Release : List.repeat Keep
+
