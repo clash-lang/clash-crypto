@@ -42,7 +42,7 @@ module Clash.Signal.Channel
   , pattern Releasing
     -- * Combinators
   , join
-  -- , disjoin
+  , disjoin
   , filterC
   , guardC
   , muxC
@@ -115,7 +115,7 @@ instance Alternative Content where
   _       <|> Fresh x = Fresh x
   Old x   <|> _       = Old x
 
--- Downgrade operator
+-- "Downgrade" operator
 (<|=|>) :: Content a -> Content a -> Content a
 None  <|=|> _     = None
 _     <|=|> None  = None
@@ -124,8 +124,6 @@ _     <|=|> Busy  = Busy
 Old x <|=|> _     = Old x
 _     <|=|> Old x = Old x
 c     <|=|> _     = c
-
-
 
 -- | A channel is a signal that either holds a value or none.
 -- Additionally, if holding a value, the channel keeps track of the
@@ -364,18 +362,18 @@ join (Channel x) (Channel y) =
 -- left or right output channel, where the 'Left' and 'Right'
 -- constructors determine the corresponding destination. Both output
 -- channels will never hold some content at the same time.
--- disjoin ∷
---   ∀ a b dom. HiddenClockResetEnable dom ⇒
---   Channel dom (Either a b) → (Channel dom a, Channel dom b)
--- disjoin (Channel s) = bothC $ unbundle $ s <&> \case
---   None            → (None   , None   )
---   None            → (None   , None   )
---   Fresh (Left x)  → (Fresh x, None   )
---   Fresh (Right y) → (None   , Fresh y)
---   Old   (Left x)  → (Old x  , None   )
---   Old   (Right y) → (None   , Old y  )
---  where
---   bothC (x, y) = (Channel x, Channel y)
+disjoin ∷
+  ∀ a b dom. HiddenClockResetEnable dom ⇒
+  Channel dom (Either a b) → (Channel dom a, Channel dom b)
+disjoin (Channel s) = bothC $ unbundle $ s <&> \case
+  None            → (None   , None   )
+  Busy            → (Busy   , Busy   )
+  Fresh (Left x)  → (Fresh x, Busy   )
+  Fresh (Right y) → (Busy   , Fresh y)
+  Old   (Left x)  → (Old x  , Busy   )
+  Old   (Right y) → (Busy   , Old y  )
+ where
+  bothC (x, y) = (Channel x, Channel y)
 
 -- | Keeps the content of the channel until the next release.
 keep ∷
