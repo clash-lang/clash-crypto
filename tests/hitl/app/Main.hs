@@ -28,7 +28,7 @@ import System.Hardware.Serialport
 import System.IO (BufferMode(..), hSetBuffering)
 import Test.Tasty
   ( TestTree, DependencyType(..)
-  , defaultMain, localOption, sequentialTestGroup, testGroup
+  , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
   )
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
@@ -196,10 +196,11 @@ main = do
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
             $ liftIO $ shake [name <> ":bitstream"]
-        , localOption (HedgehogTestLimit (Just 1))
-            $ testProperty "write bitstream" $ property
-            $ liftIO $ upload shake sem dev settings name
-        , localOption (HedgehogTestLimit (Just 100))
+        , withResource
+            (upload shake sem dev settings name)
+            (const $ return ())
+            $ const
+            $ localOption (HedgehogTestLimit (Just 100))
             $ testProperty "run HITLT" $ property p
         ]
 
