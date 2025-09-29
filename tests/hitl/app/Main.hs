@@ -366,12 +366,11 @@ hitltTimeoutErr size bs
 
 -- Useful for variable-length data.
 escapeAndTerminate ∷ ByteString → ByteString
-escapeAndTerminate = terminate . escape
-
-terminate ∷ ByteString → ByteString
-terminate bs = case BS.unsnoc bs of
-  Nothing       → BS.empty
-  Just (bs0, c) → bs0 `append` pack [0x00, 0xFF, c]
+escapeAndTerminate bs = case BS.unsnoc bs of
+  Nothing → BS.empty
+  Just (bs0, c) → escape bs0
+         `append` pack [0x00, 0xFF]
+         `append` escape (singleton c)
 
 escape ∷ ByteString → ByteString
 escape = BS.concatMap $ \case
