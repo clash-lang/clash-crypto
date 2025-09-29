@@ -42,7 +42,7 @@ module Clash.Signal.Channel
   , pattern Releasing
     -- * Combinators
   , join
-  , disjoin
+  -- , disjoin
   , filterC
   , guardC
   , muxC
@@ -60,7 +60,7 @@ import GHC.Records (HasField(..))
 
 -- | An extended option type that allows to differentiate between
 -- old and fresh data.
-data Content a = None | Fresh a | Old a
+data Content a = None | Busy | Fresh a | Old a
   deriving
     ( Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX
     , Functor, Traversable
@@ -69,6 +69,8 @@ data Content a = None | Fresh a | Old a
 instance Semigroup a ⇒ Semigroup (Content a) where
   None    <> p       = p
   p       <> None    = p
+  Busy    <> p       = p
+  p       <> Busy    = p
   Fresh x <> Fresh y = Fresh $ x <> y
   Fresh x <> Old y   = Fresh $ x <> y
   Old x   <> Fresh y = Fresh $ x <> y
@@ -95,6 +97,8 @@ instance Applicative Content where
 
   None    <*> _       = None
   _       <*> None    = None
+  Busy    <*> _       = Busy
+  _       <*> Busy    = Busy
   Fresh f <*> Fresh x = Fresh $ f x
   Fresh f <*> Old x   = Fresh $ f x
   Old f   <*> Fresh x = Fresh $ f x
@@ -105,9 +109,23 @@ instance Alternative Content where
 
   None    <|> p       = p
   p       <|> None    = p
+  Busy    <|> p       = p
+  p       <|> Busy    = p
   Fresh x <|> _       = Fresh x
   _       <|> Fresh x = Fresh x
   Old x   <|> _       = Old x
+
+-- Downgrade operator
+(<|=|>) :: Content a -> Content a -> Content a
+None  <|=|> _     = None
+_     <|=|> None  = None
+Busy  <|=|> _     = Busy
+_     <|=|> Busy  = Busy
+Old x <|=|> _     = Old x
+_     <|=|> Old x = Old x
+c     <|=|> _     = c
+
+
 
 -- | A channel is a signal that either holds a value or none.
 -- Additionally, if holding a value, the channel keeps track of the
@@ -149,6 +167,7 @@ data ProviderAction = Keep | Release | Clear
 content ∷ ∀ a dom. Channel dom a → Signal dom (Maybe a)
 content c = getContent c <&> \case
   None    → Nothing
+  Busy    → Nothing
   Fresh x → Just x
   Old x   → Just x
 
@@ -208,6 +227,7 @@ channel = Channel . mealy (~~>) False
  where
   _    ~~> (x, Release) = (True,  Fresh x)
   True ~~> (x, Keep   ) = (True,  Old x  )
+  True ~~> _            = (True,  Busy   )
   _    ~~> _            = (False, None   )
 
 -- | Turns a 'Signal' into a 'Channel' via adding a 'ProviderAction',
@@ -226,9 +246,10 @@ cachedChannel ∷
   Channel dom a
 cachedChannel = Channel . mealy (~~>) None
  where
-  _ ~~> (_, Clear)   = (None,  None   )
-  _ ~~> (x, Release) = (Old x, Fresh x)
-  c ~~> (_, Keep)    = (c,     c      )
+  None ~~> (_, Clear)   = (None,  None   )
+  _    ~~> (_, Clear)   = (Busy,  Busy   )
+  _    ~~> (x, Release) = (Old x, Fresh x)
+  c    ~~> (_, Keep)    = (c,     c      )
 
 -- | Turns a signal of 'Maybe'-wrapped values into a cached channel
 -- that releases every 'Just'-wrapped input and holds it until the
@@ -254,10 +275,10 @@ filterC f = Channel . mealy (~~>) True . getContent
   _ ~~> c@(Fresh x) = g (f x) c
   s ~~> c           = g s c
 
-  g b c = (b, if b then c else None)
+  g s c = (s, if s then c else c <|=|> Busy)
 
 -- | Restricts channel access over time: the content of the input
--- channel only passes the guard, if the Boolean selector evaluates to
+-- channel only passes the guard if the Boolean selector evaluates to
 -- @True@ at the point in time where content gets released.
 guardC ∷
   ∀ a dom.
@@ -267,10 +288,10 @@ guardC ∷
   Channel dom a
 guardC b (Channel s) = Channel $ mealy (~~>) False $ bundle (b, s)
  where
-  _     ~~> (True,  Fresh x) = (True,  Fresh x)
-  _     ~~> (False, Fresh _) = (False, None   )
-  True  ~~> (_,     cnt    ) = (True,  cnt    )
-  False ~~> (_,     _      ) = (False, None   )
+  _     ~~> (True,  Fresh x) = (True,  Fresh x       )
+  _     ~~> (False, Fresh _) = (False, Busy          )
+  True  ~~> (_,     cnt    ) = (True,  cnt           )
+  False ~~> (_,     cnt    ) = (False, cnt <|=|> Busy)
 
 -- | A channel specific variant of 'mux' that reads from a 'Signal' to
 -- mux between the two possible alternatives.
@@ -315,6 +336,7 @@ enhance put get compute =
   channel . mealy (~~>) (Releasing undefined) . getContent
  where
   _           ~~> None    = (Releasing undefined, (undefined,  Clear  ))
+  _           ~~> Busy    = (Releasing undefined, (undefined,  Clear  ))
   _           ~~> Fresh x = (Computing $ put x  , (undefined,  Clear  ))
   Releasing s ~~> Old x   = (Releasing s        , (get x s,    Keep   ))
   Computing s ~~> Old x   = case compute x s of
@@ -342,17 +364,18 @@ join (Channel x) (Channel y) =
 -- left or right output channel, where the 'Left' and 'Right'
 -- constructors determine the corresponding destination. Both output
 -- channels will never hold some content at the same time.
-disjoin ∷
-  ∀ a b dom. HiddenClockResetEnable dom ⇒
-  Channel dom (Either a b) → (Channel dom a, Channel dom b)
-disjoin (Channel s) = bothC $ unbundle $ s <&> \case
-  None            → (None   , None   )
-  Fresh (Left x)  → (Fresh x, None   )
-  Fresh (Right y) → (None   , Fresh y)
-  Old   (Left x)  → (Old x  , None   )
-  Old   (Right y) → (None   , Old y  )
- where
-  bothC (x, y) = (Channel x, Channel y)
+-- disjoin ∷
+--   ∀ a b dom. HiddenClockResetEnable dom ⇒
+--   Channel dom (Either a b) → (Channel dom a, Channel dom b)
+-- disjoin (Channel s) = bothC $ unbundle $ s <&> \case
+--   None            → (None   , None   )
+--   None            → (None   , None   )
+--   Fresh (Left x)  → (Fresh x, None   )
+--   Fresh (Right y) → (None   , Fresh y)
+--   Old   (Left x)  → (Old x  , None   )
+--   Old   (Right y) → (None   , Old y  )
+--  where
+--   bothC (x, y) = (Channel x, Channel y)
 
 -- | Keeps the content of the channel until the next release.
 keep ∷
@@ -430,8 +453,10 @@ zipRecent f (Channel x) (Channel y) =
  where
   _ ~~> (None   , _      ) = (0, None         )
   _ ~~> (_      , None   ) = (0, None         )
+  _ ~~> (Busy   , _      ) = (0, Busy     )
+  _ ~~> (_      , Busy   ) = (0, Busy     )
   _ ~~> (Fresh u, Fresh v) = (1, Fresh $ f u v)
   _ ~~> (Old u  , Fresh v) = (1, Fresh $ f u v)
-  0 ~~> (_      , Old _  ) = (0, None         )
+  0 ~~> (_      , Old _  ) = (0, Busy         )
   _ ~~> (Old u  , Old v  ) = (1, Old $ f u v  )
-  _ ~~> (Fresh _, Old _  ) = (0, None         )
+  _ ~~> (Fresh _, Old _  ) = (0, Busy         )
