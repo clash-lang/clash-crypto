@@ -30,6 +30,11 @@ import Clash.Signal.Extra (apWhen, regEnN)
 
 import Data.Constraint.Nat.Extra (CancelMultiple, KeepsPositiveIfMultiple)
 
+import Data.Proxy (Proxy)
+
+-- import GHC.TypeNats.Proof (Rewrite(..), using)
+
+
 combinatorialAES ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, KeyType alg) →
@@ -41,3 +46,4 @@ combinatorialAES input
   = fmap
       (\(pt, key) -> cipher alg pt (keyExpansion alg key))
       input
+
