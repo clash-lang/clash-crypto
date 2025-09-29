@@ -28,7 +28,7 @@ small letter as well.
 
 module Clash.Crypto.Cipher.AES.Specification
   ( -- All functions that are present in the FIPS.
-    AESFunctions(..),
+    AESFunctions(..),AESFacts(..), KnownAES(..),
     aesFunctional,
     -- Type of all specific AES functions.
     AES(..), 
