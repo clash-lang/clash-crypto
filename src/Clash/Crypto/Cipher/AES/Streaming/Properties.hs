@@ -45,11 +45,9 @@ data AESStreamFacts (alg ∷ AES) where
     , KnownNat (Nk alg)
     , KnownNat (KeyLength alg)
     , KnownNat (Nr alg)
-    -- , AESInitials alg
     , AESFunctions alg
     , 1 ≤ BlockSize alg
     , 1 ≤ BlockSize alg `Div` 8
-    -- , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
     , 1 ≤ Nk alg -- due to the expansion algorithm
     , 1 ≤ Nr alg -- due to the expansion algorithm

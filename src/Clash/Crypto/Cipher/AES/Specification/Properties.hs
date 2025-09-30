@@ -32,23 +32,12 @@ data AESFacts (alg ∷ AES) where
     , KnownNat (Nk alg)
     , KnownNat (KeyLength alg)
     , KnownNat (Nr alg)
-    -- , AESInitials alg
     , AESFunctions alg
     , 1 ≤ BlockSize alg
     , 1 ≤ BlockSize alg `Div` 8
-    -- , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
     , 1 ≤ Nk alg -- due to the expansion algorithm
     , 1 ≤ Nr alg -- due to the expansion algorithm
-    -- , 1 ≤ MessageDigestSize alg
-    -- , 1 ≤ HashValueWords alg * WordSize alg
-    -- , 2 ^ SizeBits alg
-    --     ~ BlockSize alg * ((2 ^ SizeBits alg) `Div` BlockSize alg)
-    -- , 2 * BlockSize alg ≤ (2 ^ SizeBits alg) `Div` BlockSize alg
-    -- , MessageDigestSize alg ≤ HashValueWords alg * WordSize alg
-    -- , MessageDigestSize alg ≤ BlockSize alg
-    -- , BlockSize alg ~ 16 * WordSize alg
-    -- , MessageDigestSize alg `Mod` 8 ~ 0
     ) ⇒
     Proxy alg →
     AESFacts alg

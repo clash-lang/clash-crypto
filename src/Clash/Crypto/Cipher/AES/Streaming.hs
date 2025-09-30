@@ -16,3 +16,32 @@ module Clash.Crypto.Cipher.AES.Streaming
     , KnownAESStream(..)
   ) where
 import Clash.Crypto.Cipher.AES.Streaming.Properties
+import Clash.Crypto.Cipher.AES.Streaming.Algorithm as Alg
+import Clash.Crypto.Cipher.AES.Specification as Spec
+import Clash.Prelude
+import Clash.Signal.Channel
+
+aesECBencryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  KnownAESStream alg, AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒     
+    Channel dom (Spec.InType alg, Spec.KeyType alg) →
+    -- ^ input stream ^ key stream
+    Channel dom (Spec.OutType alg)
+    -- ^ response channel  
+aesECBencryption input
+  | AESStreamFacts{} ← knownAESStream @alg
+  =  Alg.cipher @alg (zipC (fst unzipInput) expansion)
+    where
+      expansion = Alg.keyExpansion @alg (snd unzipInput)
+      unzipInput = unzipC input
+
+aesECBdecryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  KnownAESStream alg, AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒     
+    Channel dom (Spec.InType alg, Spec.KeyType alg) →
+    -- ^ input stream ^ key stream
+    Channel dom (Spec.OutType alg)
+    -- ^ response channel  
+aesECBdecryption input
+  | AESStreamFacts{} ← knownAESStream @alg
+  =  Alg.invCipher @alg (zipC (fst unzipInput) expansion)
+    where
+      expansion = Alg.keyExpansion @alg (snd unzipInput)
+      unzipInput = unzipC input
+
