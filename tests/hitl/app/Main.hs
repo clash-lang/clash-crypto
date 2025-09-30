@@ -30,7 +30,7 @@ import System.Hardware.Serialport
 import System.IO (BufferMode(..), hSetBuffering)
 import Test.Tasty
   ( TestTree, DependencyType(..)
-  , defaultMain, localOption, sequentialTestGroup, testGroup
+  , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
   )
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
@@ -198,10 +198,11 @@ main = do
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
             $ liftIO $ shake [name <> ":bitstream"]
-        , localOption (HedgehogTestLimit (Just 1))
-            $ testProperty "write bitstream" $ property
-            $ liftIO $ upload shake sem dev settings name
-        , localOption (HedgehogTestLimit (Just 100))
+        , withResource
+            (upload shake sem dev settings name)
+            (const $ return ())
+            $ const
+            $ localOption (HedgehogTestLimit (Just 100))
             $ testProperty "run HITLT" $ property p
         ]
 
@@ -368,12 +369,11 @@ hitltTimeoutErr size bs
 
 -- Useful for variable-length data.
 escapeAndTerminate ∷ ByteString → ByteString
-escapeAndTerminate = terminate . escape
-
-terminate ∷ ByteString → ByteString
-terminate bs = case BS.unsnoc bs of
-  Nothing       → BS.empty
-  Just (bs0, c) → bs0 `append` pack [0x00, 0xFF, c]
+escapeAndTerminate bs = case BS.unsnoc bs of
+  Nothing → BS.empty
+  Just (bs0, c) → escape bs0
+         `append` pack [0x00, 0xFF]
+         `append` escape (singleton c)
 
 escape ∷ ByteString → ByteString
 escape = BS.concatMap $ \case
