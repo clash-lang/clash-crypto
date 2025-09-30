@@ -46,12 +46,11 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming.Algorithm"
 
       testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion,
       testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion,
-      testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion
-      -- ,
+      testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion,
 
-      -- testProperty "KeyExpansionIEC version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansionIEC @AES128) Spec.keyExpansionIEC,
-      -- testProperty "KeyExpansionIEC version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansionIEC @AES192) Spec.keyExpansionIEC,
-      -- testProperty "KeyExpansionIEC version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansionIEC @AES256) Spec.keyExpansionIEC
+      testProperty "KeyExpansionIEC version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansionIEC @AES128) Spec.keyExpansionIEC,
+      testProperty "KeyExpansionIEC version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansionIEC @AES192) Spec.keyExpansionIEC,
+      testProperty "KeyExpansionIEC version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansionIEC @AES256) Spec.keyExpansionIEC
   ]
       ]
 

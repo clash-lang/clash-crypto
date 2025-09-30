@@ -52,6 +52,7 @@ data AESStreamFacts (alg ∷ AES) where
     -- , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
     , 1 ≤ Nk alg -- due to the expansion algorithm
+    , 1 ≤ Nr alg -- due to the expansion algorithm
     , AESKeyExpansion alg
     ) ⇒
     Proxy alg →
