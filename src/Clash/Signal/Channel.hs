@@ -115,16 +115,6 @@ instance Alternative Content where
   _       <|> Fresh x = Fresh x
   Old x   <|> _       = Old x
 
--- "Downgrade" operator
-(<|=|>) :: Content a -> Content a -> Content a
-None  <|=|> _     = None
-_     <|=|> None  = None
-Busy  <|=|> _     = Busy
-_     <|=|> Busy  = Busy
-Old x <|=|> _     = Old x
-_     <|=|> Old x = Old x
-c     <|=|> _     = c
-
 -- | A channel is a signal that either holds a value or none.
 -- Additionally, if holding a value, the channel keeps track of the
 -- held value being fresh, i.e., updated at the current cycle, or not.
@@ -273,7 +263,7 @@ filterC f = Channel . mealy (~~>) True . getContent
   _ ~~> c@(Fresh x) = g (f x) c
   s ~~> c           = g s c
 
-  g s c = (s, if s then c else c <|=|> Busy)
+  g s c = (s, if s then c else Busy)
 
 -- | Restricts channel access over time: the content of the input
 -- channel only passes the guard if the Boolean selector evaluates to
@@ -286,10 +276,11 @@ guardC ∷
   Channel dom a
 guardC b (Channel s) = Channel $ mealy (~~>) False $ bundle (b, s)
  where
-  _     ~~> (True,  Fresh x) = (True,  Fresh x       )
-  _     ~~> (False, Fresh _) = (False, Busy          )
-  True  ~~> (_,     cnt    ) = (True,  cnt           )
-  False ~~> (_,     cnt    ) = (False, cnt <|=|> Busy)
+  _     ~~> (True,  Fresh x) = (True,  Fresh x)
+  _     ~~> (False, Fresh _) = (False, Busy   )
+  True  ~~> (_,     cnt    ) = (True,  cnt    )
+  _     ~~> (_,     None   ) = (False, None   )
+  _     ~~> (_,     _      ) = (False, Busy   )
 
 -- | A channel specific variant of 'mux' that reads from a 'Signal' to
 -- mux between the two possible alternatives.
@@ -333,13 +324,12 @@ enhance ∷
 enhance put get compute =
   channel . mealy (~~>) (Releasing undefined) . getContent
  where
-  _           ~~> None    = (Releasing undefined, (undefined,  Clear  ))
-  _           ~~> Busy    = (Releasing undefined, (undefined,  Clear  ))
   _           ~~> Fresh x = (Computing $ put x  , (undefined,  Clear  ))
   Releasing s ~~> Old x   = (Releasing s        , (get x s,    Keep   ))
   Computing s ~~> Old x   = case compute x s of
     Releasing r →           (Releasing r        , (get x r,    Release))
     Computing r →           (Computing r        , (undefined,  Clear  ))
+  _           ~~> _       = (Releasing undefined, (undefined,  Clear  ))
 
 -- | Joins two channels together. The joint channel always outputs the
 -- most recently released content of the two input channels. The
