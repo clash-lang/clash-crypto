@@ -62,5 +62,5 @@ data AESStreamFacts (alg ∷ AES) where
 -- instance of the class.
 class    KnownAESStream alg       where knownAESStream ∷ AESStreamFacts alg
 instance KnownAESStream AES128    where knownAESStream = AESStreamFacts Proxy
--- instance KnownAESStream AES192    where knownAESStream = AESStreamFacts Proxy
+instance KnownAESStream AES192    where knownAESStream = AESStreamFacts Proxy
 -- instance KnownAESStream AES256    where knownAESStream = AESStreamFacts Proxy
