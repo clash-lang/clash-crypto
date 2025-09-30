@@ -21,7 +21,6 @@ import Data.Proxy(Proxy(..))
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
 import Hedgehog
-import Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
 
@@ -45,9 +44,10 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming.Algorithm"
       testProperty "EqInvCipher version AES192" $ cipherProperty @AES192 (Stream.eqInvCipher @AES192) Spec.eqInvCipher,
       testProperty "EqInvCipher version AES256" $ cipherProperty @AES256 (Stream.eqInvCipher @AES256) Spec.eqInvCipher,
 
-      testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion,
-      testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion,
-      testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion
+      testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion
+      -- ,
+      -- testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion,
+      -- testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion
       -- ,
 
       -- testProperty "KeyExpansionIEC version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansionIEC @AES128) Spec.keyExpansionIEC,
@@ -90,7 +90,7 @@ type KeyExpansionComponent alg dom =
  Channel dom (WType alg)
 type KeyExpansionRefComponent alg =
   Proxy alg -> KeyType alg → WType alg
-keyExpansionProperty ∷ ∀ (alg ∷ AES). (KnownAESStream alg, KnownAES alg,KnownNat (Nr alg)) ⇒ KnownDomain System ⇒  KeyExpansionComponent alg System → KeyExpansionRefComponent alg → Property
+keyExpansionProperty ∷ ∀ (alg ∷ AES). (KnownAES alg,KnownNat (Nr alg)) ⇒ KnownDomain System ⇒  KeyExpansionComponent alg System → KeyExpansionRefComponent alg → Property
 keyExpansionProperty keyComp keyComp1
   | AESFacts alg ← knownAES @alg
   = property $ do

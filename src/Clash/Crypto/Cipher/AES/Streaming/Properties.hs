@@ -30,8 +30,6 @@ import Clash.Crypto.Cipher.AES.Specification.Properties as Prop
 import Clash.Crypto.Cipher.AES.Streaming.Algorithm
 
 -- Interface liberies:
-import Clash.Prelude
-import Clash.Signal.Channel
 import Language.Haskell.Unicode (type (≤))
 
 import Clash.Prelude
@@ -64,5 +62,5 @@ data AESStreamFacts (alg ∷ AES) where
 -- instance of the class.
 class    KnownAESStream alg       where knownAESStream ∷ AESStreamFacts alg
 instance KnownAESStream AES128    where knownAESStream = AESStreamFacts Proxy
-instance KnownAESStream AES192    where knownAESStream = AESStreamFacts Proxy
-instance KnownAESStream AES256    where knownAESStream = AESStreamFacts Proxy
+-- instance KnownAESStream AES192    where knownAESStream = AESStreamFacts Proxy
+-- instance KnownAESStream AES256    where knownAESStream = AESStreamFacts Proxy
