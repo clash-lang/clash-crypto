@@ -1,5 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 import Prelude
 
 import Control.Concurrent.QSem (QSem, newQSem, waitQSem, signalQSem)

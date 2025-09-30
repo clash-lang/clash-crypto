@@ -53,7 +53,11 @@ data SHAFacts (alg ∷ SHA) where
 -- required properties, which are proven automatically for each
 -- instance of the class.
 class    KnownSHA alg       where knownSHA ∷ SHAFacts alg
-instance KnownSHA SHA1      where knownSHA = SHAFacts Proxy
+instance
+ {-# DEPRECATED
+   [ "SHA1 phases out by Dec. 31, 2030 and shall not be used in modern"
+   , "applications any more (cf. https://doi.org/10.6028/NIST.SP.800-131Ar2)."
+   ] #-} KnownSHA SHA1      where knownSHA = SHAFacts Proxy
 instance KnownSHA SHA224    where knownSHA = SHAFacts Proxy
 instance KnownSHA SHA256    where knownSHA = SHAFacts Proxy
 instance KnownSHA SHA384    where knownSHA = SHAFacts Proxy
