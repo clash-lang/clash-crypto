@@ -44,9 +44,9 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming.Algorithm"
       testProperty "EqInvCipher version AES192" $ cipherProperty @AES192 (Stream.eqInvCipher @AES192) Spec.eqInvCipher,
       testProperty "EqInvCipher version AES256" $ cipherProperty @AES256 (Stream.eqInvCipher @AES256) Spec.eqInvCipher,
 
-      testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion
+      testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion,
+      testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion
       -- ,
-      -- testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion,
       -- testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion
       -- ,
 
