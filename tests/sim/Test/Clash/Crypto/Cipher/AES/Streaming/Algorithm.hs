@@ -31,24 +31,28 @@ import Clash.Crypto.Cipher.AES.Streaming.Algorithm as Stream
 import qualified Data.List as List
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming.Algorithm"
-  [ localOption (HedgehogTestLimit (Just 10)) $ testGroup "Verification equality of hardware and functional"[
+  [ localOption (HedgehogTestLimit (Just 10)) $ testGroup "Verification equality of hardware and functional"
+  [
       testProperty "Cipher version AES128" $ cipherProperty @AES128 (Stream.cipher @AES128) Spec.cipher,
-      localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Cipher version AES192" $ cipherProperty @AES192 (Stream.cipher @AES192) Spec.cipher,
-      localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Cipher version AES256" $ cipherProperty @AES256 (Stream.cipher @AES256) Spec.cipher,
       
       testProperty "InvCipher version AES128" $ cipherProperty @AES128 (Stream.invCipher @AES128) Spec.invCipher,
-      localOption (HedgehogTestLimit (Just 10)) $
       testProperty "InvCipher version AES192" $ cipherProperty @AES192 (Stream.invCipher @AES192) Spec.invCipher,
-      localOption (HedgehogTestLimit (Just 10)) $
       testProperty "InvCipher version AES256" $ cipherProperty @AES256 (Stream.invCipher @AES256) Spec.invCipher,
       
       testProperty "EqInvCipher version AES128" $ cipherProperty @AES128 (Stream.eqInvCipher @AES128) Spec.eqInvCipher,
-      localOption (HedgehogTestLimit (Just 10)) $
       testProperty "EqInvCipher version AES192" $ cipherProperty @AES192 (Stream.eqInvCipher @AES192) Spec.eqInvCipher,
-      localOption (HedgehogTestLimit (Just 10)) $
-      testProperty "EqInvCipher version AES256" $ cipherProperty @AES256 (Stream.eqInvCipher @AES256) Spec.eqInvCipher
+      testProperty "EqInvCipher version AES256" $ cipherProperty @AES256 (Stream.eqInvCipher @AES256) Spec.eqInvCipher,
+
+      testProperty "KeyExpansion version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansion @AES128) Spec.keyExpansion,
+      testProperty "KeyExpansion version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansion @AES192) Spec.keyExpansion,
+      testProperty "KeyExpansion version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansion @AES256) Spec.keyExpansion
+      -- ,
+
+      -- testProperty "KeyExpansionIEC version AES128" $ keyExpansionProperty @AES128 (Stream.keyExpansionIEC @AES128) Spec.keyExpansionIEC,
+      -- testProperty "KeyExpansionIEC version AES192" $ keyExpansionProperty @AES192 (Stream.keyExpansionIEC @AES192) Spec.keyExpansionIEC,
+      -- testProperty "KeyExpansionIEC version AES256" $ keyExpansionProperty @AES256 (Stream.keyExpansionIEC @AES256) Spec.keyExpansionIEC
   ]
       ]
 
@@ -67,8 +71,6 @@ cipherProperty cipherComp cipherComp1
     let f' = compute (inputAsInType, wAsInType)
     f' === cipherComp1 alg inputAsInType wAsInType
     where
-    cipherError =
-        error "Since the modulo of the field is prime, the inverse always exists."
     compute input
         = fromMaybe (error "The returned list was empty")
             $ getFirst
@@ -83,22 +85,19 @@ cipherProperty cipherComp cipherComp1
             $ Keep : Keep : Release : List.repeat Keep
 
 type KeyExpansionComponent alg dom =
- HiddenClockResetEnable dom =>
- Channel dom (InType alg, WType alg) ->
- Channel dom (OutType alg)
+ HiddenClockResetEnable dom ⇒ 
+ Channel dom (KeyType alg) → 
+ Channel dom (WType alg)
 type KeyExpansionRefComponent alg =
-  Proxy alg -> InType alg -> WType alg -> OutType alg
-keyExpansionProperty ∷ ∀ (alg ∷ AES). (KnownAES alg) ⇒ KnownDomain System ⇒  CipherComponent alg System → CipherRefComponent alg → Property
-keyExpansionProperty cipherComp cipherComp1
+  Proxy alg -> KeyType alg → WType alg
+keyExpansionProperty ∷ ∀ (alg ∷ AES). (KnownAESStream alg, KnownAES alg,KnownNat (Nr alg)) ⇒ KnownDomain System ⇒  KeyExpansionComponent alg System → KeyExpansionRefComponent alg → Property
+keyExpansionProperty keyComp keyComp1
   | AESFacts alg ← knownAES @alg
   = property $ do
-    inputAsInType ← forAll $ genVec @(Nb alg) (genVec @(WordSize alg) genDefinedBitVector) 
-    wAsInType     ← forAll $ genVec @((Nr alg + 1) * 4) (genVec @(WordSize alg) genDefinedBitVector) 
-    let f' = compute (inputAsInType, wAsInType)
-    f' === cipherComp1 alg inputAsInType wAsInType
+    keyAsInType   ← forAll $ genVec @(Nk alg) (genVec @(WordSize alg) genDefinedBitVector) 
+    let f' = compute keyAsInType
+    f' === keyComp1 alg keyAsInType
     where
-    cipherError =
-        error "Since the modulo of the field is prime, the inverse always exists."
     compute input
         = fromMaybe (error "The returned list was empty")
             $ getFirst
@@ -106,7 +105,7 @@ keyExpansionProperty cipherComp cipherComp1
             $ sampleN @System 10000000
             $ withClockResetEnable @System clockGen resetGen enableGen
             $ newsfeed
-            $ cipherComp
+            $ keyComp
             $ channel
             $ fmap (input, )
             $ fromList
