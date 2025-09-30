@@ -153,7 +153,7 @@ instance AESFunctions AES256 where
     keyExpansion ∷ Proxy AES256 → KeyType AES256 → WType AES256
     keyExpansion alg key = takeI (keyExpansionInBlocks alg key)
         where 
-            keyExpansionInBlocks ∷ Proxy AES256 → KeyType AES256 → Vec (Nk AES256 * (Nr AES256 + 3) * (Nr AES256 + 3)) (WordType AES256)
+            keyExpansionInBlocks ∷ Proxy AES256 → KeyType AES256 → Vec (Nk AES256 * (Nr AES256 + 3)) (WordType AES256)
             keyExpansionInBlocks alg1 key1 = concat (scanl (middelCalculation alg1) key1 (iterateI (+1) 0))
                 where
                 middelCalculation ∷ Proxy AES256 → KeyType AES256 → Integer → KeyType AES256
