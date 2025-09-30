@@ -43,16 +43,10 @@ import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
 import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
 -- Test AES128
 import Test.Clash.Crypto.Cipher.AES.GoldenReference as Reference 
-import Crypto.Cipher.Types
-import Crypto.Error
 
 import qualified Crypto.Random.Types as CRT
 
 import Data.ByteString (ByteString) 
-import Crypto.Cipher.AES 
-import Crypto.Cipher.Types 
-import Crypto.Random (getRandomBytes)
-import Crypto.Error (throwCryptoError)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 

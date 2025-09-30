@@ -12,15 +12,15 @@ Streaming based blockcipher algorithms according to
 
 module Clash.Crypto.Cipher.AES
   ( -- All functions that are present in the FIPS.
-    AESFunctions(..),
+    -- AESFunctions(..),
     -- Type of all specific AES functions.
-
+    AES(..),
     -- Verification
     KnownAES(..),
     AESFacts(..),
     -- Types
-    InType, OutType, StateType,
-    WordType, RoundWType, WordSize, Nk, Nb, Nr, KeyType,
+    InType, OutType, KeyType, StateType,
+    WordType, RoundWType, WordSize, Nk, Nb, Nr,
     -- Definitions
     (⊕), subBytes, invSubBytes,
     mixColumns, invMixColumns,
@@ -30,6 +30,9 @@ module Clash.Crypto.Cipher.AES
       --Verification
     , AESStreamFacts(..)
     , KnownAESStream(..)
+    , aesECBencryption
+    , aesECBdecryption
+    , AESKeyExpansion(..)
   ) where
 
 -- import Clash.Prelude

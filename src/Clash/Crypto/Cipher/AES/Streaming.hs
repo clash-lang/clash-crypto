@@ -14,6 +14,9 @@ Streaming based implementation of FIPS 197,
 module Clash.Crypto.Cipher.AES.Streaming
   (   AESStreamFacts(..)
     , KnownAESStream(..)
+    , aesECBencryption
+    , aesECBdecryption
+    , AESKeyExpansion(..)
   ) where
 import Clash.Crypto.Cipher.AES.Streaming.Properties
 import Clash.Crypto.Cipher.AES.Streaming.Algorithm as Alg

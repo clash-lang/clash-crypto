@@ -50,13 +50,17 @@ import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 import qualified Crypto.MAC.HMAC     as HMAC (hmac)
-
+import qualified Test.Clash.Crypto.Cipher.AES.GoldenReference as REFAES (encryptoECB,  decryptoECB)
 import Clash.Prelude
   ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
   , toList, resize,  bitCoerce, natToNum
   )
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
+  )
+import Clash.Crypto.Cipher.AES
+  ( AES(..), AESKeyExpansion(..), KnownAESStream(..), KnownAES(..), AESStreamFacts(..),
+   AESacts(..), InType, OutType, KeyType, aesECBencryption, aesECBdecryption
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
@@ -88,7 +92,13 @@ main = do
   run sem dev settings
     = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
-          testGroup "Clash.Crypto.Hash.SHA"
+            testGroup "Clash.Crypto.Cipher.AES"
+            [ -- we don't test the >128 variants here, as synthesis
+              -- times of the downstream tools for these are too
+              -- exorbitant.
+              testAES @AES128 "AES" sem dev settings
+            ] ,
+            testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
@@ -154,7 +164,19 @@ main = do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
-
+  testAES ∷
+    ∀ alg.
+    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testAES sem dev settings
+    | AESFacts alg ← knownAES @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings name $ do
+        bs ← forAll $ Gen.bytes $ Range.linear 80 100
+        runHitltAES @alg sem dev settings bs
   testSHA ∷
     ∀ alg.
     (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
@@ -207,6 +229,19 @@ main = do
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
+runHitltAES ∷
+  ∀ (alg ∷ AES).
+  (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  PropertyT IO ()
+runHitltAES sem dev settings input | AESFacts alg ← knownAES @alg =
+ let
+  bs = escapeAndTerminate input
+  eq = encryptoECB alg input
+ in runHitlt @((Nb alg * Nb alg * Nb alg * Nk alg) `Div` 8) sem dev settings bs eq
 
 runHitltInverseModulo ∷
   QSem →
