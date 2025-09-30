@@ -12,8 +12,8 @@ Streaming based implementation of FIPS 197,
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.Cipher.AES.Streaming
-  ( AESFacts(..)
-  , KnownAES(..)
+  (   AESStreamFacts(..)
+    , KnownAESStream(..)
   ) where
 
 

@@ -20,18 +20,19 @@ streaming.
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Clash.Crypto.Cipher.AES.Streaming.Properties   
-( AESFacts(..)
-  , KnownAES(..)
+( AESStreamFacts(..)
+  , KnownAESStream(..)
   ) where
 import Data.Proxy(Proxy(..))
 import Clash.Crypto.Cipher.AES.Specification
+import Clash.Crypto.Cipher.AES.Specification.Types
 import Clash.Crypto.Cipher.AES.Specification.Properties as Prop
 import Clash.Crypto.Cipher.AES.Streaming.Algorithm
 
 -- Interface liberies:
 import Clash.Prelude
 import Clash.Signal.Channel
-
+import Language.Haskell.Unicode (type (≤))
 
 import Clash.Prelude
 
@@ -39,8 +40,21 @@ import Clash.Prelude
 -- | In chapter 6 the constraints are defined.
 data AESStreamFacts (alg ∷ AES) where
   AESStreamFacts ∷
-    ( Prop.KnownAES alg,
-      AESKeyExpansion alg
+    ( Prop.KnownAES alg
+    , KnownNat (WordSize alg)
+    , KnownNat (Nb alg)
+    , KnownNat (BlockSize alg)
+    , KnownNat (Nk alg)
+    , KnownNat (KeyLength alg)
+    , KnownNat (Nr alg)
+    -- , AESInitials alg
+    , AESFunctions alg
+    , 1 ≤ BlockSize alg
+    , 1 ≤ BlockSize alg `Div` 8
+    -- , 1 ≤ ScheduleCount alg
+    , 1 ≤ WordSize alg
+    , 1 ≤ Nk alg -- due to the expansion algorithm
+    , AESKeyExpansion alg
     ) ⇒
     Proxy alg →
     AESStreamFacts alg
@@ -48,7 +62,7 @@ data AESStreamFacts (alg ∷ AES) where
 -- | We utilize the type checker to provide evidence for all of the
 -- required properties, which are proven automatically for each
 -- instance of the class.
-class    KnownAESStream alg       where knownAES ∷ AESStreamFacts alg
-instance KnownAESStream AES128    where knownAES = AESStreamFacts Proxy
-instance KnownAESStream AES192    where knownAES = AESStreamFacts Proxy
-instance KnownAESStream AES256    where knownAES = AESStreamFacts Proxy
+class    KnownAESStream alg       where knownAESStream ∷ AESStreamFacts alg
+instance KnownAESStream AES128    where knownAESStream = AESStreamFacts Proxy
+instance KnownAESStream AES192    where knownAESStream = AESStreamFacts Proxy
+instance KnownAESStream AES256    where knownAESStream = AESStreamFacts Proxy

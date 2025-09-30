@@ -25,7 +25,11 @@ module Clash.Crypto.Cipher.AES
     (⊕), subBytes, invSubBytes,
     mixColumns, invMixColumns,
     shiftRows, invShiftRows,
-    addRoundKey, invAddRoundKey,
+    addRoundKey, invAddRoundKey
+    -- Streaming
+      --Verification
+    , AESStreamFacts(..)
+    , KnownAESStream(..)
   ) where
 
 -- import Clash.Prelude
@@ -35,7 +39,7 @@ module Clash.Crypto.Cipher.AES
 -- import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Cipher.AES.Specification
--- import Clash.Crypto.Cipher.AES.Streaming
+import Clash.Crypto.Cipher.AES.Streaming
 
 
 -- | Reads serialized messages from an input stream, calculates their
