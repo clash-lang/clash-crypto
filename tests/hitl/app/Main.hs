@@ -60,7 +60,7 @@ import Clash.Crypto.Hash.SHA
   )
 import Clash.Crypto.Cipher.AES
   ( AES(..), AESKeyExpansion(..), KnownAESStream(..), KnownAES(..), AESStreamFacts(..),
-   AESacts(..), InType, OutType, KeyType, aesECBencryption, aesECBdecryption
+   AESFacts(..), InType, OutType, KeyType, aesECBencryption, aesECBdecryption
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
