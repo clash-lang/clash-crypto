@@ -148,7 +148,7 @@ invCipher  input
       CipherLast 1                       → ((invSubBytes state,w),                   CipherLast 0)
       CipherLast 0                       → ((invAddRoundKey state (last w),w),        CipherFin)
 data KeyMode
-  = KeyStart | KeyNew (Index 2) Integer | KeyLast (Index 4) Integer | KeyFin | KeyEnd
+  = KeyStart | KeyProsXOR (Index 3) Integer | KeyProsLastW (Index 4) Integer | KeyFin | KeyEnd
   deriving (Generic, NFDataX, Show, Eq)
 class AESKeyExpansion (alg ∷ AES) where
     keyExpansion ∷ (Spec.KnownAES alg, HiddenClockResetEnable dom) ⇒
@@ -178,13 +178,13 @@ instance AESKeyExpansion AES128 where
           = (, mode0 /= KeyEnd) $ case mode0 of
           KeyEnd                             → (s0,                                                                             mode0)
           KeyFin                             → (s0,                                                                             KeyEnd)
-          KeyStart                           → (s0,                                                                             KeyLast 3 (natToInteger @(Nr alg)))
-          KeyLast 3 i                        → ((state, rotWord lastState ,w),                                                  KeyLast 2 i)
-          KeyLast 2 i                        → ((state, subWord lastState ,w),                                                  KeyLast 1 i)
-          KeyLast 1 i                        → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),     KeyLast 0 i)
-          KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i) -- TODO possible the longest path, reduce this statement to obtain a shorter path.
-          KeyNew 0 (0)                       → (s0,                                                                             KeyFin)
-          KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
+          KeyStart                           → (s0,                                                                             KeyProsLastW 3 (natToInteger @(Nr alg)))
+          KeyProsLastW 3 i                   → ((state, rotWord lastState ,w),                                                  KeyProsLastW 2 i)
+          KeyProsLastW 2 i                   → ((state, subWord lastState ,w),                                                  KeyProsLastW 1 i)
+          KeyProsLastW 1 i                   → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),     KeyProsLastW 0 i)
+          KeyProsLastW 0 i                   → ((postscanl xorWord lastState state, lastState , w),                             KeyProsXOR 0 i)
+          KeyProsXOR 0 (0)                   → (s0,                                                                             KeyFin)
+          KeyProsXOR 0 i                     → ((state, last state, shiftNewPart w state),                                      KeyProsLastW 3 (i - 1))
           
         shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES128) ⇒ WType alg → KeyType alg -> WType alg
         shiftNewPart w state = fst (shiftInAtN w state)
@@ -209,51 +209,57 @@ instance AESKeyExpansion AES192 where
         compute _ (s0@(state, lastState, w), mode0) 
           | AESFacts alg ← knownAES @alg
           = (, mode0 /= KeyEnd) $ case mode0 of
-          KeyEnd                             → (s0,                                                                             mode0)
-          KeyFin                             → (s0,                                                                             KeyEnd)
-          KeyStart                           → (s0,                                                                             KeyLast 3 (natToInteger @(Nr alg)))
-          KeyLast 3 i                        → ((state, rotWord lastState ,w),                                                  KeyLast 2 i)
-          KeyLast 2 i                        → ((state, subWord lastState ,w),                                                  KeyLast 1 i)
-          KeyLast 1 i                        → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),     KeyLast 0 i)
-          KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i) -- TODO possible the longest path, reduce this statement to obtain a shorter path.
-          KeyNew 0 (1)                       → (s0,                                                                             KeyFin)
-          KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
+          KeyEnd                             → (s0,                                                                                  mode0)
+          KeyFin                             → (s0,                                                                                  KeyEnd)
+          KeyStart                           → (s0,                                                                                  KeyProsLastW 3 (natToInteger @(Nr alg)))
+          KeyProsLastW 3 i                   → ((state, rotWord lastState ,w),                                                       KeyProsLastW 2 i)
+          KeyProsLastW 2 i                   → ((state, subWord lastState ,w),                                                       KeyProsLastW 1 i)
+          KeyProsLastW 1 i                   → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),          KeyProsLastW 0 i)
+          KeyProsLastW 0 i                   → ((postscanl xorWord lastState state, lastState , w),                                  KeyProsXOR 0 i)
+          KeyProsXOR 0 (1)                   → (s0,                                                                                  KeyFin)
+          KeyProsXOR 0 i                     → ((state, last state, shiftNewPart w state),                                           KeyProsLastW 3 (i - 1))
           
         shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES192) ⇒ Vec (Nk alg * Nr alg) (WordType alg) → KeyType alg -> Vec (Nk alg * Nr alg) (WordType alg)
         shiftNewPart w state = fst (shiftInAtN w state)
 
--- instance AESKeyExpansion AES256 where
---   keyExpansion ∷
---       (Spec.KnownAES AES256, HiddenClockResetEnable dom) ⇒
---       Channel dom (KeyType AES256) →
---       -- ^ input stream ^ key stream
---       Channel dom (WType AES256)
---       -- ^ response channel
---   keyExpansion = enhance put get compute
---       where
---         put ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
---         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
---           | AESFacts _ ← knownAES @alg
---           = ((key, last key, repeat  @(((Nr alg + 1) * 4) -  Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
+instance AESKeyExpansion AES256 where
+  keyExpansion ∷
+      (Spec.KnownAES AES256, HiddenClockResetEnable dom) ⇒
+      Channel dom (KeyType AES256) →
+      -- ^ input stream ^ key stream
+      Channel dom (WType AES256)
+      -- ^ response channel
+  keyExpansion = enhance put get compute
+      where
+        put ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode)
+        put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
+          | AESFacts _ ← knownAES @alg
+          = ((key, last key, repeat  @(Nk alg * Nr alg - Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
---         get ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) -> WType alg
---         get _ ((_, _, w), _) = w
---         compute ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒  KeyType alg → ((KeyType alg, WordType alg, WType alg), KeyMode) → CompMode ((KeyType alg, WordType alg, WType alg), KeyMode)
---         compute _ (s0@(state, lastState, w), mode0) 
---           | AESFacts alg ← knownAES @alg
---           = (, mode0 /= KeyEnd) $ case mode0 of
---           KeyEnd                             → (s0,                                                                             mode0)
---           KeyFin                             → (s0,                                                                             KeyEnd)
---           KeyStart                           → (s0,                                                                             KeyLast 3 (natToInteger @(Nr alg)))
---           KeyLast 3 i                        → ((state, rotWord lastState ,w),                                                  KeyLast 2 i)
---           KeyLast 2 i                        → ((state, subWord lastState ,w),                                                  KeyLast 1 i)
---           KeyLast 1 i                        → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),     KeyLast 0 (i-1))
---           -- TODO: There needs to be a subWord in between
---           KeyLast 0 i                        → ((postscanl xorWord lastState state, lastState , w),                             KeyNew 0 i)
---           KeyNew 0 i                         → ((state, last state, shiftNewPart w state),                                      KeyLast 3 (i - 1))
---           KeyNew 0 (-1)                      → (s0,                                                                             KeyFin)
---         shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ WType alg → KeyType alg -> WType alg
---         shiftNewPart w state = fst (shiftInAtN w state)
+        get ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ KeyType alg → ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode) -> WType alg
+        get _ ((_, _, w), _) = takeI w
+         
+        compute ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒  KeyType alg → ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode) → CompMode ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode)
+        compute _ (s0@(state, lastState, w), mode0) 
+          | AESFacts alg ← knownAES @alg
+          = (, mode0 /= KeyEnd) $ case mode0 of
+          KeyEnd                             → (s0,                                                                                  mode0)
+          KeyFin                             → (s0,                                                                                  KeyEnd)
+          KeyStart                           → (s0,                                                                                  KeyProsLastW 3 (natToInteger @(Nr alg)))
+          KeyProsLastW 3 i                   → ((state, rotWord lastState ,w),                                                       KeyProsLastW 2 i)
+          KeyProsLastW 2 i                   → ((state, subWord lastState ,w),                                                       KeyProsLastW 1 i)
+          KeyProsLastW 1 i                   → ((state, xorWord lastState (_Rcon alg !! ((natToInteger @(Nr alg)) - i)),w),          KeyProsLastW 0 i)
+          KeyProsLastW 0 i                   → ((firstPart state lastState, lastState , w),                                          KeyProsXOR 2 i)
+          KeyProsXOR 0 (1)                   → (s0,                                                                                  KeyFin)
+          KeyProsXOR 2 i                     → ((state, subWord (last (firstSplit state)) , w),                                      KeyProsXOR 1 i)
+          KeyProsXOR 1 i                     → ((secondPart state lastState, lastState , w),                                         KeyProsXOR 0 i)
+          KeyProsXOR 0 i                     → ((state, last state, shiftNewPart w state),                                           KeyProsLastW 3 (i - 1))
+        firstSplit = takeI @(Nk AES256 `Div` 2)
+        secondSplit = dropI @(Nk AES256 `Div` 2)
+        firstPart state lastState =  postscanl xorWord lastState (firstSplit state) ++ secondSplit state
+        secondPart state lastState = firstSplit state ++ postscanl xorWord lastState (secondSplit state)
+        shiftNewPart ∷ ∀ alg. (Spec.KnownAES alg, alg ~ AES256) ⇒ Vec (Nk alg * Nr alg) (WordType alg) → KeyType alg -> Vec (Nk alg * Nr alg) (WordType alg)
+        shiftNewPart ws state = fst (shiftInAtN ws state)
 
 
 
