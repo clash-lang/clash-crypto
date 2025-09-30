@@ -167,6 +167,7 @@ library hitlt-instances
     , clash-crypto
     , clash-crypto:hitlt-shared
   exposed-modules:
+    AES
     BEA
     FastGCD
     FltCtmi
