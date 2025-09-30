@@ -42,7 +42,7 @@ import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
 import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
 -- Test AES128
-import Crypto.Cipher.AES as Reference (AES128, AES192, AES256) 
+import Test.Clash.Crypto.Cipher.AES.GoldenReference as Reference 
 import Crypto.Cipher.Types
 import Crypto.Error
 
@@ -111,40 +111,7 @@ testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m
 testOplus a b = a ⊕ b === xor a b 
 
 
-class CryptoAES (alg ∷ Spec.AES) where
-  encryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
-  decryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
-instance CryptoAES Spec.AES128      where 
-  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  encryptoECB _ key plainText = case cipherInit key of
-    CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 plainText
-    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
-  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  decryptoECB _ key cipherText = case cipherInit key of
-    CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 cipherText
-    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
 
-
-instance CryptoAES Spec.AES192    where
-  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  encryptoECB _ key plainText = case cipherInit key of
-    CryptoPassed (cipher1 :: AES192) -> ecbEncrypt cipher1 plainText
-    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
-  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  decryptoECB _ key cipherText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES192)-> ecbDecrypt cipher1 cipherText
-
-instance CryptoAES Spec.AES256    where 
-  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  encryptoECB _ key plainText = case cipherInit key of
-    CryptoPassed (cipher1 :: AES256) -> ecbEncrypt cipher1 plainText
-    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
-
-  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
-  decryptoECB _ key cipherText = case cipherInit key of
-    CryptoFailed _ -> error "Cipher initialization failed"
-    CryptoPassed (cipher1 ∷ AES256)-> ecbDecrypt cipher1 cipherText
 
 testAESPure ∷ ∀ (alg ∷ Spec.AES) m.
   (Monad m, KnownAES alg, CryptoAES alg) ⇒
@@ -186,7 +153,7 @@ testAESPure key input
     resultDigestAsVBv8 = concat resultDigestAsBv
 
     dut = toList $ unpack <$> resultDigestAsVBv8
-    ref = BS.unpack $ encryptoECB alg key input
+    ref = BS.unpack $ Reference.encryptoECB alg key input
   -- inputAsInType === test_in1AES128
   -- resultDigestAsBv === test_out1AES128
   ref === dut

@@ -19,7 +19,6 @@ module Clash.Crypto.Cipher.AES.Streaming.Combinatorial
 
 import Data.Proxy (Proxy)
 
--- import GHC.TypeNats.Proof (Rewrite(..), using)
 
 import Clash.Crypto.Cipher.AES.Specification
 -- Interface liberies:
@@ -32,7 +31,7 @@ import Data.Constraint.Nat.Extra (CancelMultiple, KeepsPositiveIfMultiple)
 
 import Data.Proxy (Proxy)
 
--- import GHC.TypeNats.Proof (Rewrite(..), using)
+
 
 
 combinatorialAES ∷ ∀ (alg ∷ AES) dom.
