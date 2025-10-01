@@ -23,8 +23,7 @@ module Test.Clash.Crypto.Cipher.AES.Specification (tastyTests) where
 
 import Clash.Crypto.Cipher.AES
 import Clash.Prelude
-import Clash.Signal.Channel
-import Clash.Signal.DataStream
+
 import Clash.Sized.Vector (unsafeFromList)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
@@ -35,20 +34,11 @@ import Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.Hedgehog
 
-import Data.Proxy (Proxy(..))
-import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
-import Clash.Hedgehog.Sized.Vector
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
-import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
+
 -- Test AES128
 import Test.Clash.Crypto.Cipher.AES.GoldenReference as Reference 
-
-import qualified Crypto.Random.Types as CRT
-
 import Data.ByteString (ByteString) 
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
 
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
 
@@ -75,8 +65,8 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification"
               key <- forAll $ genKeyFor @(Spec.AES192 ∷ Spec.AES)
               input <- forAll $ genInputBlock @(Spec.AES192 ∷ Spec.AES)
               aesPure key input
-        | (aesPure, algName, proxyAlg) <-
-            [ (testAESPure @Spec.AES192, "192", Proxy @Spec.AES192)
+        | (aesPure, algName) <-
+            [ (testAESPure @Spec.AES192, "192")
             ]
         ]
         ,
@@ -100,9 +90,6 @@ genKeyFor
   | AESFacts _ ← knownAES @alg = do
   BS.pack <$> Gen.list (Range.singleton (natToNum @( Spec.WordSize alg  * Spec.Nk alg ))) Gen.enumBounded
 
-type TestLen = 8
-testOplus ∷ (Monad m) => BitVector TestLen -> BitVector TestLen -> PropertyT m ()
-testOplus a b = a ⊕ b === xor a b 
 
 
 
@@ -175,13 +162,13 @@ key1AES128 = [ 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15,
 --             :> (:> :> :> :>Nil)
 --             :>Nil
 --             )
-key1AES192 ∷ ByteString
-key1AES192 = [ 0x8e, 0x73, 0xb0, 0xf7, 
-               0xda, 0x0e, 0x64, 0x52,
-               0xc8, 0x10, 0xf3, 0x2b,
-               0x80, 0x90, 0x79, 0xe5,
-               0x62, 0xf8, 0xea, 0xd2,
-               0x52, 0x2c, 0x6b, 0x7b]
+-- key1AES192 ∷ ByteString
+-- key1AES192 = [ 0x8e, 0x73, 0xb0, 0xf7, 
+--                0xda, 0x0e, 0x64, 0x52,
+--                0xc8, 0x10, 0xf3, 0x2b,
+--                0x80, 0x90, 0x79, 0xe5,
+--                0x62, 0xf8, 0xea, 0xd2,
+--                0x52, 0x2c, 0x6b, 0x7b]
 -- t = encryptoECB key1AES192 in1AES128
 -- key1AES256 ∷ ByteString
 -- key1AES256 = [0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81, 0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4]
