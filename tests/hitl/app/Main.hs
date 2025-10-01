@@ -38,6 +38,7 @@ import Text.Read (readMaybe)
 
 import qualified Data.ByteString as BS
   (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
+  (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
 import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
 import qualified Hedgehog.Gen    as Gen (bytes, integral)
@@ -50,6 +51,7 @@ import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 import qualified Crypto.MAC.HMAC     as HMAC (hmac)
+import qualified Test.Clash.Crypto.Cipher.AES.GoldenReference as REFAES (encryptoECB,  decryptoECB)
 import qualified Test.Clash.Crypto.Cipher.AES.GoldenReference as REFAES (encryptoECB,  decryptoECB)
 import Clash.Prelude
   ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
@@ -316,17 +318,18 @@ runHitltHMACSHA sem dev settings key msg
   | SHAFacts alg ← knownSHA @alg
   = let
       n = natToNum @(BlockSize alg `Div` 8)
-      bs = withKeySize (BS.length key)
+      bs = raiseIsKey
         <> escape key
+        <> lowerIsKey
         <> escape (BS.replicate (n - BS.length key) 0xFF)
-        <> escapeAndTerminate msg
+        <> escape msg
+        <> raiseIsKey
       eq = HMAC.hmac (cryptoHash alg) n key msg
     in
       runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
  where
-  withKeySize n
-    | n > 0x00 && n < 0xFF = BS.pack [ 0x00, toEnum n ]
-    | otherwise            = error $ "Invalid key size: " <> show n
+  raiseIsKey = BS.pack [ 0x00, maxBound ]
+  lowerIsKey = BS.pack [ 0x00, 1 ]
 
 upload ∷
   ([String] → IO ()) →
