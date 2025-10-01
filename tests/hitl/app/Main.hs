@@ -224,7 +224,7 @@ main = do
     = localOption (HedgehogTestLimit (Just 1))
     $ sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
-            $ testProperty "build bitstream" $ property
+            $ testProperty ("build bitstream" <> show name) $ property
             $ liftIO $ shake [name <> ":bitstream"]
         , withResource
             (upload shake sem dev settings name)

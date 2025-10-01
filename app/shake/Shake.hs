@@ -39,7 +39,7 @@ import Development.Shake.FilePath
 import qualified Development.Shake as Shake (need)
 
 import Clash.Crypto.Hash.SHA (SHA)
-
+import Clash.Crypto.Cipher.AES (AES)
 pkgName, top :: String
 pkgName = "clash-crypto"
 top     = "topEntity"
@@ -103,6 +103,10 @@ shakeRules cfgs wanted = do
       return $ drop 2 <$> filter (startsWith ("./" <> prefix)) allSources
   let ?getSources = getSources
 
+  -- AES HITLT rules
+
+  forM_ [minBound :: AES .. maxBound] $ \alg ->
+    hitltRules "AES" (show alg) [("HITLT_AES", show alg)]
   -- SHA HITLT rules
 
   forM_ [minBound :: SHA .. maxBound] $ \alg ->
