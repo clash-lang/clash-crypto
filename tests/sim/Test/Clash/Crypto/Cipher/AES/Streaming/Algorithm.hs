@@ -12,7 +12,7 @@ Test suite for 'Clash.Crypto.Cipher.AES.Streaming.Algorithm'.
 -}
 
 module Test.Clash.Crypto.Cipher.AES.Streaming.Algorithm (tastyTests) where
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude 
 import Clash.Signal.Channel
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
