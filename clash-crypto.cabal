@@ -189,7 +189,12 @@ test-suite hitlt
     , clash-crypto:hitlt-shared
     , clash-crypto:shake-rules
     , clash-prelude-hedgehog
+    --SHA
     , cryptohash
+    --
+    --AES
+    , crypton >= 1.0.4
+    ---
     , hedgehog >= 1.0
     , modular-arithmetic
     , serialport >= 0.5.6

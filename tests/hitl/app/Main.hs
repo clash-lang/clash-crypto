@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-
+{-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 import Prelude
@@ -49,7 +49,12 @@ import qualified Crypto.Hash.SHA256  as SHA256 (hash)
 import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
-import qualified Crypto.MAC.HMAC     as HMAC (hmac)
+import qualified "cryptohash" Crypto.MAC.HMAC     as HMAC (hmac)
+
+import qualified Clash.Crypto.Cipher.AES.Specification as SpecAES
+import Crypto.Cipher.AES as Reference (AES128, AES192, AES256) 
+import Crypto.Cipher.Types
+import Crypto.Error
 
 import Clash.Prelude
   ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
@@ -60,7 +65,7 @@ import Clash.Crypto.Hash.SHA
   )
 import Clash.Crypto.Cipher.AES
   ( AES(..), AESKeyExpansion(..), KnownAESStream(..), KnownAES(..), AESStreamFacts(..),
-   AESFacts(..), InType, OutType, KeyType, Nb,Nk,Nr, aesECBencryption, aesECBdecryption
+   AESFacts(..), InType, OutType, KeyType, Nb,Nk,Nr,aesECBencryption, aesECBdecryption
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
@@ -92,12 +97,12 @@ main = do
   run sem dev settings
     = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
-          --  testGroup "Clash.Crypto.Cipher.AES"
-          --   [ -- we don't test the >128 variants here, as synthesis
-          --     -- times of the downstream tools for these are too
-          --     -- exorbitant.
-          --     testAES @AES128 "AES" sem dev settings
-          --   ] ,
+           testGroup "Clash.Crypto.Cipher.AES"
+            [ -- we don't test the >128 variants here, as synthesis
+              -- times of the downstream tools for these are too
+              -- exorbitant.
+              testAES @SpecAES.AES128 sem dev settings
+            ] ,
           testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
@@ -164,19 +169,20 @@ main = do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
-  -- testAES ∷
-  --   ∀ alg.
-  --   (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg) ⇒
-  --   QSem →
-  --   FilePath →
-  --   SerialPortSettings →
-  --   TestTree
-  -- testAES sem dev settings
-  --   | AESFacts alg ← knownAES @alg
-  --   , name ← dropWhile (== '\'') $ show $ typeRep alg
-  --   = test sem dev settings name $ do
-  --       bs ← forAll $ Gen.bytes $ Range.linear 80 100
-  --       runHitltAES @alg sem dev settings bs
+  testAES ∷
+    ∀ alg.
+    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testAES sem dev settings
+    | AESFacts alg ← knownAES @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings name $ do
+        input ← forAll $ Gen.bytes $ Range.linear 80 100
+        key ← forAll $ Gen.bytes $ Range.linear 80 100
+        runHitltAES @alg sem dev settings input key
   testSHA ∷
     ∀ alg.
     (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
@@ -229,19 +235,20 @@ main = do
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
--- runHitltAES ∷
---   ∀ (alg ∷ AES).
---   (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg) ⇒
---   QSem →
---   FilePath →
---   SerialPortSettings →
---   ByteString →
---   PropertyT IO ()
--- runHitltAES sem dev settings input | AESFacts alg ← knownAES @alg =
---  let
---   bs = escapeAndTerminate input
---   eq = encryptoECB alg input
---  in runHitlt @((Nb alg * Nb alg * Nb alg * Nk alg) `Div` 8) sem dev settings bs eq
+runHitltAES ∷
+  ∀ (alg ∷ AES).
+  (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  ByteString →
+  PropertyT IO ()
+runHitltAES sem dev settings input key | AESFacts alg ← knownAES @alg =
+ let
+  bs = escapeAndTerminate (append input key)
+  eq = encryptoECB alg input key
+ in runHitlt @((Nb alg * Nb alg * Nb alg * Nk alg) `Div` 8) sem dev settings bs eq
 
 runHitltInverseModulo ∷
   QSem →
@@ -425,6 +432,41 @@ instance CryptoHash SHA384    where cryptoHash _ = SHA384.hash
 instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
 instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 244
 instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
+
+class CryptoAES (alg ∷ SpecAES.AES) where
+  encryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
+  decryptoECB :: Proxy alg -> ByteString -> ByteString -> ByteString
+instance CryptoAES SpecAES.AES128      where 
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  encryptoECB _ key plainText = case cipherInit key of
+    CryptoPassed (cipher1 :: AES128) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  decryptoECB _ key cipherText = case cipherInit key of
+    CryptoPassed (cipher1 ∷ AES128)-> ecbDecrypt cipher1 cipherText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show cipher1)
+
+
+instance CryptoAES SpecAES.AES192    where
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  encryptoECB _ key plainText = case cipherInit key of
+    CryptoPassed (cipher1 :: AES192) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  decryptoECB _ key cipherText = case cipherInit key of
+    CryptoFailed _ -> error "Cipher initialization failed"
+    CryptoPassed (cipher1 ∷ AES192)-> ecbDecrypt cipher1 cipherText
+
+instance CryptoAES SpecAES.AES256    where 
+  encryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  encryptoECB _ key plainText = case cipherInit key of
+    CryptoPassed (cipher1 :: AES256) -> ecbEncrypt cipher1 plainText
+    CryptoFailed cipher1 -> error ("Cipher initialization failed" <> show (cipher1, BS.length key))
+
+  decryptoECB ∷ Proxy alg → ByteString -> ByteString -> ByteString
+  decryptoECB _ key cipherText = case cipherInit key of
+    CryptoFailed _ -> error "Cipher initialization failed"
+    CryptoPassed (cipher1 ∷ AES256)-> ecbDecrypt cipher1 cipherText
 
 parseCS ∷ String → CommSpeed
 parseCS = \case
