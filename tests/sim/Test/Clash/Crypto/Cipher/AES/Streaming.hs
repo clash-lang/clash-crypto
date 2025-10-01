@@ -1,11 +1,11 @@
 {-|
-Module      : Test.Clash.Crypto.Cipher.AES.Specification
+Module      : Test.Clash.Crypto.Cipher.AES.Streaming
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Test suite for 'Clash.Crypto.Cipher.AES.Specifications'.
+Test suite for 'Clash.Crypto.Cipher.AES.Streaming'.
 -}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}

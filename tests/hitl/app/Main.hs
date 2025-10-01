@@ -40,9 +40,9 @@ import qualified Data.ByteString as BS
   (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
 import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
-import qualified Hedgehog.Gen    as Gen (bytes, integral)
-import qualified Hedgehog.Range  as Range (linear, constantFrom)
-
+import qualified Hedgehog.Gen    as Gen (bytes, integral, list, enumBounded)
+import qualified Hedgehog.Range  as Range (linear, constantFrom, singleton)
+import Hedgehog (Gen(..))
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
 import qualified Crypto.Hash.SHA224  as SHA224 (hash)
 import qualified Crypto.Hash.SHA256  as SHA256 (hash)
@@ -98,10 +98,9 @@ main = do
     = defaultMain $ testGroup "Clash Crytpo HITL tests"
         [
            testGroup "Clash.Crypto.Cipher.AES"
-            [ -- we don't test the >128 variants here, as synthesis
-              -- times of the downstream tools for these are too
-              -- exorbitant.
-              testAES @SpecAES.AES128 sem dev settings
+            [ testAES128 @SpecAES.AES128 sem dev settings
+            , testAES192 @SpecAES.AES192 sem dev settings
+            , testAES256 @SpecAES.AES256 sem dev settings
             ] ,
           testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
@@ -169,19 +168,58 @@ main = do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
-  testAES ∷
+  genInputBlock ∷ ∀ (alg ∷ SpecAES.AES). SpecAES.KnownAES alg => Gen ByteString
+  genInputBlock 
+      | AESFacts _ ← knownAES @alg =
+      BS.pack <$> Gen.list (Range.singleton (natToNum @(SpecAES.Nb alg * SpecAES.WordSize alg))) Gen.enumBounded
+  genKeyFor :: ∀ (alg ∷ SpecAES.AES). SpecAES.KnownAES alg => Gen ByteString
+  genKeyFor   
+    | AESFacts _ ← knownAES @alg = do
+    BS.pack <$> Gen.list (Range.singleton (natToNum @( SpecAES.WordSize alg  * SpecAES.Nk alg ))) Gen.enumBounded
+
+
+  testAES128 ∷
     ∀ alg.
     (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
-  testAES sem dev settings
+  testAES128 sem dev settings
     | AESFacts alg ← knownAES @alg
     , name ← dropWhile (== '\'') $ show $ typeRep alg
     = test sem dev settings name $ do
-        input ← forAll $ Gen.bytes $ Range.linear 80 100
-        key ← forAll $ Gen.bytes $ Range.linear 80 100
+        key <- forAll $ genKeyFor @(SpecAES.AES128 ∷ SpecAES.AES)
+        input <- forAll $ genInputBlock @(SpecAES.AES128 ∷ SpecAES.AES)
+        runHitltAES @alg sem dev settings input key
+  testAES192 ∷
+    ∀ alg.
+    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testAES192 sem dev settings
+    | AESFacts alg ← knownAES @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings name $ do
+        key <- forAll $ genKeyFor @(SpecAES.AES192 ∷ SpecAES.AES)
+        input <- forAll $ genInputBlock @(SpecAES.AES192 ∷ SpecAES.AES)
+        runHitltAES @alg sem dev settings input key
+
+  testAES256 ∷
+    ∀ alg.
+    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testAES256 sem dev settings
+    | AESFacts alg ← knownAES @alg
+    , name ← dropWhile (== '\'') $ show $ typeRep alg
+    = test sem dev settings name $ do
+        key <- forAll $ genKeyFor @(SpecAES.AES256 ∷ SpecAES.AES)
+        input <- forAll $ genInputBlock @(SpecAES.AES256 ∷ SpecAES.AES)
         runHitltAES @alg sem dev settings input key
   testSHA ∷
     ∀ alg.
