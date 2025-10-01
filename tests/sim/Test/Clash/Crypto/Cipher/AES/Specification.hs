@@ -41,11 +41,16 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
-
-
+import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
+import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification"
+  [Def.tastyTests,
+  Alg.tastyTests,
+  tastyTestsAESPure]
+tastyTestsAESPure ∷ TestTree
+tastyTestsAESPure = testGroup "Clash.Crypto.Cipher.AES.Specification"
   [ localOption (HedgehogTestLimit (Just 10)) $
       testGroup "Specification Sanity Checks against haskell crypton AES128"
         [ 
@@ -59,7 +64,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification"
               testAESPure @Spec.AES128 in1AES128 key1AES128 
         ]
         ,
-        testGroup "Specification Sanity Checks against haskell crypton AES" $
+        testGroup "Specification Sanity Checks against haskell crypton AES192" $
         [ testProperty ("AES-" <> algName) $
             property $ do
               key <- forAll $ genKeyFor @(Spec.AES192 ∷ Spec.AES)

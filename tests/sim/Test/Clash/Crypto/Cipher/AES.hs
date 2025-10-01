@@ -24,17 +24,12 @@ module Test.Clash.Crypto.Cipher.AES (tastyTests) where
 
 import Test.Tasty
 
-import qualified Test.Clash.Crypto.Cipher.AES.Specification.Definitions as Def
-import qualified Test.Clash.Crypto.Cipher.AES.Specification.Algorithm as Alg
 import qualified Test.Clash.Crypto.Cipher.AES.Specification as Spec
-import qualified Test.Clash.Crypto.Cipher.AES.Streaming.Algorithm as StreamAlg
-
+import qualified Test.Clash.Crypto.Cipher.AES.Streaming as Stream
 
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES"
-  [Def.tastyTests, 
-  Alg.tastyTests,
-  Spec.tastyTests,
-  StreamAlg.tastyTests] 
+  [Spec.tastyTests
+  , Stream.tastyTests] 
 
