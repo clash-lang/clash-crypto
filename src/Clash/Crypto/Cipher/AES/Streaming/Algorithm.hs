@@ -64,15 +64,15 @@ cipherStream  input
        = (, mode0 /= CipherEnd) $ case mode0 of
       CipherEnd                          → (s0,                                    mode0)
       CipherFin                          → (s0,                                    CipherEnd)
-      CipherStart                        → ((addRoundKey state (head w),w),        CipherRounds 3 (natToInteger @(Nr alg)))
-      CipherRounds 3 1                   → (s0,                                    CipherLast 2)
-      CipherRounds 3 i                   → ((subBytes state,w),                    CipherRounds 2 i)
-      CipherRounds 2 i                   → ((shiftRows state,w),                   CipherRounds 1 i)
-      CipherRounds 1 i                   → ((mixColumns state,w),                  CipherRounds 0 i)
-      CipherRounds 0 i                   → ((addRoundKey state (w !! (((natToInteger @(Nr alg)) - i) + 1)),w),  CipherRounds 3 (i - 1))
-      CipherLast 2                       → ((subBytes state,w),                    CipherLast 1)
-      CipherLast 1                       → ((shiftRows state,w),                   CipherLast 0)
-      CipherLast 0                       → ((addRoundKey state (last w),w),        CipherFin)
+      CipherStart                        → ((addRoundKey state (head w),w),        CipherFin) -- CipherRounds 3 (natToInteger @(Nr alg)))
+      -- CipherRounds 3 1                   → (s0,                                    CipherLast 2)
+      -- CipherRounds 3 i                   → ((subBytes state,w),                    CipherRounds 2 i)
+      -- CipherRounds 2 i                   → ((shiftRows state,w),                   CipherRounds 1 i)
+      -- CipherRounds 1 i                   → ((mixColumns state,w),                  CipherRounds 0 i)
+      -- CipherRounds 0 i                   → ((addRoundKey state (w !! (((natToInteger @(Nr alg)) - i) + 1)),w),  CipherRounds 3 (i - 1))
+      -- CipherLast 2                       → ((subBytes state,w),                    CipherLast 1)
+      -- CipherLast 1                       → ((shiftRows state,w),                   CipherLast 0)
+      -- CipherLast 0                       → ((addRoundKey state (last w),w),        CipherFin)
 
 eqInvCipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒

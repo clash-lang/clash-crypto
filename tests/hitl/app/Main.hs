@@ -177,7 +177,6 @@ main = do
     | AESFacts _ ← knownAES @alg = do
     BS.pack <$> Gen.list (Range.singleton (natToNum @(SpecAES.WordSize alg  * SpecAES.Nk alg ))) Gen.enumBounded
 
-
   testAES128 ∷
     ∀ alg.
     (KnownAES alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
@@ -286,8 +285,8 @@ runHitltAES sem dev settings input key | AESFacts alg ← knownAES @alg =
  let
   bs = (append input key)
   eq = encryptoECB alg input key
- in runHitlt @(WordSize alg * Nb alg) sem dev settings bs eq
-
+--  in runHitlt @(WordSize alg * Nb alg) sem dev settings bs eq
+ in runHitlt @((Nr alg + 1) * 4) sem dev settings bs eq
 runHitltInverseModulo ∷
   QSem →
   FilePath →

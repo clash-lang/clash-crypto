@@ -39,8 +39,9 @@ aesECBencryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  AESKeyExpa
     -- ^ response channel  
 aesECBencryption input
   | AESFacts{} ← knownAES @alg
-  =  fst unzipInput
+  = Alg.cipherStream @alg (zipC (fst unzipInput) expansion)
     where
+      expansion = Alg.keyExpansionStream @alg (snd unzipInput)
       unzipInput = unzipC input
 aesECBdecryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒     
     Channel dom (Spec.InType alg, Spec.KeyType alg) →
@@ -49,8 +50,8 @@ aesECBdecryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  AESKeyExpa
     -- ^ response channel  
 aesECBdecryption input
   | AESFacts{} ← knownAES @alg
-  =  Alg.invCipher @alg (zipC (fst unzipInput) expansion)
+  =  Alg.invCipherStream @alg (zipC (fst unzipInput) expansion)
     where
-      expansion = Alg.keyExpansion @alg (snd unzipInput)
+      expansion = Alg.keyExpansionStream @alg (snd unzipInput)
       unzipInput = unzipC input
 
