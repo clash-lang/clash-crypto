@@ -19,10 +19,10 @@ Algorithm implementation of FIPS 197 using the enchance methode
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Clash.Crypto.Cipher.AES.Streaming.Algorithm   
-( Clash.Crypto.Cipher.AES.Streaming.Algorithm.cipher
-  , Clash.Crypto.Cipher.AES.Streaming.Algorithm.invCipher
-  , Clash.Crypto.Cipher.AES.Streaming.Algorithm.eqInvCipher
-  , Clash.Crypto.Cipher.AES.Streaming.Algorithm.keyExpansionIEC
+(   cipherStream
+  , invCipherStream
+  , eqInvCipherStream
+  , keyExpansionIECStream
   , AESKeyExpansion(..)
   ) where
 
@@ -36,13 +36,13 @@ import Clash.Signal.Channel
 data CipherMode
   = CipherStart | CipherRounds (Index 4) Integer | CipherLast (Index 3) | CipherFin | CipherEnd
   deriving (Generic, NFDataX, Show, Eq)
-cipher ∷ ∀ (alg ∷ AES) dom.
+cipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
     -- ^ response channel
-cipher  input
+cipherStream  input
   | AESFacts{} <- knownAES @alg
   = enhance put get compute input
   where
@@ -74,13 +74,13 @@ cipher  input
       CipherLast 1                       → ((shiftRows state,w),                   CipherLast 0)
       CipherLast 0                       → ((addRoundKey state (last w),w),        CipherFin)
 
-eqInvCipher ∷ ∀ (alg ∷ AES) dom.
+eqInvCipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
     -- ^ response channel
-eqInvCipher  input
+eqInvCipherStream  input
   | AESFacts{} <- knownAES @alg
   = enhance put get compute input
   where
@@ -111,13 +111,13 @@ eqInvCipher  input
       CipherLast 2                       → ((invSubBytes state,w),                    CipherLast 1)
       CipherLast 1                       → ((invShiftRows state,w),                   CipherLast 0)
       CipherLast 0                       → ((invAddRoundKey state (last w),w),        CipherFin)
-invCipher ∷ ∀ (alg ∷ AES) dom.
+invCipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
     -- ^ input stream ^ key stream
     Channel dom (OutType alg)
     -- ^ response channel
-invCipher  input
+invCipherStream  input
   | AESFacts{} <- knownAES @alg
   = enhance put get compute input
   where
@@ -152,19 +152,19 @@ data KeyMode
   = KeyStart | KeyProsXOR (Index 3) Integer | KeyProsLastW (Index 4) Integer | KeyFin | KeyEnd
   deriving (Generic, NFDataX, Show, Eq)
 class AESKeyExpansion (alg ∷ AES) where
-    keyExpansion ∷ (KnownAES alg, HiddenClockResetEnable dom) ⇒
+    keyExpansionStream ∷ (KnownAES alg, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType alg) →
       --  ^ key stream
       Channel dom (WType alg)
       -- ^ response channel
 instance AESKeyExpansion AES128 where
-  keyExpansion ∷
+  keyExpansionStream ∷
       (KnownAES AES128, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES128) →
       --  ^ key stream
       Channel dom (WType AES128)
       -- ^ response channel
-  keyExpansion = enhance put get compute
+  keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
@@ -190,13 +190,13 @@ instance AESKeyExpansion AES128 where
         shiftNewPart ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ WType alg → KeyType alg -> WType alg
         shiftNewPart w state = fst (shiftInAtN w state)
 instance AESKeyExpansion AES192 where
-  keyExpansion ∷
+  keyExpansionStream ∷
       (KnownAES AES192, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES192) →
       -- ^ key stream
       Channel dom (WType AES192)
       -- ^ response channel
-  keyExpansion = enhance put get compute
+  keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒ KeyType alg →  ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
@@ -224,13 +224,13 @@ instance AESKeyExpansion AES192 where
         shiftNewPart w state = fst (shiftInAtN w state)
 
 instance AESKeyExpansion AES256 where
-  keyExpansion ∷
+  keyExpansionStream ∷
       (KnownAES AES256, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType AES256) →
       -- ^ key stream
       Channel dom (WType AES256)
       -- ^ response channel
-  keyExpansion = enhance put get compute
+  keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode)
         put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
@@ -266,15 +266,15 @@ instance AESKeyExpansion AES256 where
 
 
 
-keyExpansionIEC ∷ ∀ (alg ∷ AES) dom.
+keyExpansionIECStream ∷ ∀ (alg ∷ AES) dom.
       (KnownAES alg, AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType alg) →
       -- ^ key stream
       Channel dom (WType alg)
       -- ^ response channel
-keyExpansionIEC input 
-      | AESFacts alg ← knownAES @alg
-      = enhance put get compute (Clash.Crypto.Cipher.AES.Streaming.Algorithm.keyExpansion @alg input)
+keyExpansionIECStream input 
+      | AESFacts{} ← knownAES @alg
+      = enhance put get compute (keyExpansionStream @alg input)
       where 
         put ∷ WType alg →  ((Vec 1 (RoundWType alg), Vec (Nr alg - 1) (RoundWType alg), Vec 1 (RoundWType alg)), KeyMode)
         put w
