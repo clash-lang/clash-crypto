@@ -135,7 +135,7 @@ genKeyFor
 
 
 testAESPureEncryption ∷ ∀ (alg ∷ Spec.AES) m.
-  (Monad m, KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+  (Monad m, KnownAES alg, AESKeyExpansion alg, CryptoAES alg) ⇒
   ByteString →
   -- ^ input data
     ByteString →
@@ -177,21 +177,21 @@ testAESPureEncryption key input
     ref = BS.unpack $ Reference.encryptoECB alg key input
   ref === dut
     where
-      compute input
+      compute input1
         = fromMaybe (error "The returned list was empty")
             $ getFirst
             $ foldMap First
-            $ sampleN @System 10000000
+            $ sampleN @System 256
             $ withClockResetEnable @System clockGen resetGen enableGen
             $ newsfeed
             $ aesECBencryption @alg
             $ channel
-            $ fmap (input, )
+            $ fmap (input1, )
             $ fromList
             $ Keep : Keep : Release : List.repeat Keep
 
 testAESPureDecryption ∷ ∀ (alg ∷ Spec.AES) m.
-  (Monad m, KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+  (Monad m, KnownAES alg, AESKeyExpansion alg, CryptoAES alg) ⇒
   ByteString →
   -- ^ input data
     ByteString →
@@ -233,7 +233,7 @@ testAESPureDecryption key input
     ref = BS.unpack $ Reference.decryptoECB alg key input
   ref === dut
     where
-      compute input
+      compute input1
         = fromMaybe (error "The returned list was empty")
             $ getFirst
             $ foldMap First
@@ -242,7 +242,7 @@ testAESPureDecryption key input
             $ newsfeed
             $ aesECBdecryption @alg
             $ channel
-            $ fmap (input, )
+            $ fmap (input1, )
             $ fromList
             $ Keep : Keep : Release : List.repeat Keep
 

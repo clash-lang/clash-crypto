@@ -28,8 +28,6 @@ module Clash.Crypto.Cipher.AES
     addRoundKey, invAddRoundKey
     -- Streaming
       --Verification
-    , AESStreamFacts(..)
-    , KnownAESStream(..)
     , aesECBencryption
     , aesECBdecryption
     , AESKeyExpansion(..)

@@ -11,7 +11,7 @@ import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.Cipher.AES
+import Clash.Crypto.Cipher.AES(AES(..), aesECBencryption)
 -- allows to select an AES variant via a CPP define
 #ifndef HITLT_AES
 type AESX = AES128

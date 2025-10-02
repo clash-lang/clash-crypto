@@ -25,7 +25,6 @@ module Test.Clash.Crypto.Cipher.AES.Specification.Algorithm (tastyTests) where
 
 import Clash.Crypto.Cipher.AES
 import Clash.Prelude
-import Clash.Sized.Vector (unsafeFromList)
 
 -- https://hackage.haskell.org/package/clash-prelude-hedgehog
 import Hedgehog
@@ -34,7 +33,6 @@ import Test.Tasty.Hedgehog
 import Data.Proxy (Proxy(..))
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Vector
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import qualified Clash.Crypto.Cipher.AES.Specification as Spec
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Cipher.AES.Specification.Algorithm"

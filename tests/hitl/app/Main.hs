@@ -57,15 +57,15 @@ import Crypto.Cipher.Types
 import Crypto.Error
 
 import Clash.Prelude
-  ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
+  ( type Div, type (*), type (+), Nat, KnownNat, Unsigned, Vec
   , toList, resize,  bitCoerce, natToNum
   )
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
   )
 import Clash.Crypto.Cipher.AES
-  ( AES(..), AESKeyExpansion(..), KnownAESStream(..), KnownAES(..), AESStreamFacts(..),
-   AESFacts(..), InType, OutType, KeyType, Nb,Nk,Nr,aesECBencryption, aesECBdecryption
+  ( AES(..), AESKeyExpansion(..), KnownAES(..),
+   AESFacts(..), InType, OutType, KeyType, WordSize, Nb,Nk,Nr,aesECBencryption, aesECBdecryption
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
@@ -175,12 +175,12 @@ main = do
   genKeyFor :: ∀ (alg ∷ SpecAES.AES). SpecAES.KnownAES alg => Gen ByteString
   genKeyFor   
     | AESFacts _ ← knownAES @alg = do
-    BS.pack <$> Gen.list (Range.singleton (natToNum @( SpecAES.WordSize alg  * SpecAES.Nk alg ))) Gen.enumBounded
+    BS.pack <$> Gen.list (Range.singleton (natToNum @(SpecAES.WordSize alg  * SpecAES.Nk alg ))) Gen.enumBounded
 
 
   testAES128 ∷
     ∀ alg.
-    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    (KnownAES alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
@@ -194,7 +194,7 @@ main = do
         runHitltAES @alg sem dev settings input key
   testAES192 ∷
     ∀ alg.
-    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    (KnownAES alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
@@ -209,7 +209,7 @@ main = do
 
   testAES256 ∷
     ∀ alg.
-    (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
+    (KnownAES alg, AESKeyExpansion alg, CryptoAES alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
@@ -275,7 +275,7 @@ main = do
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 runHitltAES ∷
   ∀ (alg ∷ AES).
-  (KnownAES alg, KnownAESStream alg, AESKeyExpansion alg, CryptoAES alg) ⇒
+  (KnownAES alg, AESKeyExpansion alg, CryptoAES alg) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -284,9 +284,9 @@ runHitltAES ∷
   PropertyT IO ()
 runHitltAES sem dev settings input key | AESFacts alg ← knownAES @alg =
  let
-  bs = escapeAndTerminate (append input key)
+  bs = (append input key)
   eq = encryptoECB alg input key
- in runHitlt @((Nb alg * Nb alg * Nb alg * Nk alg) `Div` 8) sem dev settings bs eq
+ in runHitlt @(WordSize alg * Nb alg) sem dev settings bs eq
 
 runHitltInverseModulo ∷
   QSem →
