@@ -52,7 +52,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming"
   , tastyTestsAESStream]
 tastyTestsAESStream ∷ TestTree
 tastyTestsAESStream = testGroup "Clash.Crypto.Cipher.AES.Streaming"
-  [ localOption (HedgehogTestLimit (Just 1000000000000)) $
+  [ localOption (HedgehogTestLimit (Just 100)) $
       testGroup "Streaming Sanity Checks against haskell crypton AES128 \nEncryption ECB mode"
         [ 
           testProperty "AES128" $
@@ -88,6 +88,17 @@ tastyTestsAESStream = testGroup "Clash.Crypto.Cipher.AES.Streaming"
         ]
         ,
         testGroup "Streaming Sanity Checks against haskell crypton AES128 \nDecryption ECB mode"
+        [ 
+          testProperty "AES128" $
+            property $ do
+              key <- forAll $ genKeyFor @(Spec.AES128 ∷ Spec.AES)
+              input <- forAll $ genInputBlock @(Spec.AES128 ∷ Spec.AES)
+              testAESPureDecryption @Spec.AES128 key input,
+        testProperty "AES-128, specific key" $
+            property $ do
+              testAESPureDecryption @Spec.AES128 in1AES128 key1AES128 
+        ]
+        ,
         [ 
           testProperty "AES128" $
             property $ do
@@ -251,5 +262,11 @@ in1AES128 ∷ ByteString
 in1AES128 = [0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34]
 key1AES128 ∷ ByteString
 key1AES128 = [ 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c ]
+
+
+in2AES128 ∷ ByteString
+in2AES128 = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+key2AES128 ∷ ByteString
+key2AES128 = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 

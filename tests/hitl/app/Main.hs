@@ -284,7 +284,7 @@ runHitltAES ∷
 runHitltAES sem dev settings input key | AESFacts alg ← knownAES @alg =
  let
   bs = (append input key)
-  eq = encryptoECB alg input key
+  eq = encryptoECB alg key input
  in runHitlt @(WordSize alg * Nb alg) sem dev settings bs eq
 --  in runHitlt @((Nr alg + 1) * 4) sem dev settings bs eq
 runHitltInverseModulo ∷
