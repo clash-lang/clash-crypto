@@ -57,7 +57,7 @@ import Crypto.Cipher.Types
 import Crypto.Error
 
 import Clash.Prelude
-  ( type Div, type (*), type (+), Nat, KnownNat, Unsigned, Vec
+  ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
   , toList, resize,  bitCoerce, natToNum
   )
 import Clash.Crypto.Hash.SHA
@@ -65,7 +65,7 @@ import Clash.Crypto.Hash.SHA
   )
 import Clash.Crypto.Cipher.AES
   ( AES(..), AESKeyExpansion(..), KnownAES(..),
-   AESFacts(..), InType, OutType, KeyType, WordSize, Nb,Nk,Nr,aesECBencryption, aesECBdecryption
+   AESFacts(..), WordSize, Nb
   )
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
