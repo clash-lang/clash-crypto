@@ -107,7 +107,7 @@ tastyTestsAESStream = testGroup "Clash.Crypto.Cipher.AES.Streaming"
               testAESPureDecryption @Spec.AES128 key input,
         testProperty "AES-128, specific key" $
             property $ do
-              testAESPureDecryption @Spec.AES128 in1AES128 key1AES128 
+              testAESPureDecryption @Spec.AES128 in2AES128 key2AES128 
         ]
         ,
         testGroup "Streaming Sanity Checks against haskell crypton AES192 \nDecryption ECB mode" $
@@ -154,12 +154,7 @@ testAESPureEncryption ∷ ∀ (alg ∷ Spec.AES) m.
   PropertyT m ()
 testAESPureEncryption key input
   | AESFacts alg ← knownAES @alg
-  -- , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = do
-
-  -- Just (SomeNat (_ ∷ Proxy n)) ←
-  --   return $ someNatVal $ toInteger $ BS.length input
-
   let
     inputAsBv8 ∷ [BitVector 8]
     inputAsBv8 = pack <$> BS.unpack input
