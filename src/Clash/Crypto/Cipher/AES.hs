@@ -12,7 +12,6 @@ Streaming based blockcipher algorithms according to
 
 module Clash.Crypto.Cipher.AES
   ( -- All functions that are present in the FIPS.
-    -- AESFunctions(..),
     -- Type of all specific AES functions.
     AES(..),
     -- Verification
@@ -27,42 +26,12 @@ module Clash.Crypto.Cipher.AES
     shiftRows, invShiftRows,
     addRoundKey, invAddRoundKey
     -- Streaming
-      --Verification
     , aesECBencryption
     , aesECBdecryption
     , AESKeyExpansion(..)
   ) where
 
--- import Clash.Prelude
--- import Clash.Signal.Channel
--- import Clash.Signal.DataStream
 
--- import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Cipher.AES.Specification
 import Clash.Crypto.Cipher.AES.Streaming
-
-
--- | Reads serialized messages from an input stream, calculates their
--- secure hash and releases the result on the returned channel
--- afterwards.
-
--- Input messages may be separated into multiple n-bit frames, where
--- the end frame of each message also holds the amount of *unused*
--- bits that have been added as LSBs to align with the frame size
--- @n@. Note that the first bit of the end frame is always part of the
--- message.
-
--- The digset relased on the channel is calculated according to the
--- selected hash algorithm. It is released after the arrival of a
--- message's end frame and the calculation of the hash.
--- aes ∷
---   ∀ (alg ∷ AES) (dom ∷ Domain) (n ∷ Nat).
---   (KnownAES alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
---   DataStream dom () (Index n) (InType alg) →
---   -- ^ streamed input messages
---   Channel dom (OutType alg)
---   -- ^ result channel
--- aes
---   | AESFacts{} ← knownAES @alg
---   = aesCipher alg

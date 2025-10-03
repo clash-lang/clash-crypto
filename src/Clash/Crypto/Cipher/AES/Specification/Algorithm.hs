@@ -74,7 +74,7 @@ instance AESFunctions AES128 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 2 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
@@ -85,7 +85,7 @@ instance AESFunctions AES128 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 3 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))
@@ -127,7 +127,7 @@ instance AESFunctions AES192 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 3 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
@@ -138,7 +138,7 @@ instance AESFunctions AES192 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 4 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))
@@ -183,7 +183,7 @@ instance AESFunctions AES256 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input1 w1s = foldl mutation (invAddRoundKey input1 (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 3 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state w = invMixColumns (invAddRoundKey ( invSubBytes (invShiftRows state)) w) 
@@ -194,7 +194,7 @@ instance AESFunctions AES256 where
             rounds ∷ Proxy alg → InType alg → WType alg → StateType alg                  
             rounds _ input w1s = foldl mutation (invAddRoundKey input (head (wInWords w1s))) (init (tail (wInWords ws)))
             wInWords ∷ WType alg → Vec (Nr alg + 1) (RoundWType alg)
-            wInWords words= reverse (unconcat (SNat ∷ SNat (Nb alg )) words)
+            wInWords words1 = reverse (unconcat (SNat ∷ SNat (Nb alg )) words1)
             -- Algorithm 4 codeline 5-8 as a function
             mutation ∷ StateType alg → RoundWType alg → StateType alg
             mutation state = invAddRoundKey (invMixColumns ( invShiftRows (invSubBytes  state)))

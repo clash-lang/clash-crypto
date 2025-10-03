@@ -21,17 +21,6 @@ import Clash.Crypto.Cipher.AES.Specification as Spec
 import Clash.Prelude
 import Clash.Signal.Channel
 
--- aesECBencryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒     
---     Channel dom (Spec.InType alg, Spec.KeyType alg) →
---     -- ^ input stream ^ key stream
---     Channel dom (Spec.OutType alg)
---     -- ^ response channel  
--- aesECBencryption input
---   | AESFacts{} ← knownAES @alg
---   =  Alg.cipher @alg (zipC (fst unzipInput) expansion)
---     where
---       expansion = Alg.keyExpansion @alg (snd unzipInput)
---       unzipInput = unzipC input
 aesECBencryption ∷ ∀ (alg ∷ Spec.AES) dom. (Spec.KnownAES alg,  AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒     
     Channel dom (Spec.InType alg, Spec.KeyType alg) →
     -- ^ input stream ^ key stream
