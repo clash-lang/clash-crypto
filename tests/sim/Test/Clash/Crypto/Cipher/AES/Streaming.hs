@@ -52,7 +52,7 @@ tastyTests = testGroup "Clash.Crypto.Cipher.AES.Streaming"
   , tastyTestsAESStream]
 tastyTestsAESStream ∷ TestTree
 tastyTestsAESStream = testGroup "Clash.Crypto.Cipher.AES.Streaming"
-  [ localOption (HedgehogTestLimit (Just 10)) $
+  [ localOption (HedgehogTestLimit (Just 1000000000000)) $
       testGroup "Streaming Sanity Checks against haskell crypton AES128 \nEncryption ECB mode"
         [ 
           testProperty "AES128" $
