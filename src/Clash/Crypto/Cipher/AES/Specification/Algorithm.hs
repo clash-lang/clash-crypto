@@ -39,6 +39,7 @@ class AESFunctions (alg ∷ AES) where
     invCipher ∷ Proxy alg → InType alg → WType alg → OutType alg 
     -- Algorithm 4 of FIPS 197
     eqInvCipher ∷ Proxy alg → InType alg → WType alg → OutType alg 
+    -- Algorithm 5 of FIPS 197
     keyExpansionIEC ∷ Proxy alg →  KeyType alg → WType alg
 instance AESFunctions AES128 where
 
@@ -159,7 +160,7 @@ instance AESFunctions AES256 where
                 middelCalculation ∷ Proxy AES256 → KeyType AES256 → Integer → KeyType AES256
                 middelCalculation _ w1s i = firstPart w1s i ++ secondPart w1s i
                     where
-                        firstPart ws i1 = postscanl xorWord (partWord ws i1) (firstSplit ws)-- - zipWith xorWord ((+>>) (partWord ws i) ws) ws /// postscanl xorWord (partWord ws i)  ws
+                        firstPart ws i1 = postscanl xorWord (partWord ws i1) (firstSplit ws)
                         firstSplit = takeI @(Nk AES256 `Div` 2)
                         secondPart ws i1 = postscanl xorWord (subWord (last (firstPart ws i1))) (secondSplit ws) 
                         secondSplit = dropI @(Nk AES256 `Div` 2)
