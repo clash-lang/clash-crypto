@@ -148,6 +148,19 @@ shakeRules cfgs wanted = do
         unless (startsWith "Up to date" msg) $ liftIO $ do
           putStr msg
           throw ShakeOutOfDate
+    when ?withBinary
+      $ "" <//> "shake" </> "build" </> "shake" </> "shake" %> \out -> do
+        sources <- getSources "app/shake"
+        shaTypes <- getSources "src/Clash/Crypto/Hash/SHA.hs"
+        Shake.need $ shaTypes <> sources
+        shakePath <- getCabalBinPath "shake"
+        unless (shakePath == out) $ fail "internal error: invalid need"
+        cabal <- getCabal
+        Stdout msg <- quietly
+          $ cmd cabal "--verbose=0" "build" (pkgName <> ":shake") "--dry-run"
+        unless (startsWith "Up to date" msg) $ liftIO $ do
+          putStr msg
+          throw ShakeOutOfDate
   -- clean
 
   "clean" ~> do
