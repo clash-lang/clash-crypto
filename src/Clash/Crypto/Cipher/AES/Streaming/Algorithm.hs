@@ -36,6 +36,7 @@ import Clash.Signal.Channel
 data CipherMode (alg ∷ AES)
   = CipherStart | CipherRounds (Index 4) (Index (Nr alg + 1)) | CipherLast (Index 3) | CipherFin | CipherEnd
   deriving (Generic, NFDataX, Show, Eq)
+-- Algorithm 1, a streamlined version
 cipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
@@ -75,7 +76,7 @@ cipherStream  input
       CipherLast 0                       → ((addRoundKey state (last w),w),                                                    CipherFin)
       CipherRounds _ _                   → (s0,                                                                                CipherFin) 
       CipherLast   _                     → (s0,                                                                                CipherFin) 
-
+-- Algorithm 4 a streamlined version
 eqInvCipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
@@ -115,6 +116,7 @@ eqInvCipherStream  input
       CipherLast 0                       → ((invAddRoundKey state (last w),w),                                                    CipherFin)
       CipherRounds _ _                   → (s0,                                                                                   CipherFin) 
       CipherLast   _                     → (s0,                                                                                   CipherFin) 
+-- Algorithm 3 a streamlined version
 invCipherStream ∷ ∀ (alg ∷ AES) dom.
     ( KnownAES alg, HiddenClockResetEnable dom) ⇒
     Channel dom (InType alg, WType alg) →
@@ -154,6 +156,7 @@ invCipherStream  input
       CipherLast 0                       → ((invAddRoundKey state (last w),w),                                                     CipherFin)
       CipherRounds _ _                   → (s0,                                                                                    CipherFin) 
       CipherLast   _                     → (s0,                                                                                    CipherFin) 
+-- keyExpansion as in Algorithm 2, as depicted in fig 6,7,8, a streamlined version
 data KeyMode (alg ∷ AES) 
   = KeyStart | KeyProsXOR (Index 3) (Index (Nr alg + 1)) | KeyProsLastW (Index 4) (Index (Nr alg + 1))  | KeyFin | KeyEnd
   deriving (Generic, NFDataX, Show, Eq)
@@ -173,7 +176,7 @@ instance AESKeyExpansion AES128 where
   keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES128) ⇒ KeyType alg →  ((KeyType alg, WordType alg, WType alg), KeyMode alg)
-        put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
+        put key 
           | AESFacts _ ← knownAES @alg
           = ((key, last key, repeat  @(((Nr alg + 1) * 4) -  Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
@@ -206,7 +209,7 @@ instance AESKeyExpansion AES192 where
   keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES192) ⇒ KeyType alg →  ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode alg)
-        put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
+        put key 
           | AESFacts _ ← knownAES @alg
           = ((key, last key, repeat  @(Nk alg * Nr alg - Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
@@ -241,7 +244,7 @@ instance AESKeyExpansion AES256 where
   keyExpansionStream = enhance put get compute
       where
         put ∷ ∀ alg. (KnownAES alg, alg ~ AES256) ⇒ KeyType alg →  ((KeyType alg, WordType alg, Vec (Nk alg * Nr alg) (WordType alg)), KeyMode alg)
-        put key -- state, result head00000 @key(1,2,3,4,5,...)  last (shiftInAtN will make it too front) and rotateRight key
+        put key 
           | AESFacts _ ← knownAES @alg
           = ((key, last key, repeat  @(Nk alg * Nr alg - Nk alg) (repeat  @(WordSize alg) (v2bv (repeat @(ByteSize alg) low))) ++ key), KeyStart)
 
@@ -275,7 +278,7 @@ instance AESKeyExpansion AES256 where
         
 
 
-
+-- Alternative keyExpansion Algorithm as written in Algorithm 5, a streamlined version
 keyExpansionIECStream ∷ ∀ (alg ∷ AES) dom.
       (KnownAES alg, AESKeyExpansion alg, HiddenClockResetEnable dom) ⇒
       Channel dom (KeyType alg) →

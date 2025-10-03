@@ -103,12 +103,6 @@ inv b = foldl (•) 0X01 (list_binary_powers b)
         pow2 b1 = (•) b1 b1
         list_binary_powers :: (KnownNat w) => BitVector w -> Vec w (BitVector w)
         list_binary_powers = generateI pow2
--- | TODO: A faster inverse can be implemented with extended ecuclidean algorithm
-
- -- TODO:
--- | Round constansts Rcon is a set of 10 set fixed words and it will be invoked by KEYEXPANSION
-
-
 -------------------------------------------
 -- Section 5: Algorithm Specifcations    --
 -------------------------------------------
