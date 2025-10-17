@@ -1,5 +1,3 @@
-Require Import Coq.Init.Wf.
-Require Import Coq.Program.Wf.
 From Equations Require Import Equations.
 From mathcomp Require Import ssreflect ssrfun ssrbool ssrnat tuple seq.
 From mathcomp Require Import zify.
@@ -69,7 +67,7 @@ Section Karatsuba.
 
   (* This is equivalent, modulo the max(n, m) part, to the corresponding sequential
      Karatsuba implementation in Clash.Crypto.ECDSA.Karatsuba *)
-  Equations karatsuba {bitlength : nat} {prf : bitlength <> 0} (x : BITS bitlength) (y: BITS bitlength) : BITS (bitlength.*2) by wf bitlength ltn2  :=
+  Equations karatsuba {bitlength : nat} {prf : bitlength <> 0} (x : BITS bitlength) (y: BITS bitlength) : BITS (bitlength.*2) by wf bitlength ltn2 :=
     karatsuba (bitlength := 0) _ _ with prf eq_refl := { | ! } ;
     karatsuba (bitlength := n.+4) x y :=
       let bitlength := n.+4 in (* Maybe there's a better way to expose bitlength after destructing it *)
@@ -166,7 +164,7 @@ Section Karatsuba.
         apply ltn_mull.
         * rewrite -{1}(exp0n (n := extra) Hextra).
           apply ltn_exp2r. exact Hextra.
-        * apply toNatBounded.
+        * by apply toNatBounded.
         * apply leq_pexp2l. by []. exact leq_shift.
         * apply (ltn_trans) with (n := 3). by []. exact Hpower.
   Qed.
