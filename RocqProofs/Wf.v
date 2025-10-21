@@ -3,6 +3,8 @@ Require Import Coq.Program.Wf.
 From Equations Require Import Equations.
 From mathcomp Require Import ssreflect ssrfun ssrnat ssrbool.
 
+Require Import Common.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -13,10 +15,6 @@ Section Well_founded_Nat.
   Variable f : A -> nat.
 
   Definition ltof (a b:A) := f a < f b.
-
-  Lemma leq_ltn_trans2 n m p : m < n -> n <= p -> m < p.
-    by move=> Hmn; apply: leq_trans.
-  Qed.
 
   (* There are easier proofs given as an example of Equations. *)
   Theorem well_founded_ltof : well_founded ltof.

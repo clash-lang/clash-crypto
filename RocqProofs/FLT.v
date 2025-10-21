@@ -5,6 +5,7 @@ From Bits Require Import bits.
 From mathcomp Require Import zify.
 
 Require Import Wf.
+Require Import Common.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -18,10 +19,9 @@ Lemma bits_nat_equiv_power  : forall l a (p : BITS l),
     rewrite /foldr //= ; rewrite toNatCons addnC.
     rewrite /foldr in IHl.
     rewrite IHl expnD -muln2 expnM.
-    by case: b => //=.
+    by case: b => //.
 Qed.
 
-(* modulo *)
 Equations moduloSeq {m : nat} {prf : m <> 0} (n : nat) : nat by wf n ltn2 :=
   moduloSeq (m := 0) _ with prf eq_refl := { | ! } ;
   moduloSeq 0 := 0 ; (* Should not be needed but makes everything simpler *)
@@ -30,14 +30,7 @@ Equations moduloSeq {m : nat} {prf : m <> 0} (n : nat) : nat by wf n ltn2 :=
     else moduloSeq (m := m) (n - m)
 .
 Next Obligation.
-  by rewrite /ltn2 ltn_subrL //=.
-Qed.
-
-
-Lemma moduloSeq1 : forall (bt_n bt_m : nat), bt_n < bt_m -> bt_n + (bt_m - bt_n) = bt_m.
-  move=> bt_n bt_m Hineq.
-  rewrite subnKC //.
-  exact (ltnW Hineq).
+  by rewrite /ltn2 ltn_subrL //.
 Qed.
 
 Inductive comparator (n m : nat) : Set :=
@@ -71,72 +64,13 @@ Definition modulo_step {bt_n bt_m steps : nat} {m : BITS bt_m} {prf : 0 < bt_m} 
   let newN       := if leB shiftedMod n then subB n shiftedMod else n in
   newN.
 
-(* Taken from a more recent version of mathcomp *)
-Lemma ltn_mull m1 m2 n1 n2 : 0 < n2 -> m1 < n1 -> m2 <= n2 -> m1 * m2 < n1 * n2.
-  Proof.
-    move=> n20 lt_mn1 le_mn2.
-    rewrite (@leq_ltn_trans (m1 * n2)) ?leq_mul2l ?le_mn2 ?orbT//.
-    by rewrite ltn_mul2r lt_mn1 n20.
-Qed.
-
-(* common to two files *)
-Lemma toNat_shlB_zExtend : forall (bitlength extra : nat) (x : BITS bitlength) (shift : nat),
-    1 <= bitlength -> shift <= extra ->
-    toNat (shlBn (zeroExtend extra x) shift) = toNat x * 2 ^ shift.
-  move=> bitlength extra x shift Hbl. move: shift.
-  elim=> [|shift IHshift] leq_shift /=.
-  - by rewrite expn0 muln1 toNat_zeroExtend.
-  - rewrite shlB_asMul toNat_mulB toNat_fromNat.
-    have Hextra: 1 <= extra by rewrite -(ltn_predK leq_shift).
-    have Hblextra : 2 <= bitlength + extra by rewrite -addn1; apply (leq_add Hbl Hextra).
-    have Hpower : 4 <= 2 ^ (bitlength + extra).
-    rewrite [_ < _]/(_.+1 <= _) [4]/(2^2);  apply leq_pexp2l.
-    + by [].
-    + exact Hblextra.
-      rewrite (IHshift (ltnW leq_shift)).
-      rewrite !div.modn_small.
-    + by rewrite -mulnA -expnSr.
-    + have H2lt3: 2 < 3 by [].
-      exact (ltn_trans H2lt3 Hpower).
-    + rewrite -mulnA -expnSr.
-      rewrite expnD.
-      apply ltn_mull.
-      * rewrite -{1}(exp0n (n := extra) Hextra).
-        apply ltn_exp2r. exact Hextra.
-      * by apply toNatBounded.
-      * apply leq_pexp2l. by []. exact leq_shift.
-      * apply (ltn_trans) with (n := 3). by []. exact Hpower.
-Qed.
-
-Lemma zeroExtend_tcast :  forall n m z (bs: BITS n) (H: n = m), zeroExtend z (tcast H bs) = tcast (f_equal (fun x => x + z) H) (zeroExtend z bs).
-  move=> n m z bs H.
-  by case: m / H.
-Qed.
-
-Lemma add_comm2 : forall n m z, n + z = m + z -> z + n = z + m.
-  lia.
-Qed.
-
-Lemma useful : forall a b, ~~ a <-> ~~ b -> a <-> b.
-  move=> a b H.
-  by split ; apply contraLR ; apply H.
-Qed.
 
 Lemma notmsbBound : forall (n : nat) (p : BITS n.+1), msb p <-> 2 ^ n <= toNat p.
   move=> n p.
-  apply useful.
+  apply contra_equiv.
   rewrite -ltnNge.
   rewrite -eqtype.eqbF_neg.
   by apply msb0Bounded.
-Qed.
-Lemma msb_tcast :  forall n m (bs: BITS n)(H: n = m), msb (tcast H bs) = msb bs.
-  move=> n m bs H.
-  by case: m / H.
-Qed.
-
-Lemma shlBn_tcast :  forall n m s (bs: BITS n)(H: n = m), shlBn (tcast H bs) s = tcast H (shlBn bs s).
-  move=> n m s bs H.
-  by case: m / H.
 Qed.
 
 Lemma notmsbBound2 : forall (n : nat) (p : BITS n), 0 < n -> msb p <-> 2 ^ n.-1 <= toNat p.
@@ -146,87 +80,20 @@ Lemma notmsbBound2 : forall (n : nat) (p : BITS n), 0 < n -> msb p <-> 2 ^ n.-1 
   by apply notmsbBound.
 Qed. 
 
-Lemma zeroExtend_tcast2 :  forall n m z (bs: BITS n) (H: n + z = m + z),
-    zeroExtend z (tcast (addnI (add_comm2 H)) bs) = tcast H (zeroExtend z bs).
-  move=> n m z bs H.
-  have H2 : n = m by exact (addnI (add_comm2 H)).
-  case: m / H2 H.
-  move=> H.
-  by rewrite [in LHS]zeroExtend_tcast !tcast_id.
-Qed.
-
-Lemma zeroExtend_tcast3 : forall n m z (bs: BITS n) (H : n + z = m),
-    shlBn (tuple.tcast H (zeroExtend z bs)) z = tuple.tcast H (shlBn (zeroExtend z bs) z).
-  move=> n m z bs H.
-  by case: m / H.
-Qed.
-
-Lemma zeroExtend_tcast4 : forall n m z s (bs: BITS n) (H : n + z = m), s <= z ->
-    shlBn (tuple.tcast H (zeroExtend z bs)) s = tuple.tcast H (shlBn (zeroExtend z bs) s).
-  move=> n m z s bs H H2.
-  by case: m / H.
-Qed. 
-
 Lemma rewriteShift : forall (bt_n bt_m : nat) (m : BITS bt_m) prf3, 0 < bt_m ->
     toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) (bt_n - bt_m)) = toNat m * 2 ^ (bt_n - bt_m).
   move=> bt_n bt_m m prf3 Hbtm.
-  rewrite zeroExtend_tcast3.
+  rewrite zeroExtend_tcast_eq.
   rewrite toNat_tcast.
-  rewrite toNat_shlB_zExtend //=.
+  by rewrite toNat_shlB_zExtend //=.
 Qed.
 
 Lemma rewriteShift2 : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf3, 0 < bt_m -> steps <= bt_n - bt_m ->
     toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps) = toNat m * 2 ^ steps.
   move=> bt_n bt_m steps m prf3 Hbtm Hsteps.
-  rewrite zeroExtend_tcast4 //.
+  rewrite zeroExtend_tcast_less //.
   rewrite toNat_tcast.
   by rewrite toNat_shlB_zExtend //.
-Qed.
-
-Lemma mul_util : forall a b c d, 0 < c -> b <= d -> a < b * c -> a < d * c.
-  move=> a b c d H0 H1 H2.
-  apply (leq_ltn_trans2 (n := b * c)). exact H2.
-  by rewrite leq_pmul2r //.
-Qed.
-
-Lemma mul_util2 : forall a b c d, 0 < c -> b < d -> a <= b * c -> a < d * c.
-  move=> a b c d H0 H1 H2.
-  apply (leq_ltn_trans (n := b * c)). apply H2.
-  by rewrite ltn_pmul2r //.
-Qed.
-
-Lemma mul_util3 : forall a b c d, 0 < c -> b <= d -> a <= b * c -> a <= d * c.
-  move=> a b c d H0 H1 H2.
-  apply (leq_trans (n := b * c)). apply H2.
-  by rewrite leq_pmul2r //.
-Qed.
- 
-Lemma first_step_msb : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n),
-    toNat
-      (modulo_step (steps := bt_n - bt_m) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n) <
-      toNat m * 2 ^ (bt_n - bt_m).
-  move=> bt_n bt_m m prf prf2 prf3 n.
-  rewrite /modulo_step leB_nat rewriteShift //.
-  case_eq (toNat m * 2 ^ (bt_n - bt_m) <= toNat n) ; move=> Hle.
-  - rewrite toNat_subB. rewrite rewriteShift //=.
-    rewrite ltn_subLR //.
-    rewrite (leq_ltn_trans2 (n := 2 ^ bt_n)) //.
-    apply toNatBounded. rewrite addnn -muln2 -mulnA -{3}(expn1 2) -expnD.
-    rewrite (mul_util3 (b := 2 ^ bt_m.-1)) //.
-    rewrite expn_gt0 //=.
-    apply notmsbBound2. apply prf. apply prf2.
-    rewrite -expnD.
-    rewrite leq_exp2l //. lia. 
-    by rewrite leB_nat rewriteShift //.
-  - rewrite ltnNge. by apply/negPf.
-Qed.
-
-Lemma shlBn_id : forall bt_n (n : BITS bt_n), shlBn n 0 = n.
-  auto.
-Qed.
-
-Lemma shlBn_shlB : forall bt_n s (n : BITS bt_n), shlB (shlBn n s) = shlBn n s.+1.
-  auto.
 Qed.
 
 Lemma step_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n) steps,
@@ -245,24 +112,24 @@ Lemma step_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 (n : BIT
       by rewrite subnK //.
     + rewrite leB_nat. by rewrite toNat_tcast toNat_zeroExtend.
   - case_eq (leB (shlBn (tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps.+1) n) ;
-      move=> HleB ; trivial.
+      move=> HleB //.
     rewrite toNat_subB //.
-    rewrite zeroExtend_tcast4 //. rewrite toNat_tcast.
+    rewrite zeroExtend_tcast_less //. rewrite toNat_tcast.
     rewrite toNat_shlB_zExtend //.
     rewrite -(modnMDl (2 ^ steps.+1)).
-    rewrite leB_nat in HleB. rewrite shlBn_tcast toNat_tcast in HleB. rewrite toNat_shlB_zExtend // in HleB.
+    rewrite leB_nat in HleB ;rewrite shlBn_tcast toNat_tcast in HleB ;
+      rewrite toNat_shlB_zExtend // in HleB.
     by rewrite mulnC subnKC //.
 Qed.
     
-Lemma next_step_msb : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n),
+Lemma next_step_ltn : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n),
     steps <= bt_n - bt_m ->
     toNat n < toNat m * 2 ^ (steps + 1) ->
     toNat
       (modulo_step (steps := steps) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n) <
       toNat m * 2 ^ steps.
   move=> bt_n bt_m steps m prf prf2 prf3 n Hsteps Hle.
-  rewrite /modulo_step.
-  rewrite leB_nat rewriteShift2 //.
+  rewrite /modulo_step leB_nat rewriteShift2 //.
   case_eq (toNat m * 2 ^ steps <= toNat n) ; move=> HleC.
   - rewrite toNat_subB. rewrite rewriteShift2 //=.
     rewrite ltn_subLR //.
@@ -286,11 +153,11 @@ Lemma modulo_loop_LE : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 st
     toNat (moduloSeq_CT_rec (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) steps n) < toNat m.
   move=> bt_n bt_m m prf prf2 prf3.
   elim/nat_ind=> [|steps IHsteps] n Hsteps Hlt.
-  - by rewrite -(muln1 (toNat m)) -(expn0 2) ; apply next_step_msb.
+  - by rewrite -(muln1 (toNat m)) -(expn0 2) ; apply next_step_ltn.
   - rewrite /moduloSeq_CT_rec -/moduloSeq_CT_rec.
     apply IHsteps.
     + by rewrite ltnW //.
-    + by rewrite addn1 ; apply next_step_msb. 
+    + by rewrite addn1 ; apply next_step_ltn.
 Qed.
 
 Lemma modulo_loop_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 steps (n : BITS bt_n),
@@ -299,8 +166,7 @@ Lemma modulo_loop_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 s
   move=> bt_n bt_m m prf prf2 prf3.
   elim/nat_ind=> [|steps IHsteps] n Hsteps ; rewrite /moduloSeq_CT_rec.
   - by apply step_mod. 
-  - rewrite -/moduloSeq_CT_rec.
-    rewrite -(step_mod _ _ _ n Hsteps).
+  - rewrite -/moduloSeq_CT_rec -(step_mod _ _ _ n Hsteps).
     by apply IHsteps; rewrite ltnW //.
 Qed.
 
@@ -340,10 +206,10 @@ Theorem moduloSeq_CT_is_modulo : forall (bt_n bt_m : nat) (n : BITS bt_n) (m : B
         by apply nat.leq_subn.
       * by apply notmsbBound2.
   - rewrite -[in LHS](modn_small (m := toNat _) (d := toNat m)) ; first last.
-    + apply modulo_loop_LE. trivial.
+    + apply modulo_loop_LE. by [].
       apply (leq_ltn_trans2 (n := 2 ^ bt_n)).
       * by apply toNatBounded.
-      * apply (mul_util3 (b := 2 ^ bt_m.-1)).
+      * apply (leq_mulL (b := 2 ^ bt_m.-1)).
         apply expn_gt0. by apply notmsbBound2. 
       * by rewrite -expnD leq_exp2l // ; lia.
     + by apply modulo_loop_mod.
