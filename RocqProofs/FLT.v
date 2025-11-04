@@ -11,6 +11,9 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* A loose proof for the inner workings of fltCtmi.
+   It will be followed by a Signal-based coinductive proof later. *)
+
 Lemma bits_nat_equiv_power  : forall l a (p : BITS l),
     foldr (fun (b : bool) e => e ^ 2 * (if b then a else 1)) 1 p = a ^ (toNat p).
   elim=> [| l IHl] a p.
@@ -22,6 +25,7 @@ Lemma bits_nat_equiv_power  : forall l a (p : BITS l),
     by case: b => //.
 Qed.
 
+(* A very basic variable time sequential implementation for unsigned modulo *)
 Equations moduloSeq {m : nat} {prf : m <> 0} (n : nat) : nat by wf n ltn2 :=
   moduloSeq (m := 0) _ with prf eq_refl := { | ! } ;
   moduloSeq 0 := 0 ; (* Should not be needed but makes everything simpler *)
@@ -32,6 +36,28 @@ Equations moduloSeq {m : nat} {prf : m <> 0} (n : nat) : nat by wf n ltn2 :=
 Next Obligation.
   by rewrite /ltn2 ltn_subrL //.
 Qed.
+
+(* This implementation reproduces the inner workings of the mealy machine behind
+   computeModuloUnsigned.
+   In order to keep the proof simple, it emulates the circuit if it received only
+   one computable input and only None afterwards. This enables us to prove that the
+   computation is in constant-time.
+   A more general proof, proving that not only the first input will be computed in
+   that amount of time will be provided later. *)
+Definition modulo_step {bt_n bt_m steps : nat} {m : BITS bt_m} {prf : 0 < bt_m} {prf2 : msb m = true}
+  {prf3 : bt_m <= bt_n} (n : BITS bt_n) : BITS bt_n :=
+  let shiftedMod := shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps in
+  let newN       := if leB shiftedMod n then subB n shiftedMod else n in
+  newN.
+
+Fixpoint moduloSeq_CT_rec (steps : nat) {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
+  {prf2 : msb m = true} {prf3 : bt_m <= bt_n}
+  (n : BITS bt_n) : BITS bt_n :=
+  match steps with
+  | 0 => modulo_step (steps := 0) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n
+  | S steps => moduloSeq_CT_rec steps (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := prf3)
+                (modulo_step (steps := steps.+1) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n)
+  end.
 
 Inductive comparator (n m : nat) : Set :=
 | Lt : n < m -> comparator n m
@@ -52,18 +78,19 @@ Fixpoint compare_nat (n m : nat) : comparator n m :=
   | 0, m'.+1 => Lt (ltn0Sn m')
   | n'.+1, 0 => Ge (ltnW (ltn0Sn n'))
   | n'.+1, m'.+1 =>
-    match compare_nat n' m' with
-    | Lt H => Lt (compareHelper2 H)
-    | Ge H => Ge (compareHelper H)
-    end
+      match compare_nat n' m' with
+      | Lt H => Lt (compareHelper2 H)
+      | Ge H => Ge (compareHelper H)
+      end
   end.
 
-Definition modulo_step {bt_n bt_m steps : nat} {m : BITS bt_m} {prf : 0 < bt_m} {prf2 : msb m = true}
-                    {prf3 : bt_m <= bt_n} (n : BITS bt_n) : BITS bt_n :=
-  let shiftedMod := shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps in
-  let newN       := if leB shiftedMod n then subB n shiftedMod else n in
-  newN.
-
+Equations moduloSeq_CT {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
+  {prf2 : msb m = true} (n : BITS bt_n) : BITS bt_n :=
+  moduloSeq_CT n with compare_nat bt_n bt_m => {
+      moduloSeq_CT n (Lt Hlt) := n;
+      moduloSeq_CT n (Ge Hgt) :=
+        let new_n := moduloSeq_CT_rec (bt_n - bt_m) (bt_n := bt_n) (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := Hgt) n in new_n
+    }.
 
 Lemma notmsbBound : forall (n : nat) (p : BITS n.+1), msb p <-> 2 ^ n <= toNat p.
   move=> n p.
@@ -81,7 +108,7 @@ Lemma notmsbBound2 : forall (n : nat) (p : BITS n), 0 < n -> msb p <-> 2 ^ n.-1 
 Qed. 
 
 Lemma rewriteShift : forall (bt_n bt_m : nat) (m : BITS bt_m) prf3, 0 < bt_m ->
-    toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) (bt_n - bt_m)) = toNat m * 2 ^ (bt_n - bt_m).
+                                                             toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) (bt_n - bt_m)) = toNat m * 2 ^ (bt_n - bt_m).
   move=> bt_n bt_m m prf3 Hbtm.
   rewrite zeroExtend_tcast_eq.
   rewrite toNat_tcast.
@@ -89,7 +116,7 @@ Lemma rewriteShift : forall (bt_n bt_m : nat) (m : BITS bt_m) prf3, 0 < bt_m ->
 Qed.
 
 Lemma rewriteShift2 : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf3, 0 < bt_m -> steps <= bt_n - bt_m ->
-    toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps) = toNat m * 2 ^ steps.
+                                                                    toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps) = toNat m * 2 ^ steps.
   move=> bt_n bt_m steps m prf3 Hbtm Hsteps.
   rewrite zeroExtend_tcast_less //.
   rewrite toNat_tcast.
@@ -121,7 +148,7 @@ Lemma step_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 (n : BIT
       rewrite toNat_shlB_zExtend // in HleB.
     by rewrite mulnC subnKC //.
 Qed.
-    
+
 Lemma next_step_ltn : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n),
     steps <= bt_n - bt_m ->
     toNat n < toNat m * 2 ^ (steps + 1) ->
@@ -137,15 +164,6 @@ Lemma next_step_ltn : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf prf2 pr
     by rewrite leB_nat rewriteShift2 //.
   - by rewrite ltnNge ; apply/negPf.
 Qed.
-
-Fixpoint moduloSeq_CT_rec (steps : nat) {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
-  {prf2 : msb m = true} {prf3 : bt_m <= bt_n}
-  (n : BITS bt_n) : BITS bt_n :=
-  match steps with
-  | 0 => modulo_step (steps := 0) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n
-  | S steps => moduloSeq_CT_rec steps (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := prf3)
-              (modulo_step (steps := steps.+1) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n)
-  end.
 
 Lemma modulo_loop_LE : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 steps (n : BITS bt_n),
     steps <= bt_n - bt_m ->
@@ -169,14 +187,6 @@ Lemma modulo_loop_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 s
   - rewrite -/moduloSeq_CT_rec -(step_mod _ _ _ n Hsteps).
     by apply IHsteps; rewrite ltnW //.
 Qed.
-
-Equations moduloSeq_CT {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
-  {prf2 : msb m = true} (n : BITS bt_n) : BITS bt_n :=
-  moduloSeq_CT n with compare_nat bt_n bt_m => {
-      moduloSeq_CT n (Lt Hlt) := n;
-      moduloSeq_CT n (Ge Hgt) :=
-        let new_n := moduloSeq_CT_rec (bt_n - bt_m) (bt_n := bt_n) (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := Hgt) n in new_n
-    }.
 
 Lemma mod_between : forall n m, m <= n < m * 2 -> n - m = n %% m.
   move=> n m /andP[Hmn Hnm2].
