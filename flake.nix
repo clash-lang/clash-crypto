@@ -1,10 +1,17 @@
 {
   description = "A flake enabling tooling for clash-crypto";
+  nixConfig = {
+    extra-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-public-keys = [ "clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=" ];
+  };
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
-    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
+    ghc-typelits-proof-assist = {
+      url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
+    };
   };
   outputs = { self, nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -35,18 +42,31 @@
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
+            # ghc-typelits-natnormalise = dontCheck prev.ghc-typelits-natnormalise;
+            # ghc-typelits-extra = dontCheck prev.ghc-typelits-extra;
           };
           myHsPkgs = pkgs.haskell.packages.ghc9101.extend overlay;
+          defaultDevShell =
+          myHsPkgs.shellFor {
+                    name = "GHC 9.10.1";
+                    packages = p: [ p.clash-crypto ];
+                    inputsFrom = [];
+                    shellHook = ''
+                      SHAKEPATH=`cabal list-bin clash-crypto:shake`
+                      export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
+                    '';
+                    nativeBuildInputs =
+                      with pkgs; [
+                        gnumake yosys nextpnr trellis ] ++
+                      (with myHsPkgs; [ cabal-install ])
+                      ++ [ecpprog.defaultPackage.${system}]
+                    ;
+                  };
       in
       {
-        devShells.default = myHsPkgs.shellFor {
-          name = "GHC 9.10.1";
-          packages = p: [ p.clash-crypto ];
-          inputsFrom = [];
-          shellHook = ''
-            SHAKEPATH=`cabal list-bin clash-crypto:shake`
-            export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
-
+        devShells.default = defaultDevShell;
+        devShells.fullFledged = defaultDevShell.overrideAttrs (finalA: prevA: {
+          shellHook = prevA.shellHook + ''
             export OCAML_VERSION=${pkgs.ocaml-ng.ocamlPackages_4_09.ocaml.version}
             export OPAMROOT=$(pwd)/.opam-local
             mkdir -p $OPAMROOT
@@ -59,13 +79,11 @@
             fi
 
             eval $(opam env)
-          '';          nativeBuildInputs =
-            with pkgs; [
-              gnumake yosys nextpnr trellis opam gmp pkg-config ] ++
-            (with myHsPkgs; [ cabal-install ])
-            ++ [ecpprog.defaultPackage.${system}]
-          ;
-        };
+          '';
+          nativeBuildInputs = prevA.nativeBuildInputs ++
+                  (with pkgs; [opam gmp pkg-config]);
+        });
+
         packages.default = dontCheck myHsPkgs.clash-crypto;
       });
 }

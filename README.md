@@ -4,8 +4,13 @@
 
 Some proofs are available in the RocqProofs folder.
 
-The Nix environment currently provides opam, providing a dependency management
-tool for Rocq libraries.
+The Nix environment currently provides opam in the `fullFledged` devShell,
+providing a dependency management tool for Rocq libraries.
+
+You can activate this devShell to use it with direnv, modifying `.envrc` in this
+way:
+
+```use flake .#fullFledged```.
 
 First execute `opam repo add rocq-released https://rocq-prover.org/opam/released`
 and `opam repo add coq-released https://coq.inria.fr/opam/released`
