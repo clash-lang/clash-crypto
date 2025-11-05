@@ -42,8 +42,6 @@
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
-            # ghc-typelits-natnormalise = dontCheck prev.ghc-typelits-natnormalise;
-            # ghc-typelits-extra = dontCheck prev.ghc-typelits-extra;
           };
           myHsPkgs = pkgs.haskell.packages.ghc9101.extend overlay;
           defaultDevShell =
@@ -65,12 +63,12 @@
       in
       {
         devShells.default = defaultDevShell;
-        devShells.fullFledged = defaultDevShell.overrideAttrs (finalA: prevA: {
+        devShells.withOpam = defaultDevShell.overrideAttrs (finalA: prevA: {
+          name = prevA.name + " with opam";
           shellHook = prevA.shellHook + ''
             export OCAML_VERSION=${pkgs.ocaml-ng.ocamlPackages_4_09.ocaml.version}
             export OPAMROOT=$(pwd)/.opam-local
             mkdir -p $OPAMROOT
-            export OPAMYES=true # Auto-answer yes to prompts
 
             if [ ! -d "$OPAMROOT/default" ]; then
               opam init --bare --disable-sandboxing --auto-setup

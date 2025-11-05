@@ -9,6 +9,7 @@ stack.yaml.lock
 tags
 TAGS
 /cabal.project.local
+.envrc
 *.o
 *.o-boot
 *.hi
