@@ -25,29 +25,29 @@
           clashCompilerSrc = pkgs.fetchFromGitHub {
             owner = "clash-lang";
             repo = "clash-compiler";
-            rev = "7bf85bfbdb6561c068f99ec5f346d1b5092a011b";
-            sha256 = "sha256-uiXDG8S5eJrQvwetU0YlAKu1C5RDFoW/3/j77nM0lYw=";
+            rev = "12169a7255319811505810a84315b9b64771a02d";
+            sha256 = "sha256-m99YICyCojOR1H6fpJIRRjWIgB1e9ZdTNDRumJAkfOg=";
           };
 
           inherit (pkgs.haskell.lib) dontCheck doJailbreak markUnbroken;
           overlay = final: prev: {
-            clash-prelude = prev.callCabal2nix "clash-prelude"
-              (clashCompilerSrc + "/clash-prelude") { };
-            clash-prelude-hedgehog = prev.callCabal2nix "clash-prelude-hedgehog"
-              (clashCompilerSrc + "/clash-prelude-hedgehog") { };
-            clash-lib = prev.callCabal2nix "clash-lib"
-              (clashCompilerSrc + "/clash-lib") { };
-            clash-ghc = prev.callCabal2nix "clash-ghc"
-              (clashCompilerSrc + "/clash-ghc") { };
+            clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
+              (clashCompilerSrc + "/clash-prelude") { });
+            clash-prelude-hedgehog = dontCheck (prev.callCabal2nix "clash-prelude-hedgehog"
+              (clashCompilerSrc + "/clash-prelude-hedgehog") { });
+            clash-lib = dontCheck (prev.callCabal2nix "clash-lib"
+              (clashCompilerSrc + "/clash-lib") { });
+            clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
+              (clashCompilerSrc + "/clash-ghc") { });
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };
-          myHsPkgs = pkgs.haskell.packages.ghc9101.extend overlay;
+          myHsPkgs = pkgs.haskell.packages.ghc9103.extend overlay;
           defaultDevShell =
           myHsPkgs.shellFor {
-                    name = "GHC 9.10.1";
+                    name = "GHC 9.10.3";
                     packages = p: [ p.clash-crypto ];
                     inputsFrom = [];
                     shellHook = ''

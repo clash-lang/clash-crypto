@@ -104,8 +104,8 @@ isDataFrame = \case
 instance HasField "isDataFrame" (Frame s e a) Bool where
   getField = isDataFrame
 
-instance HasField "hasData" (DataStream dom s e a) (Signal dom Bool) where
-  getField = fmap isDataFrame
+instance HasField "hasData" (Frame s e a) Bool where
+  getField = isDataFrame
 
 -- | Checks whether the given frame is a 'Start' frame.
 isStartFrame ∷ Frame s e a → Bool
@@ -116,8 +116,8 @@ isStartFrame = \case
 instance HasField "isStartFrame" (Frame s e a) Bool where
   getField = isStartFrame
 
-instance HasField "atStartFrame" (DataStream dom s e a) (Signal dom Bool) where
-  getField = fmap isStartFrame
+instance HasField "atStartFrame" (Frame s e a) Bool where
+  getField = isStartFrame
 
 -- | Checks whether the given frame is a 'Middle' frame.
 isMiddleFrame ∷ Frame s e a → Bool
@@ -128,8 +128,8 @@ isMiddleFrame = \case
 instance HasField "isMiddleFrame" (Frame s e a) Bool where
   getField = isMiddleFrame
 
-instance HasField "atMiddleFrame" (DataStream dom s e a) (Signal dom Bool) where
-  getField = fmap isMiddleFrame
+instance HasField "atMiddleFrame" (Frame s e a) Bool where
+  getField = isMiddleFrame
 
 -- | Checks whether the given frame is an 'End' frame.
 isEndFrame ∷ Frame s e a → Bool
@@ -140,8 +140,8 @@ isEndFrame = \case
 instance HasField "isEndFrame" (Frame s e a) Bool where
   getField = isEndFrame
 
-instance HasField "atEndFrame" (DataStream dom s e a) (Signal dom Bool) where
-  getField = fmap isEndFrame
+instance HasField "atEndFrame" (Frame s e a) Bool where
+  getField = isEndFrame
 
 -- | Replaces frames holding no data with the first argument and
 -- extracts the data from the frame otherwise and modifies it using
