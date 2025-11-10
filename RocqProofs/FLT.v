@@ -6,221 +6,205 @@ From mathcomp Require Import zify.
 
 Require Import Wf.
 Require Import Common.
+Require Import Modulo.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(* A loose proof for the inner workings of fltCtmi.
-   It will be followed by a Signal-based coinductive proof later. *)
+Section FLT.
+  Section Defs. 
+    Variable bt_m : nat.
+    Variable m    : BITS bt_m.
+    Variable prf  : 0 < bt_m.
+    Variable prf2 : msb m = true.
+    Variable n : BITS bt_m.
+    Variable prf_mod : ltB n m. (* TODO: Check if it is useful *)
 
-Lemma bits_nat_equiv_power  : forall l a (p : BITS l),
-    foldr (fun (b : bool) e => e ^ 2 * (if b then a else 1)) 1 p = a ^ (toNat p).
-  elim=> [| l IHl] a p.
-  - by rewrite toNatNil (tuple0 p) /foldr //=.
-  - case/tupleP: p => [b bs].
-    rewrite /foldr //= ; rewrite toNatCons addnC.
-    rewrite /foldr in IHl.
-    rewrite IHl expnD -muln2 expnM.
-    by case: b => //.
-Qed.
+    Definition flt_step (index : nat) (accum : BITS bt_m) : BITS bt_m :=
+      let v1 := moduloSeq_CT_resized prf prf2 (fullmulB accum accum) in
+      moduloSeq_CT_resized prf prf2 (fullmulB v1 (if getBit (decB m) index then n else fromNat 1)).
 
-(* A very basic variable time sequential implementation for unsigned modulo *)
-Equations moduloSeq {m : nat} {prf : m <> 0} (n : nat) : nat by wf n ltn2 :=
-  moduloSeq (m := 0) _ with prf eq_refl := { | ! } ;
-  moduloSeq 0 := 0 ; (* Should not be needed but makes everything simpler *)
-  moduloSeq n :=
-    if n < m then n
-    else moduloSeq (m := m) (n - m)
-.
-Next Obligation.
-  by rewrite /ltn2 ltn_subrL //.
-Qed.
+    (* starting from the LSB of the high part *)
+    Equations fltSeq_CT_rec (steps : nat) : BITS bt_m :=
+      fltSeq_CT_rec 0 := flt_step (bt_m - 1) #1 ;
+      fltSeq_CT_rec s.+1 := flt_step (bt_m - s.+2) (fltSeq_CT_rec s)
+    .
+    
+    Definition fltSeq_CT : BITS bt_m :=
+      fltSeq_CT_rec bt_m.-1.
+  End Defs.
 
-(* This implementation reproduces the inner workings of the mealy machine behind
-   computeModuloUnsigned.
-   In order to keep the proof simple, it emulates the circuit if it received only
-   one computable input and only None afterwards. This enables us to prove that the
-   computation is in constant-time.
-   A more general proof, proving that not only the first input will be computed in
-   that amount of time will be provided later. *)
-Definition modulo_step {bt_n bt_m steps : nat} {m : BITS bt_m} {prf : 0 < bt_m} {prf2 : msb m = true}
-  {prf3 : bt_m <= bt_n} (n : BITS bt_n) : BITS bt_n :=
-  let shiftedMod := shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps in
-  let newN       := if leB shiftedMod n then subB n shiftedMod else n in
-  newN.
+  Lemma on_step : forall (steps bt_m : nat) (n m : BITS bt_m) (prf : 0 < bt_m) (prf2 : msb m) a,
+      toNat (flt_step prf prf2 n steps a) = (toNat a ^ 2) * toNat (if getBit (decB m) steps then n else fromNat 1) %% toNat m.
+    move=> steps bt_m n m prf prf2 a.
+    rewrite /flt_step.
+    rewrite moduloSeq_CT_resized_is_modulo.
+    rewrite toNat_fullmulB.
+    rewrite moduloSeq_CT_resized_is_modulo.
+    rewrite toNat_fullmulB.
+    rewrite mulnn.
+    by rewrite modnMml.
+  Qed.
 
-Fixpoint moduloSeq_CT_rec (steps : nat) {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
-  {prf2 : msb m = true} {prf3 : bt_m <= bt_n}
-  (n : BITS bt_n) : BITS bt_n :=
-  match steps with
-  | 0 => modulo_step (steps := 0) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n
-  | S steps => moduloSeq_CT_rec steps (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := prf3)
-                (modulo_step (steps := steps.+1) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n)
-  end.
+  Lemma getBit0 : forall bt_m (m : BITS bt_m.+1), msb m = getBit m bt_m.
+    move=> bt_m.
+    case/tupleP=> m ms.
+    rewrite /msb //=. rewrite (last_nth false). rewrite /getBit.
+    by rewrite {1}size_tuple.
+  Qed.
 
-Inductive comparator (n m : nat) : Set :=
-| Lt : n < m -> comparator n m
-| Ge : m <= n -> comparator n m
-.
+  Lemma msb_high1 : forall bt_m (m : BITS (bt_m + 1)), singleBit (msb m) = high 1 m.
+    move=> bt_m m.
+    apply allBitsEq.
+    case=> // ; move=> _.
+    rewrite getBit_high add0n.
+    have H2 : bt_m + 1 = bt_m.+1 by lia.
+    rewrite H2 in m *.
+    by rewrite -!getBit0 //.
+  Qed.
 
-Lemma compareHelper : forall n m, n <= m -> n.+1 <= m.+1.
-  lia. 
-Qed.
+  Lemma auxa : forall bt_m idx (n : BITS bt_m),
+      idx < bt_m ->
+      nat_of_bool (getBit n idx) = toNat (singleBit (getBit n idx)).
+    case=> [|?] ???.  
+    - by []. 
+    - by rewrite toNatCons //= toNatNil ; lia.
+  Qed.
 
-Lemma compareHelper2 : forall n m, n < m -> n.+1 < m.+1.
-  lia. 
-Qed.
+  Lemma aux :
+    forall bt_m idx (n : BITS bt_m)
+      (H : bt_m = bt_m - idx.+1 + idx.+1)
+      (H2 : bt_m = (bt_m - idx.+1).+1 + idx),
+      idx < bt_m ->
+      toNat (high idx.+1 (tcast H n)) = toNat (high idx (tcast H2 n)) * 2 + getBit n (bt_m - idx.+1).
+    elim=> [|bt_m _] //.
+    elim=> [|idx IHidx] ; move=> n H H2 Hineq //=.
+    - rewrite toNatNil. rewrite mul0n add0n.
+      rewrite -msb_high1.
+      rewrite msb_tcast.
+      rewrite getBit0.
+      have -> : bt_m.+1 - 1 = bt_m by lia.
+      by rewrite auxa.
+    - rewrite (addnC (toNat _ * 2)) muln2. rewrite -toNat_joinlsb.
+      f_equal.
+      apply allBitsEq.
+      elim=> [|i IHi] ; move=> Hi.
+      + rewrite /joinlsb {2}/getBit //=.
+        rewrite getBit_high.
+        by rewrite getBit_tcast.
+      + have -> : getBit (joinlsb (high idx.+1 (tcast H2 n), getBit n (bt_m.+1 - idx.+2))) i.+1 = getBit (high idx.+1 (tcast H2 n)) i by rewrite /getBit /joinlsb //=.
+        rewrite !getBit_high.
+        rewrite !getBit_tcast.
+        f_equal.
+        lia.
+  Qed.
 
-Fixpoint compare_nat (n m : nat) : comparator n m :=
-  match n, m with
-  | 0, 0 => Ge (leqnn 0)
-  | 0, m'.+1 => Lt (ltn0Sn m')
-  | n'.+1, 0 => Ge (ltnW (ltn0Sn n'))
-  | n'.+1, m'.+1 =>
-      match compare_nat n' m' with
-      | Lt H => Lt (compareHelper2 H)
-      | Ge H => Ge (compareHelper H)
-      end
-  end.
+  Lemma mod_other : forall a b c d, a = b %[mod d] -> a * c = b * c %[mod d].
+    by move=> ???? H ; rewrite -modnMm H modnMm.
+  Qed.
 
-Equations moduloSeq_CT {bt_n bt_m : nat} {m : BITS bt_m} {prf : 0 < bt_m}
-  {prf2 : msb m = true} (n : BITS bt_n) : BITS bt_n :=
-  moduloSeq_CT n with compare_nat bt_n bt_m => {
-      moduloSeq_CT n (Lt Hlt) := n;
-      moduloSeq_CT n (Ge Hgt) :=
-        let new_n := moduloSeq_CT_rec (bt_n - bt_m) (bt_n := bt_n) (bt_m := bt_m) (prf := prf) (prf2 := prf2) (prf3 := Hgt) n in new_n
-    }.
+  Lemma mod_simpl : forall a b c, (a %% b) ^ 2 * c = a ^ 2 * c %[mod b].
+    by move=> ??? ; apply mod_other ;rewrite modnXm.
+  Qed.
+  
+  Lemma fltEq1 :
+    forall (bt_m steps o : nat) (n : BITS bt_m) (m : BITS bt_m) (prf : 0 < bt_m) (prf2 : msb m) (H : steps.+1 < bt_m) (H2 : bt_m = o + steps.+1),
+      toNat (fltSeq_CT_rec prf prf2 n steps)
+      = toNat n ^ toNat (high steps.+1 (tcast H2 (decB m))) %% toNat m.
+    elim=> [|bt_m _] //.
+    elim: bt_m => [|bt_m IHbtm] //.
+    - elim=> [|steps IHsteps] ; move=> o n m prf prf2 H H2.
+      + rewrite on_step.
+        rewrite toNat_fromNat .
+        have -> : (1 %% 2 ^ bt_m.+2) ^ 2 = 1 by rewrite modn_small ; rewrite -{1}(expn0 2) // ; rewrite ltn_exp2l //.
+        rewrite mul1n.
+        rewrite -msb_high1.
+        rewrite -getBit0.
+        rewrite msb_tcast.
+        case_eq (msb (decB m)) ; move=> _.
+        * by [].
+        * have -> : toNat (singleBit false) = 0 by [].
+          rewrite expn0 toNat_fromNat.
+          by have -> : (1 %% 2 ^ bt_m.+2) = 1 by rewrite modn_small ; rewrite -{1}(expn0 2) // ; rewrite ltn_exp2l //.
+      + rewrite on_step.
+        have Hx : o = bt_m.+2 - steps.+2 by lia.
+        rewrite Hx in H2 *.        
+        rewrite (IHsteps o.+1). lia.
+        move=> H0.
+        have Hm : (bt_m.+2 - steps.+2).+1 + steps.+1 = bt_m.+2 - steps.+1 + steps.+1 by lia.
+        rewrite Hx in H2 H0 *.
+        have H3 : bt_m.+2 = bt_m.+2 - steps.+1 + steps.+1 by lia.
+        rewrite (aux (decB m) H2 (idx := steps.+1) H0) //.
+        have -> : toNat (if getBit (decB m) (bt_m.+2 - steps.+2) then n else # (1)) = toNat n ^ getBit (decB m) (bt_m.+2 - steps.+2).
+        case_eq (getBit (decB m) (bt_m.+2 - steps.+2)) ; move=> ?.
+        by [].
+        rewrite toNat_fromNat modn_small //=. rewrite -{1}(expn0 2) // ; rewrite ltn_exp2l //.
+        rewrite mod_simpl.
+        rewrite -expnM.
+        by rewrite expnD.
+        lia.
+        lia.
+  Qed.
 
-Lemma notmsbBound : forall (n : nat) (p : BITS n.+1), msb p <-> 2 ^ n <= toNat p.
-  move=> n p.
-  apply contra_equiv.
-  rewrite -ltnNge.
-  rewrite -eqtype.eqbF_neg.
-  by apply msb0Bounded.
-Qed.
-
-Lemma notmsbBound2 : forall (n : nat) (p : BITS n), 0 < n -> msb p <-> 2 ^ n.-1 <= toNat p.
-  move=> n p Hn.
-  rewrite -(toNat_tcast p (eq_sym (ltn_predK Hn))) //.
-  rewrite -(msb_tcast p (eq_sym (ltn_predK Hn))).
-  by apply notmsbBound.
-Qed. 
-
-Lemma rewriteShift : forall (bt_n bt_m : nat) (m : BITS bt_m) prf3, 0 < bt_m ->
-                                                             toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) (bt_n - bt_m)) = toNat m * 2 ^ (bt_n - bt_m).
-  move=> bt_n bt_m m prf3 Hbtm.
-  rewrite zeroExtend_tcast_eq.
-  rewrite toNat_tcast.
-  by rewrite toNat_shlB_zExtend //=.
-Qed.
-
-Lemma rewriteShift2 : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf3, 0 < bt_m -> steps <= bt_n - bt_m ->
-                                                                    toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps) = toNat m * 2 ^ steps.
-  move=> bt_n bt_m steps m prf3 Hbtm Hsteps.
-  rewrite zeroExtend_tcast_less //.
-  rewrite toNat_tcast.
-  by rewrite toNat_shlB_zExtend //.
-Qed.
-
-Lemma step_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n) steps,
-    steps <= bt_n - bt_m ->
-    toNat
-      (modulo_step (steps := steps) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n)
-    =
-      toNat n %[mod toNat m].
-  move=> bt_n bt_m m prf prf2 prf3 n.
-  elim/nat_ind=> [|steps IHstep] Hsteps ; rewrite /modulo_step.
-  - rewrite shlBn_id.
-    rewrite leB_nat toNat_tcast toNat_zeroExtend.
-    case_eq (toNat m <= toNat n) ; move=> Hle ; auto ; first last.
-    + rewrite toNat_subB. rewrite toNat_tcast toNat_zeroExtend.
-      rewrite -modnDr.
-      by rewrite subnK //.
-    + rewrite leB_nat. by rewrite toNat_tcast toNat_zeroExtend.
-  - case_eq (leB (shlBn (tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps.+1) n) ;
-      move=> HleB //.
-    rewrite toNat_subB //.
-    rewrite zeroExtend_tcast_less //. rewrite toNat_tcast.
-    rewrite toNat_shlB_zExtend //.
-    rewrite -(modnMDl (2 ^ steps.+1)).
-    rewrite leB_nat in HleB ;rewrite shlBn_tcast toNat_tcast in HleB ;
-      rewrite toNat_shlB_zExtend // in HleB.
-    by rewrite mulnC subnKC //.
-Qed.
-
-Lemma next_step_ltn : forall (bt_n bt_m steps : nat) (m : BITS bt_m) prf prf2 prf3 (n : BITS bt_n),
-    steps <= bt_n - bt_m ->
-    toNat n < toNat m * 2 ^ (steps + 1) ->
-    toNat
-      (modulo_step (steps := steps) (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) n) <
-      toNat m * 2 ^ steps.
-  move=> bt_n bt_m steps m prf prf2 prf3 n Hsteps Hle.
-  rewrite /modulo_step leB_nat rewriteShift2 //.
-  case_eq (toNat m * 2 ^ steps <= toNat n) ; move=> HleC.
-  - rewrite toNat_subB. rewrite rewriteShift2 //=.
-    rewrite ltn_subLR //.
-    rewrite addnn -muln2 -mulnA -{2}(expn1 2) -expnD //.
-    by rewrite leB_nat rewriteShift2 //.
-  - by rewrite ltnNge ; apply/negPf.
-Qed.
-
-Lemma modulo_loop_LE : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 steps (n : BITS bt_n),
-    steps <= bt_n - bt_m ->
-    toNat n < toNat m * 2 ^ (steps + 1) ->
-    toNat (moduloSeq_CT_rec (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) steps n) < toNat m.
-  move=> bt_n bt_m m prf prf2 prf3.
-  elim/nat_ind=> [|steps IHsteps] n Hsteps Hlt.
-  - by rewrite -(muln1 (toNat m)) -(expn0 2) ; apply next_step_ltn.
-  - rewrite /moduloSeq_CT_rec -/moduloSeq_CT_rec.
-    apply IHsteps.
-    + by rewrite ltnW //.
-    + by rewrite addn1 ; apply next_step_ltn.
-Qed.
-
-Lemma modulo_loop_mod : forall (bt_n bt_m : nat) (m : BITS bt_m) prf prf2 prf3 steps (n : BITS bt_n),
-    steps <= bt_n - bt_m ->
-    toNat (moduloSeq_CT_rec (m := m) (prf := prf) (prf2 := prf2) (prf3 := prf3) steps n) = toNat n %[mod toNat m].
-  move=> bt_n bt_m m prf prf2 prf3.
-  elim/nat_ind=> [|steps IHsteps] n Hsteps ; rewrite /moduloSeq_CT_rec.
-  - by apply step_mod. 
-  - rewrite -/moduloSeq_CT_rec -(step_mod _ _ _ n Hsteps).
-    by apply IHsteps; rewrite ltnW //.
-Qed.
-
-Lemma mod_between : forall n m, m <= n < m * 2 -> n - m = n %% m.
-  move=> n m /andP[Hmn Hnm2].
-  have Hbound: 0 <= n - m < m by apply/andP; split ; lia.
-  have Hdecomp: n = 1 * m + (n - m) by rewrite mul1n addnC subnK // ; apply/ltnW ; apply Hmn. 
-  - apply/eq_sym.
-    rewrite [in LHS]Hdecomp mul1n modnDl.
-    by apply modn_small.
-Qed.
-
-Lemma moduloSeq_is_modulo : forall m prf n, moduloSeq (m := m) (prf := prf) n = n %% m.
-  move=> m prf n.
-  funelim (moduloSeq n) ; rewrite -Heqcall //=.
-  case_eq (n.+1 < n0.+1) ; move=> Heq.
-  - by apply PeanoNat.Nat.eq_sym_iff ; apply modn_small ; apply Heq.
-  - by rewrite H -modnDr subnK //= ; rewrite ltnNge Bool.negb_false_iff //= in Heq.
-Qed.
-
-Theorem moduloSeq_CT_is_modulo : forall (bt_n bt_m : nat) (n : BITS bt_n) (m : BITS bt_m) prf prf2, toNat (moduloSeq_CT (m := m) (prf2 := prf2) (bt_m := bt_m) (prf := prf) n) = toNat n %% toNat m.
-  move=> bt_n bt_m n m prf prf2.
-  funelim (moduloSeq_CT n) ; rewrite -Heqcall.
-  - rewrite modn_small //.
-    rewrite (leq_ltn_trans2 (n := 2 ^ bt_n)) //.
-    + by apply toNatBounded.
-    + rewrite (leq_trans (n := 2 ^ bt_m.-1)) //.
-      * rewrite leq_exp2l //.
-        by apply nat.leq_subn.
-      * by apply notmsbBound2.
-  - rewrite -[in LHS](modn_small (m := toNat _) (d := toNat m)) ; first last.
-    + apply modulo_loop_LE. by [].
-      apply (leq_ltn_trans2 (n := 2 ^ bt_n)).
-      * by apply toNatBounded.
-      * apply (leq_mulL (b := 2 ^ bt_m.-1)).
-        apply expn_gt0. by apply notmsbBound2. 
-      * by rewrite -expnD leq_exp2l // ; lia.
-    + by apply modulo_loop_mod.
-Qed.
+  Lemma fltEq :
+    forall (bt_m : nat) (n : BITS bt_m) (m : BITS bt_m) (prf : 0 < bt_m) (prf2 : msb m),
+      toNat (fltSeq_CT prf prf2 n) = toNat n ^ (toNat (decB m)) %% toNat m.
+    elim=> [|bt_m _] //.
+    elim: bt_m => [|bt_m _]; move=> n m prf prf2.
+    - have H : m = ones 1.
+      apply allBitsEq.
+      move=> i Hi.
+      case: i => // in Hi *.
+      rewrite -getBit0. by rewrite getBit_ones.
+      have Hm : toNat m = 1.
+      rewrite H.
+      rewrite toNat_ones. lia.
+      rewrite Hm modn1.
+      rewrite /fltSeq_CT.
+      simp fltSeq_CT_rec.
+      rewrite /flt_step.
+      rewrite moduloSeq_CT_resized_is_modulo.
+      rewrite toNat_fullmulB.
+      rewrite moduloSeq_CT_resized_is_modulo.
+      rewrite toNat_fullmulB toNat_fromNat.
+      have -> : 1 %% 2 ^ 1 = 1 by lia.
+      rewrite mul1n modnMml mul1n Hm.
+      by rewrite modn1.
+    - rewrite /fltSeq_CT.
+      have -> : bt_m.+2.-1 = bt_m.+1 by lia.
+      simp fltSeq_CT_rec.
+      have H3 : bt_m.+2 = bt_m.+2 - bt_m.+1 + bt_m.+1 by lia.
+      rewrite on_step.
+      rewrite (fltEq1 (o := bt_m.+2 - bt_m.+1) _ _ _ _ H3).
+      rewrite mod_simpl.
+      rewrite -expnM.
+      have -> : toNat (if getBit (decB m) (bt_m.+2 - bt_m.+2) then n else # (1)) =
+                 toNat n ^ getBit (decB m) (bt_m.+2 - bt_m.+2).
+      case_eq (getBit (decB m) (bt_m.+2 - bt_m.+2)) ; move=> _.
+      by [].
+      rewrite toNat_fromNat modn_small //=. rewrite -{1}(expn0 2) // ; rewrite ltn_exp2l //.
+      have H4 : bt_m.+2 = (bt_m.+2 - bt_m.+2).+1 + bt_m.+1 by lia.
+      (* TODO: Move outside as a lemma *)
+      have H5 : forall Hw He, toNat (high bt_m.+1 (tcast He (decB m))) = toNat (high bt_m.+1 (tcast Hw (decB m))).
+      + move=> n0 n1 Hw He.
+        have Hq : n0 = n1 by lia.
+        f_equal.
+        apply allBitsEq ;move=> i Hi.
+        rewrite !getBit_high.
+        rewrite !getBit_tcast. 
+        by rewrite Hq.
+      rewrite (H5 _ _ H4).
+      rewrite -expnD.
+      have H6 : bt_m.+2 = bt_m.+2 - bt_m.+2 + bt_m.+2 by lia.
+      rewrite -(aux (idx := bt_m.+1) (decB m) H6 H4).
+      have <- : decB m = high bt_m.+2 (tcast H6 (decB m)).
+      apply allBitsEq ; move=> ??.
+      rewrite getBit_high.
+      rewrite {3}subnn addn0.
+      by rewrite getBit_tcast.
+      reflexivity.
+      lia.
+      lia.
+  Qed.
+End FLT.
