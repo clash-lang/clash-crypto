@@ -9,6 +9,8 @@ stack.yaml.lock
 tags
 TAGS
 /cabal.project.local
+.envrc
+.opam-local/
 *.o
 *.o-boot
 *.hi
@@ -31,3 +33,7 @@ TAGS
 *.log
 *.tar.gz
 *.DS_Store
+*.glob
+*.vos
+*.vok
+*.vo
