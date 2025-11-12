@@ -1,0 +1,21 @@
+name: "Simulation Tests"
+description: "Run simulation tests"
+
+inputs:
+  testcase:
+    description: "pattern selecting the tests to be executed"
+    required: true
+    default: "none"
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Pull the Nix devShell from the cache"
+      shell: bash
+      run: nix build .#devShells.x86_64-linux.default
+    - name: "Run simulation test(s)"
+      shell: bash
+      run: |
+        nix develop \
+          --command bash \
+          -c "cabal run -- simulation -p ${{ inputs.testcase }}"

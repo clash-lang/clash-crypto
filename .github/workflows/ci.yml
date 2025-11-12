@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+
+env:
+  PROJECT: "clash-formal"
+  ATTIC_CACHE: "http://${{ secrets.ATTIC_SERVER_IP }}:9200"
+  NIX_CONFIG: |
+    extra-substituters = $ATTIC_CACHE/$PROJECT
+    extra-trusted-public-keys = ${{ secrets.ATTIC_CACHE_PK }}
+    netrc-file = /etc/nix/netrc
+  NETRC_FILE: |
+    machine ${{ secrets.ATTIC_SERVER_IP }}
+    password ${{ secrets.ATTIC_PULL_JWT_TOKEN }}
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  nix-build:
+    name: Build & cache Nix devShell
+    runs-on: [self-hosted, compute]
+    container:
+      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      options: --memory=11g
+    needs: []
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Login to the local cache"
+        run: |
+          attic login \
+            --set-default "${{ env.PROJECT }}" \
+            "${{ env.ATTIC_CACHE }}" \
+            "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
+      - name: "Build the Nix devShell"
+        run: nix build .#devShells.x86_64-linux.default
+      - name: "Push any changes to the cache"
+        run: |
+          attic push \
+            "${{ env.PROJECT }}" \
+            "$(nix path-info .#devShells.x86_64-linux.default)"
+
+  simulate:
+    name: Simulation Tests
+    runs-on: [self-hosted, compute]
+    container:
+      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      options: --memory=11g
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - SHA-1
+          - SHA-224
+          - SHA-256
+          - SHA-512
+          - HMAC
+          - Modulo.Modulo
+          - Karatsuba
+          - InverseModulo
+
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Run Simulation"
+        uses: "./.github/actions/simulate"
+        with:
+          testcase: ${{ matrix.test }}
+
+  hitlt:
+    name: HITL Tests
+    runs-on: [self-hosted, hardware-access, orangecrab]
+    container:
+      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      options: >-
+        --memory=11g
+        --device /dev/bus/usb
+        --device /dev/ttyPmodUSB0
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - SHA.SHA1
+          - SHA.SHA224
+          - SHA.SHA256
+          - HMACSHA256
+          - Modulo.Modulo
+          - Karatsuba
+          - BEA
+          - FastGCD
+          - FltCtmi
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Run HITLT"
+        uses: "./.github/actions/hitlt"
+        with:
+          testcase: ${{ matrix.test }}

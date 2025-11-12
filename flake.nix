@@ -40,6 +40,7 @@
             clash-ghc = prev.callCabal2nix "clash-ghc"
               (clashCompilerSrc + "/clash-ghc") { };
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
+            network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };

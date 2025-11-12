@@ -1,0 +1,10 @@
+#!/bin/bash
+
+mkdir -p /root/.ssh
+echo -e "${*}" > /root/.ssh/deploykey && chmod 600 /root/.ssh/deploykey
+echo -e "\
+host github.com\n\
+  User git\n\
+  Hostname github.com\n\
+  IdentityFile /root/.ssh/deploykey\n\
+" > /root/.ssh/config
