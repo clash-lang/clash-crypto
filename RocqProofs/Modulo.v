@@ -62,8 +62,7 @@ Section Modulo.
 
     Lemma rewriteShift :
       toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) (bt_n - bt_m)) = toNat m * 2 ^ (bt_n - bt_m).
-      rewrite zeroExtend_tcast_eq.
-      rewrite toNat_tcast.
+      rewrite zeroExtend_tcast_eq toNat_tcast.
       by rewrite toNat_shlB_zExtend //.
     Qed.
 
@@ -72,9 +71,7 @@ Section Modulo.
         toNat (shlBn (tuple.tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps)
         =
           toNat m * 2 ^ steps.
-      move=> ??.
-      rewrite zeroExtend_tcast_less //.
-      rewrite toNat_tcast.
+      move=> ?? ; rewrite zeroExtend_tcast_less // toNat_tcast.
       by rewrite toNat_shlB_zExtend //.
     Qed.
 
@@ -82,68 +79,54 @@ Section Modulo.
         steps <= bt_n - bt_m ->
         toNat (modulo_step (steps := steps) n0) = toNat n0 %[mod toNat m].
       case=> [|steps] n0 ? ; rewrite /modulo_step.
-      - rewrite shlBn_id.
-        rewrite leB_nat toNat_tcast toNat_zeroExtend.
-        case_eq (toNat m <= toNat n0) ; move=> Hle ; auto ; first last.
-        + rewrite toNat_subB. rewrite toNat_tcast toNat_zeroExtend.
-          rewrite -modnDr.
-          by rewrite subnK //.
-        + rewrite leB_nat. by rewrite toNat_tcast toNat_zeroExtend.
-      - case_eq (leB (shlBn (tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps.+1) n0) ;
-          move=> HleB //.
+      - rewrite shlBn_id leB_nat toNat_tcast toNat_zeroExtend.
+        case Hle: (toNat m <= toNat n0) => //.
+        rewrite toNat_subB ; first
+          by rewrite toNat_tcast toNat_zeroExtend -modnDr subnK //.
+        by rewrite leB_nat toNat_tcast toNat_zeroExtend.
+      - case HleB: (leB (shlBn (tcast (subnKC prf3) (zeroExtend (bt_n - bt_m) m)) steps.+1) n0) => //.
         rewrite toNat_subB //.
-        rewrite zeroExtend_tcast_less //. rewrite toNat_tcast.
+        rewrite zeroExtend_tcast_less // ; rewrite toNat_tcast.
         rewrite toNat_shlB_zExtend //.
         rewrite -(modnMDl (2 ^ steps.+1)).
-        rewrite leB_nat in HleB ;rewrite shlBn_tcast toNat_tcast in HleB ;
+        rewrite leB_nat in HleB ; rewrite shlBn_tcast toNat_tcast in HleB ;
           rewrite toNat_shlB_zExtend // in HleB.
         by rewrite mulnC subnKC //.
     Qed. 
-    
 
     Lemma next_step_ltn : forall (n0 : BITS bt_n) (steps : nat),
         steps <= bt_n - bt_m ->
         toNat n0 < toNat m * 2 ^ (steps + 1) ->
         toNat (modulo_step (steps := steps) n0) < toNat m * 2 ^ steps.
-      move=> n0 steps ??.
-      rewrite /modulo_step leB_nat rewriteShift2 //.
-      case_eq (toNat m * 2 ^ steps <= toNat n0) ; move=> ?.
-      - rewrite toNat_subB. rewrite rewriteShift2 //=.
-        rewrite ltn_subLR //.
-        rewrite addnn -muln2 -mulnA -{2}(expn1 2) -expnD //.
-        by rewrite leB_nat rewriteShift2 //.
-      - by rewrite ltnNge ; apply/negPf.
+      move=> n0 steps ?? ; rewrite /modulo_step leB_nat rewriteShift2 //.
+      elim En : (toNat m * 2 ^ steps <= toNat n0) ; last by rewrite ltnNge ; apply/negPf.
+      rewrite toNat_subB. rewrite rewriteShift2 // ltn_subLR //.
+      rewrite addnn -muln2 -mulnA -{2}(expn1 2) -expnD //.
+      by rewrite leB_nat rewriteShift2.
     Qed.
-
-    
 
     Lemma modulo_loop_LE : forall steps (n0 : BITS bt_n),
         steps <= bt_n - bt_m ->
         toNat n0 < toNat m * 2 ^ (steps + 1) ->
         toNat (moduloSeq_CT_rec steps n0) < toNat m.
-      elim/nat_ind=> [|? IHsteps] n0 ?? ; simp moduloSeq_CT_rec.
-      - by rewrite -(muln1 (toNat m)) -(expn0 2) ; apply next_step_ltn.
-      - apply IHsteps.
-        + by rewrite ltnW //.
-        + by rewrite addn1 ; apply next_step_ltn.
+      elim=> [|? IHsteps] ??? ; simp moduloSeq_CT_rec ;
+            first by rewrite -(muln1 (toNat m)) -(expn0 2) ; apply next_step_ltn.
+      apply IHsteps ; first by rewrite ltnW //.
+      by rewrite addn1 ; apply next_step_ltn.
     Qed.
 
     Lemma modulo_loop_mod : forall steps n0,
         steps <= bt_n - bt_m ->
         toNat (moduloSeq_CT_rec steps n0) = toNat n0 %[mod toNat m].
-      elim/nat_ind=> [|? IHsteps] n0 Hsteps ; simp moduloSeq_CT_rec.
-      - by apply step_mod.
-      - by rewrite -(step_mod n0 Hsteps) ; apply IHsteps ; rewrite ltnW //.
+      elim=> [|? IHsteps] n0 Hsteps ; simp moduloSeq_CT_rec ; first by apply step_mod.
+      by rewrite -(step_mod n0 Hsteps) ; apply IHsteps ; rewrite ltnW.
     Qed.
 
   End BiggerThan.
   
   Lemma notmsbBound : forall (n : nat) (p : BITS n.+1), msb p <-> 2 ^ n <= toNat p.
-    move=> ??.
-    apply contra_equiv.
-    rewrite -ltnNge.
-    rewrite -eqtype.eqbF_neg.
-    by apply msb0Bounded.
+    move=> ?? ; apply contra_equiv.
+    by rewrite -ltnNge -eqtype.eqbF_neg ; apply msb0Bounded.
   Qed.
 
   Lemma notmsbBound2 : forall (x : nat) (p : BITS x), 0 < x -> msb p <-> 2 ^ x.-1 <= toNat p.
@@ -196,7 +179,7 @@ Section Modulo.
 
   Lemma mod_between : forall n0 m0, m0 <= n0 < m0 * 2 -> n0 - m0 = n0 %% m0.
     move=> n0 m0 /andP[Hmn ?].
-    have Hbound: 0 <= n0 - m0 < m0 by apply/andP; split ; lia.
+    have ? : 0 <= n0 - m0 < m0 by apply/andP; split ; lia.
     have Hdecomp: n0 = 1 * m0 + (n0 - m0) by rewrite mul1n addnC subnK // ; apply/ltnW ; apply Hmn.
     by apply/eq_sym ; rewrite [in LHS]Hdecomp mul1n modnDl ; apply modn_small.
   Qed.
@@ -205,20 +188,16 @@ Section Modulo.
     move=> ?.
     funelim (moduloSeq_CT _).
     - rewrite modn_small //.
-      rewrite (leq_ltn_trans2 (n := 2 ^ bt_n)) //.
-      + by apply toNatBounded.
-      + rewrite (leq_trans (n := 2 ^ bt_m.-1)) //.
-        * rewrite leq_exp2l //.
-          by apply nat.leq_subn.
-        * by apply notmsbBound2.
-    - rewrite -[in LHS](modn_small (m := toNat _) (d := toNat m)) ; first last.
-      + apply modulo_loop_LE. by [].
-        apply (leq_ltn_trans2 (n := 2 ^ bt_n)).
-        * by apply toNatBounded.
-        * apply (leq_mulL (b := 2 ^ bt_m.-1)).
-          apply expn_gt0. by apply notmsbBound2.
-        * by rewrite -expnD leq_exp2l // ; lia.
-      + by apply modulo_loop_mod.
+      rewrite (leq_ltn_trans2 (n := 2 ^ bt_n)) // ; first by apply toNatBounded.
+      rewrite (leq_trans (n := 2 ^ bt_m.-1)) // ; last by apply notmsbBound2.
+      by rewrite leq_exp2l // ; apply nat.leq_subn.
+    - rewrite -[in LHS](modn_small (m := toNat _) (d := toNat m)) ; first by apply modulo_loop_mod.
+      apply modulo_loop_LE. by [].
+      apply (leq_ltn_trans2 (n := 2 ^ bt_n)) ; first by apply toNatBounded.
+      apply (leq_mulL (b := 2 ^ bt_m.-1)).
+      + by apply expn_gt0.
+      + by apply notmsbBound2.
+      + by rewrite -expnD leq_exp2l // ; lia.
   Qed.
 
   Lemma x : forall a, 0 <> a -> 0 < a.
@@ -228,16 +207,14 @@ Section Modulo.
   Theorem moduloSeq_CT_resized_is_modulo : forall (v : BITS bt_n), toNat (moduloSeq_CT_resized v) = toNat v %% toNat m.
     move=> ?.
     funelim (moduloSeq_CT_resized _).
-    - rewrite toNat_tcast.
-      rewrite toNat_zeroExtend. apply/eq_sym.
-      apply modn_small.
+    - rewrite toNat_tcast toNat_zeroExtend.
+      apply/eq_sym ; apply modn_small.
       rewrite (leq_ltn_trans2 (n := 2 ^ bt_n)) //.
       + by apply toNatBounded.
       + rewrite (leq_trans (n := 2 ^ bt_m.-1)) //.
-        * rewrite leq_exp2l //.
-          by apply nat.leq_subn.
+        * by rewrite leq_exp2l // ; apply nat.leq_subn.
         * by apply notmsbBound2.
-    - rewrite toNat_low. rewrite toNat_tcast. rewrite moduloSeq_CT_is_modulo.
+    - rewrite toNat_low ; rewrite toNat_tcast ; rewrite moduloSeq_CT_is_modulo.
       rewrite modn_small //.
       rewrite (leq_ltn_trans2 (n := toNat m)) //.
       + rewrite ltn_mod.
@@ -247,7 +224,6 @@ Section Modulo.
         have H3 : zero bt_m = m by apply toNat_inj.
         have H4 : msb m = false by rewrite -H3; apply msb_zero.
         by rewrite prf2 // in H4.
-      + apply ltnW.
-        by apply toNatBounded.
+      + by apply ltnW ; apply toNatBounded.
   Qed.
 End Modulo.
