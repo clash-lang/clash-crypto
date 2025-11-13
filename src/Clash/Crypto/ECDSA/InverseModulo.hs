@@ -249,8 +249,22 @@ splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - d1 - d2 - d3 - d4
 
 splitNumberSeq :: forall dom. (HiddenClockResetEnable dom) =>
  Channel dom (Unsigned 512) -> Channel dom (Signed 263)
-splitNumberSeq input = guardC done cur
+splitNumberSeq = enhance put get compute . fmap (reverse . bitCoerce)
  where
+  put _ = (0, 0)
+  
+  compute :: Vec 16 (Unsigned 32) -> (Signed 263, Index 9) -> CompMode (Signed 263, Index 9)
+  compute a (accum, 8) = Releasing (accum - selectIdx a 8, undefined)
+  compute a (accum, 1) = Computing (accum + 2 * selectIdx a 1, 2)
+  compute a (accum, 2) = Computing (accum + 2 * selectIdx a 2, 3)
+  compute a (accum, i) = Computing (accum `op` selectIdx a i, satSucc SatBound i)
+   where op = if i < 5 then (+) else (-)
+
+  selectIdx :: Vec 16 (Unsigned 32) -> Index 9 -> Signed 263
+  selectIdx a idx = extend . unsignedToSigned . bitCoerce $ map (maybe 0 (a !!)) (indices !! idx)
+
+  get _ (accum, _) = accum
+  
   indices :: Vec 9 (Vec 8 (Maybe (Index 16)))
   indices = t :> s1 :> s2 :> s3 :> s4 :> d1 :> d2 :> d3 :> d4 :> Nil
   
@@ -265,33 +279,53 @@ splitNumberSeq input = guardC done cur
   d3 = $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
   d4 = $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
 
-  reg :: Channel dom (Vec 16 (Unsigned 32))
-  reg = keepD $ muxC input.hasUpdates (reverse <$> bitCoerce <$> input) reg
-
-  cur :: Channel dom (Signed 263)
-  cur = keepD
-    $ fmap op
-    $ zipC idx
-    $ zipC cur curVal
-
-  select _ Nothing  = 0
-  select v (Just i) = v !! i
-
-  curVal :: Channel dom (Signed 263)
-  curVal =
-    fmap (resize . bitCoerce)
-    $ fmap (\(r, i) -> map (select r) i)
-    $ zipC reg
-    $ fmap (indices !!) idx
+-- splitNumberSeq :: forall dom. (HiddenClockResetEnable dom) =>
+--  Channel dom (Unsigned 512) -> Channel dom (Signed 263)
+-- splitNumberSeq input = guardC done cur
+--  where
+--   indices :: Vec 9 (Vec 8 (Maybe (Index 16)))
+--   indices = t :> s1 :> s2 :> s3 :> s4 :> d1 :> d2 :> d3 :> d4 :> Nil
   
-  idx :: Channel dom (Index 9)
-  idx = keepD
-    $ muxC input.hasUpdates (channel $ pure (0, Keep))
-    $ muxC cur.hasUpdates (fmap (satSucc SatBound) idx) idx
+--   t,s1,s2,s3,s4,d1,d2,d3,d4 :: Vec 8 (Maybe (Index 16))
+--   t  = $(listToVecTH $ L.map Just [7,6,5,4,3,2,1,0 :: Index 16])
+--   s1 = $(listToVecTH $ L.map Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
+--   s2 = $(listToVecTH $ Nothing : (L.map Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
+--   s3 = $(listToVecTH $ L.map Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [10,9,8])
+--   s4 = $(listToVecTH $ L.map Just [8,13,15,14,13,11,10,9 :: Index 16])
+--   d1 = $(listToVecTH $ L.map Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [13,12,11])
+--   d2 = $(listToVecTH $ L.map Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> L.map Just [15,14,13,12])
+--   d3 = $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
+--   d4 = $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
 
-  op (i, (accum, v)) = if i < 5 then accum + v else accum - v
+--   reg :: Channel dom (Vec 16 (Unsigned 32))
+--   reg = reverse . bitCoerce <$> input
 
-  done = content idx .== Just maxBound
+--   cur :: Channel dom (Signed 263)
+--   cur = keepD
+--     -- $ fmap op
+--     -- $ zipC idx
+--     $ zipRecent op idx
+--     $ zipC cur curVal
+
+--   select _ Nothing  = 0
+--   select v (Just i) = v !! i
+
+--   curVal :: Channel dom (Signed 263)
+--   curVal =
+--     fmap (resize . bitCoerce)
+--     $ fmap (\(r, i) -> map (select r) i)
+--     $ zipC reg
+--     $ fmap (indices !!) idx
+  
+--   idx :: Channel dom (Index 9)
+--   idx = keepD
+--     $ muxC input.hasUpdates (channel $ pure (0, Keep))
+--     $ muxC cur.hasUpdates (fmap (satSucc SatBound) idx) idx
+
+--   -- op :: (Index 9, (Signed 263, Signed 263)) -> Signed 263
+--   op i (accum, v) = if i < 5 then accum + v else accum - v
+
+--   done = content idx .== Just maxBound
 
 
 -- | A working implementation of Inverse Modulo based on Fermat's Little
@@ -307,7 +341,7 @@ fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
     $ fmap bitCoerce
     $ computeModuloSigned @m
     $ splitNumberSeq
-    -- $ delayC
+    $ delayC
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     $ zipC cur
     $ muxC (fst <$> stage) input
