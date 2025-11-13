@@ -81,16 +81,22 @@ computeModuloSigned ∷
   Channel dom (Mod m)
 computeModuloSigned = enhance put get compute
  where
-  put n = (n, maxBound ∷ Index (shifts + 2))
-  get _ = Mod @m . bitCoerce . resize . signedToUnsigned . fst
-  compute _ (n, j) = ((next n j, if j > 0 then j - 1 else j), j > 0)
+  put n = (signedToUnsigned n, maxBound ∷ Index (shifts + 1), msb n)
+  get _ (a, _, sign) = Mod @m . bitCoerce . resize $ if bitToBool sign && a /= 0 then natToNum @m - a else a
+  compute _ (n, j, sign) = ((subIfGE n $ shiftedm j, satPred SatBound j, sign), j > 0)
+  shiftedm = shiftL (natToNum @m) . fromEnum
+  -- put n = (signedToUnsigned n, maxBound ∷ Index (shifts + 1), signum n)
+  -- get _ (a, _, sign) = Mod @m . bitCoerce . resize $
+  --     if sign < 0 then natToNum @m - a else a
+  -- -- compute _ (n, j, sign) = ((next n j, if j > 0 then j - 1 else j, sign), j > 0)
+  -- compute _ (n, j, sign) = ((subIfGE n $ shiftedm j, satPred SatBound j, sign), j > 0)
   -- ^ using `satPred SatBound j` instead does not work here because of
   -- https://github.com/clash-lang/ghc-typelits-natnormalise/issues/94
-  next n j
-    | j == maxBound = n + if n < 0 then shiftedm (j - 1) else 0
-    | otherwise     = subIfGE n $ shiftedm j
+  -- next n j
+  --   | j == maxBound = n + if n < 0 then shiftedm (j - 1) else 0
+  --   | otherwise     = subIfGE n $ shiftedm j
 
-  shiftedm = shiftL (natToNum @m) . fromEnum
+  -- shiftedm = shiftL (natToNum @m) . fromEnum
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.

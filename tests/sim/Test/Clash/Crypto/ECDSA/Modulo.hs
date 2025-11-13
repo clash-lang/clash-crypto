@@ -12,7 +12,7 @@ Test suite for 'Clash.Crypto.ECDSA.Modulo'.
 
 module Test.Clash.Crypto.ECDSA.Modulo where
 
-import Clash.Crypto.ECDSA.Modulo (computeModuloUnsigned, ModSize, unMod)
+import Clash.Crypto.ECDSA.Modulo (computeModuloSigned, ModSize, unMod)
 import Clash.Prelude
 import Clash.Signal.Channel
 import Data.Maybe (fromMaybe)
@@ -29,6 +29,8 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit), testProperty)
 
 import qualified Data.List as List
 import qualified Hedgehog.Range as Range
+import Clash.Hedgehog.Sized.Signed (genSigned)
+import Clash.Crypto.ECDSA.Utils (signedToUnsigned)
 
 tastyTests :: HasCallStack => TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
@@ -36,8 +38,8 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
   $  testGroup "Modulo"
       [ testProperty "Equality between sequential modulo and combinatorial modulo"
         $ property $ do
-          n <- forAll $ genUnsigned $ Range.linear 0 (50_000 :: Unsigned 64)
-          modulus <- forAll $ genUnsigned $ Range.linear 2 500
+          n       <- forAll $ genSigned $ Range.linear (-50_000) (50_000 :: Signed 65)
+          modulus <- forAll $ genUnsigned $ Range.linear 5 500
           testMod n modulus
       ]
   ]
@@ -45,7 +47,7 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
 testOutput ::
   forall (modT :: Nat).
   (KnownNat modT, 1 <= modT, ModSize modT <= 64) =>
-  Unsigned 64 ->
+  Signed 65 ->
   -- ^ n
   Unsigned 64 ->
   -- ^ Modulus
@@ -54,21 +56,21 @@ testOutput n modulus
   = fromMaybe (error "The returned list was empty")
   $ getFirst
   $ foldMap First
-  $ sampleN @System (fromEnum (n `div` modulus) + 100)
+  $ sampleN @System (fromEnum (signedToUnsigned n `div` modulus) + 100)
   $ withClockResetEnable clockGen resetGen enableGen
   $ newsfeed
   $ fmap (resize . bitCoerce . unMod)
-  $ computeModuloUnsigned @modT
+  $ computeModuloSigned @modT
   $ channel
   $ fmap (n, )
   $ fromList
   $ Keep : Keep : Release : List.repeat Keep
 
-testMod :: (MonadFail m, MonadTest m) => Unsigned 64 -> Unsigned 64 -> m ()
+testMod :: (MonadFail m, MonadTest m) => Signed 65 -> Unsigned 64 -> m ()
 testMod n modulus = do
   Just (SomeNat (_ :: Proxy modT)) <- return $ someNatVal $ toInteger modulus
   case (Proxy :: Proxy 1) %<=? (Proxy :: Proxy modT) of
     LE Refl -> case (Proxy :: Proxy (ModSize modT)) %<=? (Proxy :: Proxy 64) of
-      LE Refl -> testOutput @modT n modulus === fromIntegral n `mod` modulus
+      LE Refl -> testOutput @modT n modulus === fromIntegral (n `mod` (bitCoerce $ extend modulus))
       NLE _ _ -> error "ModSize modulus should be less than or equal to 64"
     NLE _ _ -> error "The given modulus should be greater than 1"

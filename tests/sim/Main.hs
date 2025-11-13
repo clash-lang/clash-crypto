@@ -11,7 +11,7 @@ main ∷ IO ()
 main = defaultMain $ testGroup "clash-crypto simulation tests"
   [ SHA.tastyTests
   , HMAC.tastyTests
+  , Modulo.tastyTests
   , InverseModulo.tastyTests
   , Karatsuba.tastyTests
-  , Modulo.tastyTests
   ]

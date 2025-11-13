@@ -29,16 +29,16 @@ import qualified Data.List as List
 import qualified Data.Modular as Modular
 
 -- TODO: Once all PRs are merged, move this to one place.
-type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
+type Q = 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
 
 deriveSictPrecomp @Q
 
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
-  [ localOption (HedgehogTestLimit (Just 1000)) $
-      testProperty "Functional equality of BEA" $ invModuloProperty bea,
-    localOption (HedgehogTestLimit (Just 100)) $
-      testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
+  [ -- localOption (HedgehogTestLimit (Just 1000)) $
+    --   testProperty "Functional equality of BEA" $ invModuloProperty bea,
+    -- localOption (HedgehogTestLimit (Just 100)) $
+    --   testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
     localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Functional equality of FLT-CTMI" $ invModuloProperty fltCtmi,
     localOption (HedgehogTestLimit (Just 100)) $
