@@ -41,12 +41,12 @@ jobs:
             "${{ env.ATTIC_CACHE }}" \
             "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
       - name: "Build the Nix devShell"
-        run: nix build .#devShells.x86_64-linux.default
+        run: nix build .#devShells.x86_64-linux.allFeatures
       - name: "Push any changes to the cache"
         run: |
           attic push \
             "${{ env.PROJECT }}" \
-            "$(nix path-info .#devShells.x86_64-linux.default)"
+            "$(nix path-info .#devShells.x86_64-linux.allFeatures)"
 
   simulate:
     name: Simulation Tests
