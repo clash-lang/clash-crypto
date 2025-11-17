@@ -11,15 +11,18 @@ Implementations of inverse modulo algorithms.
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.InverseModulo
   ( Precomp
   , bea
   , fastGcdSequential
   , fltCtmi
+  , fltCtmiExtended
   , sictMiSequential
   , deriveSictPrecomp
   , splitNumber
+  , PrimeExtender (..)
   ) where
 
 import Clash.Prelude hiding (Mod)
@@ -215,74 +218,42 @@ pattern FLTMul = True
 
 -- Add a step from the ECDSA document.
 -- Has the restriction than the number must be < p^2.
--- TODO: Refactor this function somehow
 splitNumber :: Unsigned 512 -> Signed 263
-splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - d1 - d2 - d3 - d4
+splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
   where
     vA :: Vec 16 (Unsigned 32)
     vA = reverse $ bitCoerce a -- To have the right indices.
-    fromIndices :: Vec n (Index 16) -> Vec n (Unsigned 32)
-    fromIndices = map (vA !!)
-    t,s1,s2,s3,s4,d1,d2,d3,d4 :: Signed 263
-    t  = extend . unsignedToSigned . bitCoerce $
-         fromIndices $(listToVecTH [7,6,5,4,3,2,1,0 :: Index 16])
-    s1 = extend . unsignedToSigned . bitCoerce $
-         fromIndices $(listToVecTH [15,14,13,12,11 :: Index 16]) ++ 0 :> 0 :> 0 :> Nil
-    s2 = extend . unsignedToSigned . bitCoerce $
-         0 :> fromIndices $(listToVecTH [15,14,13,12 :: Index 16]) ++ 0 :> 0 :> 0 :> Nil
-    s3 = extend . unsignedToSigned . bitCoerce $
-         fromIndices $(listToVecTH [15,14 :: Index 16]) ++ 0 :> 0 :> 0 :> Nil ++
-         fromIndices $(listToVecTH [10,9,8 :: Index 16])
-    s4 = extend . unsignedToSigned . bitCoerce $
-        fromIndices $(listToVecTH [8,13,15,14,13,11,10,9 :: Index 16])
-    d1 = extend . unsignedToSigned . bitCoerce $
-         fromIndices $(listToVecTH [10,8 :: Index 16]) ++ 0 :> 0 :> 0 :> Nil ++
-         fromIndices $(listToVecTH [13,12,11 :: Index 16])
-    d2 = extend . unsignedToSigned . bitCoerce $
-         fromIndices $(listToVecTH [11,9 :: Index 16]) ++ 0 :> 0 :> Nil ++
-         fromIndices $(listToVecTH [15,14,13,12 :: Index 16])
-    d3 = extend . unsignedToSigned . bitCoerce $ vA !! (12 :: Index 16) :> 0 :> Nil ++
-         fromIndices $(listToVecTH [10,9,8,15,14,13 :: Index 16])
-    d4 = extend . unsignedToSigned . bitCoerce $ vA !! (13 :: Index 16) :> 0 :> Nil ++
-         fromIndices $(listToVecTH [11,10,9 :: Index 16]) ++
-         0 :> fromIndices $(listToVecTH [15,14 :: Index 16])
-
-splitNumberSeq :: forall dom. (HiddenClockResetEnable dom) =>
- Channel dom (Unsigned 512) -> Channel dom (Signed 263)
-splitNumberSeq = enhance put get compute . fmap (reverse . bitCoerce)
- where
-  put _ = (0, 0)
-  
-  compute :: Vec 16 (Unsigned 32) -> (Signed 263, Index 9) -> CompMode (Signed 263, Index 9)
-  compute a (accum, 8) = Releasing (accum - selectIdx a 8, undefined)
-  compute a (accum, 1) = Computing (accum + 2 * selectIdx a 1, 2)
-  compute a (accum, 2) = Computing (accum + 2 * selectIdx a 2, 3)
-  compute a (accum, i) = Computing (accum `op` selectIdx a i, satSucc SatBound i)
-   where op = if i < 5 then (+) else (-)
-
-  selectIdx :: Vec 16 (Unsigned 32) -> Index 9 -> Signed 263
-  selectIdx a idx = extend . unsignedToSigned . bitCoerce $ map (maybe 0 (a !!)) (indices !! idx)
-
-  get _ (accum, _) = accum
-  
-  indices :: Vec 9 (Vec 8 (Maybe (Index 16)))
-  indices = t :> s1 :> s2 :> s3 :> s4 :> d1 :> d2 :> d3 :> d4 :> Nil
-  
-  t,s1,s2,s3,s4,d1,d2,d3,d4 :: Vec 8 (Maybe (Index 16))
-  t  = $(listToVecTH $ L.map Just [7,6,5,4,3,2,1,0 :: Index 16])
-  s1 = $(listToVecTH $ L.map Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
-  s2 = $(listToVecTH $ Nothing : (L.map Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
-  s3 = $(listToVecTH $ L.map Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [10,9,8])
-  s4 = $(listToVecTH $ L.map Just [8,13,15,14,13,11,10,9 :: Index 16])
-  d1 = $(listToVecTH $ L.map Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [13,12,11])
-  d2 = $(listToVecTH $ L.map Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> L.map Just [15,14,13,12])
-  d3 = $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
-  d4 = $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
+    fromIndices :: Vec 8 (Maybe (Index 16)) -> Signed 263
+    fromIndices = extend . unsignedToSigned . bitCoerce . map (maybe 0 (vA !!))
+    t,s1,s2,s3,s4,id1,id2,id3,id4 :: Signed 263
+    t  = fromIndices $(listToVecTH $ L.map Just [7,6,5,4,3,2,1,0 :: Index 16])
+    s1 = fromIndices $(listToVecTH $ L.map Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
+    s2 = fromIndices $(listToVecTH $ Nothing : (L.map Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
+    s3 = fromIndices $(listToVecTH $ L.map Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [10,9,8])
+    s4 = fromIndices $(listToVecTH $ L.map Just [8,13,15,14,13,11,10,9 :: Index 16])
+    id1 = fromIndices $(listToVecTH $ L.map Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [13,12,11])
+    id2 = fromIndices $(listToVecTH $ L.map Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> L.map Just [15,14,13,12])
+    id3 = fromIndices $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
+    id4 = fromIndices $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
 
 -- splitNumberSeq :: forall dom. (HiddenClockResetEnable dom) =>
 --  Channel dom (Unsigned 512) -> Channel dom (Signed 263)
--- splitNumberSeq input = guardC done cur
+-- splitNumberSeq = enhance put get compute . fmap (reverse . bitCoerce)
 --  where
+--   put _ = (0, 0)
+  
+--   compute :: Vec 16 (Unsigned 32) -> (Signed 263, Index 9) -> CompMode (Signed 263, Index 9)
+--   compute a (accum, 8) = Releasing (accum - selectIdx a 8, undefined)
+--   compute a (accum, i) = Computing (accum `op` (op2 $ selectIdx a i), satSucc SatBound i)
+--    where
+--     op  = if i < 5 then (+) else (-)
+--     op2 = if i == 1 || i == 2 then (*2) else id
+
+--   selectIdx :: Vec 16 (Unsigned 32) -> Index 9 -> Signed 263
+--   selectIdx a idx = extend . unsignedToSigned . bitCoerce $ map (maybe 0 (a !!)) (indices !! idx)
+
+--   get _ (accum, _) = accum
+  
 --   indices :: Vec 9 (Vec 8 (Maybe (Index 16)))
 --   indices = t :> s1 :> s2 :> s3 :> s4 :> d1 :> d2 :> d3 :> d4 :> Nil
   
@@ -297,50 +268,62 @@ splitNumberSeq = enhance put get compute . fmap (reverse . bitCoerce)
 --   d3 = $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
 --   d4 = $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
 
---   reg :: Channel dom (Vec 16 (Unsigned 32))
---   reg = reverse . bitCoerce <$> input
-
---   cur :: Channel dom (Signed 263)
---   cur = keepD
---     -- $ fmap op
---     -- $ zipC idx
---     $ zipRecent op idx
---     $ zipC cur curVal
-
---   select _ Nothing  = 0
---   select v (Just i) = v !! i
-
---   curVal :: Channel dom (Signed 263)
---   curVal =
---     fmap (resize . bitCoerce)
---     $ fmap (\(r, i) -> map (select r) i)
---     $ zipC reg
---     $ fmap (indices !!) idx
-  
---   idx :: Channel dom (Index 9)
---   idx = keepD
---     $ muxC input.hasUpdates (channel $ pure (0, Keep))
---     $ muxC cur.hasUpdates (fmap (satSucc SatBound) idx) idx
-
---   -- op :: (Index 9, (Signed 263, Signed 263)) -> Signed 263
---   op i (accum, v) = if i < 5 then accum + v else accum - v
-
---   done = content idx .== Just maxBound
-
-
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
-  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m, ModSize m ~ 256) ⇒
-  Channel dom (Mod m) →
+  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m) =>
+  Channel dom (Mod m) ->
   Channel dom (Mod m)
 fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
  where
   cur = keepD
     $ join input
     $ fmap bitCoerce
+    $ computeModuloUnsigned @m
+    $ delayC
+    $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+    $ zipC cur
+    $ muxC (fst <$> stage) input
+    $ guardC (not <$> done)
+      cur
+
+  stage = register (FLTSquare, minBound ∷ Index (FLTIterations m))
+    $ apWhen input.hasUpdates (const (FLTSquare, maxBound))
+    $ apWhen cur.hasUpdates nextStage
+      stage
+   where
+    k = natToNum @(m - 2) ∷ BitVector (ModSize (m - 2))
+
+    nextStage (m, i)
+      | FLTSquare ← m, i > 0
+      , testBit k $ fromEnum $ i - 1
+      = (FLTMul, i)
+
+      | otherwise
+      = (FLTSquare, if i > 0 then i - 1 else i)
+
+  done = stage .== (FLTSquare, minBound)
+
+-- Takes the modulus and the size of the padding. We add 1 for the sign.
+class PrimeExtender (m :: Nat) (n :: Nat) where
+ extenderCircuit ::
+  Channel dom (Unsigned (ModSize m * 2)) ->
+  Channel dom (Signed (ModSize m + n + 1))
+
+-- | A working implementation of Inverse Modulo based on Fermat's Little
+-- Theorem. Fine up to 256 bits, and only works with prime moduli.
+fltCtmiExtended ∷
+  ∀ m n dom. (KnownNat m, KnownNat n, 1 <= n, HiddenClockResetEnable dom, 3 ≤ m, PrimeExtender m n) ⇒
+  Channel dom (Mod m) ->
+  Channel dom (Mod m)
+fltCtmiExtended (fmap bitCoerce → input)
+  = bitCoerce <$> guardC done cur
+ where
+  cur = keepD
+    $ join input
+    $ fmap bitCoerce
     $ computeModuloSigned @m
-    $ fmap splitNumber
+    $ extenderCircuit @_ @n
     $ delayC
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     $ zipC cur
