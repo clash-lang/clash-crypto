@@ -74,11 +74,11 @@
               eval $(opam env)
             '';
             nativeBuildInputs = prevA.nativeBuildInputs ++
-                    (with pkgs; [opam gmp pkg-config]);
+                    (with pkgs; [ opam gmp pkg-config ]);
           };
           hlsOverlay = _: prevA : {
             nativeBuildInputs = prevA.nativeBuildInputs ++
-                    (with pkgs; [opam gmp pkg-config]);
+                    (with myHsPkgs; [ haskell-language-server ]);
           };
       in
       {
