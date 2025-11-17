@@ -236,38 +236,6 @@ splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
     id3 = fromIndices $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
     id4 = fromIndices $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
 
--- splitNumberSeq :: forall dom. (HiddenClockResetEnable dom) =>
---  Channel dom (Unsigned 512) -> Channel dom (Signed 263)
--- splitNumberSeq = enhance put get compute . fmap (reverse . bitCoerce)
---  where
---   put _ = (0, 0)
-  
---   compute :: Vec 16 (Unsigned 32) -> (Signed 263, Index 9) -> CompMode (Signed 263, Index 9)
---   compute a (accum, 8) = Releasing (accum - selectIdx a 8, undefined)
---   compute a (accum, i) = Computing (accum `op` (op2 $ selectIdx a i), satSucc SatBound i)
---    where
---     op  = if i < 5 then (+) else (-)
---     op2 = if i == 1 || i == 2 then (*2) else id
-
---   selectIdx :: Vec 16 (Unsigned 32) -> Index 9 -> Signed 263
---   selectIdx a idx = extend . unsignedToSigned . bitCoerce $ map (maybe 0 (a !!)) (indices !! idx)
-
---   get _ (accum, _) = accum
-  
---   indices :: Vec 9 (Vec 8 (Maybe (Index 16)))
---   indices = t :> s1 :> s2 :> s3 :> s4 :> d1 :> d2 :> d3 :> d4 :> Nil
-  
---   t,s1,s2,s3,s4,d1,d2,d3,d4 :: Vec 8 (Maybe (Index 16))
---   t  = $(listToVecTH $ L.map Just [7,6,5,4,3,2,1,0 :: Index 16])
---   s1 = $(listToVecTH $ L.map Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
---   s2 = $(listToVecTH $ Nothing : (L.map Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
---   s3 = $(listToVecTH $ L.map Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [10,9,8])
---   s4 = $(listToVecTH $ L.map Just [8,13,15,14,13,11,10,9 :: Index 16])
---   d1 = $(listToVecTH $ L.map Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [13,12,11])
---   d2 = $(listToVecTH $ L.map Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> L.map Just [15,14,13,12])
---   d3 = $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
---   d4 = $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
-
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
