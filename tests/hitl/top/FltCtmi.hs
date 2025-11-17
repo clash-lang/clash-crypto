@@ -13,10 +13,7 @@ import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.InverseModulo (fltCtmiExtended, splitNumber, PrimeExtender (..))
-
-instance PrimeExtender Q 6 where
- extenderCircuit = fmap splitNumber
+import Clash.Crypto.ECDSA.InverseModulo (fltCtmiExtended, splitNumber)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -31,6 +28,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . fltCtmiExtended @Q @6 . cachedFromMaybe . bulkRead
+  $ newsfeed . fltCtmiExtended @Q (fmap splitNumber) . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

@@ -22,7 +22,6 @@ module Clash.Crypto.ECDSA.InverseModulo
   , sictMiSequential
   , deriveSictPrecomp
   , splitNumber
-  , PrimeExtender (..)
   ) where
 
 import Clash.Prelude hiding (Mod)
@@ -272,26 +271,21 @@ fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
 
   done = stage .== (FLTSquare, minBound)
 
--- Takes the modulus and the size of the padding. We add 1 for the sign.
-class PrimeExtender (m :: Nat) (n :: Nat) where
- extenderCircuit ::
-  Channel dom (Unsigned (ModSize m * 2)) ->
-  Channel dom (Signed (ModSize m + n + 1))
-
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmiExtended ∷
-  ∀ m n dom. (KnownNat m, KnownNat n, 1 <= n, HiddenClockResetEnable dom, 3 ≤ m, PrimeExtender m n) ⇒
+  ∀ m n dom. (KnownNat m, KnownNat n, HiddenClockResetEnable dom, 3 ≤ m) ⇒
+  (Channel dom (Unsigned (ModSize m * 2)) -> Channel dom (Signed (ModSize m + n + 1))) ->
   Channel dom (Mod m) ->
   Channel dom (Mod m)
-fltCtmiExtended (fmap bitCoerce → input)
+fltCtmiExtended extender (fmap bitCoerce → input)
   = bitCoerce <$> guardC done cur
  where
   cur = keepD
     $ join input
     $ fmap bitCoerce
     $ computeModuloSigned @m
-    $ extenderCircuit @_ @n
+    $ extender
     $ delayC
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     $ zipC cur
