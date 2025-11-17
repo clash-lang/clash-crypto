@@ -45,44 +45,48 @@
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };
           myHsPkgs = pkgs.haskell.packages.ghc9103.extend overlay;
-          defaultDevShell =
-          myHsPkgs.shellFor {
-                    name = "GHC 9.10.3";
-                    packages = p: [ p.clash-crypto ];
-                    inputsFrom = [];
-                    shellHook = ''
-                      SHAKEPATH=`cabal list-bin clash-crypto:shake`
-                      export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
-                    '';
-                    nativeBuildInputs =
-                      with pkgs; [
-                        gnumake yosys nextpnr trellis ] ++
-                      (with myHsPkgs; [ cabal-install ])
-                      ++ [ecpprog.defaultPackage.${system}]
-                    ;
-                  };
+          defaultDevShell = myHsPkgs.shellFor {
+            name = "GHC 9.10.3";
+            packages = p: [ p.clash-crypto ];
+            shellHook = ''
+              SHAKEPATH=`cabal list-bin clash-crypto:shake`
+              export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
+            '';
+            nativeBuildInputs =
+              with pkgs; [ gnumake yosys nextpnr trellis ] ++
+              (with myHsPkgs; [ cabal-install ]) ++
+              [ecpprog.defaultPackage.${system}]
+              ;
+            };
+          opamOverlay = _: prevA: {
+            name = prevA.name + " with opam";
+            shellHook = prevA.shellHook + ''
+              export OCAML_VERSION=${pkgs.ocaml-ng.ocamlPackages_4_09.ocaml.version}
+              export OPAMROOT=$(pwd)/.opam-local
+              mkdir -p $OPAMROOT
+
+              if [ ! -d "$OPAMROOT/default" ]; then
+                opam init --bare --disable-sandboxing --auto-setup
+                # Create a switch for the current OCaml version
+                opam switch create default $OCAML_VERSION
+              fi
+
+              eval $(opam env)
+            '';
+            nativeBuildInputs = prevA.nativeBuildInputs ++
+                    (with pkgs; [opam gmp pkg-config]);
+          };
+          hlsOverlay = _: prevA : {
+            nativeBuildInputs = prevA.nativeBuildInputs ++
+                    (with pkgs; [opam gmp pkg-config]);
+          };
       in
       {
         devShells.default = defaultDevShell;
-        devShells.withOpam = defaultDevShell.overrideAttrs (finalA: prevA: {
-          name = prevA.name + " with opam";
-          shellHook = prevA.shellHook + ''
-            export OCAML_VERSION=${pkgs.ocaml-ng.ocamlPackages_4_09.ocaml.version}
-            export OPAMROOT=$(pwd)/.opam-local
-            mkdir -p $OPAMROOT
-
-            if [ ! -d "$OPAMROOT/default" ]; then
-              opam init --bare --disable-sandboxing --auto-setup
-              # Create a switch for the current OCaml version
-              opam switch create default $OCAML_VERSION
-            fi
-
-            eval $(opam env)
-          '';
-          nativeBuildInputs = prevA.nativeBuildInputs ++
-                  (with pkgs; [opam gmp pkg-config]);
-        });
-
+        devShells.withOpam = defaultDevShell.overrideAttrs opamOverlay;
+        devShells.withHLS = defaultDevShell.overrideAttrs hlsOverlay;
+        devShells.allFeatures =
+          (defaultDevShell.overrideAttrs hlsOverlay).overrideAttrs opamOverlay;
         packages.default = dontCheck myHsPkgs.clash-crypto;
       });
 }
