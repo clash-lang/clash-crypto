@@ -17,6 +17,7 @@ module Clash.Crypto.ECDSA.InverseModulo
   , bea
   , fastGcdSequential
   , fltCtmi
+  , fltCtmiE
   , sictMiSequential
   , deriveSictPrecomp
   ) where
@@ -213,27 +214,41 @@ pattern FLTMul = True
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
-  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
-fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
+  ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
+  Channel dom (Mod p) →
+  Channel dom (Mod p)
+fltCtmi i = o
  where
-  cur = keepD
-    $ join input
-    $ fmap bitCoerce
-    $ computeModuloUnsigned @m
+  (s, o)
+    = fltCtmiE @p i
+    $ computeModuloUnsigned @p
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
-    $ zipC cur
-    $ muxC (fst <$> stage) input
-    $ guardC (not <$> done)
-      cur
+    $ (\(a, b) → (bitCoerce a, bitCoerce b)) <$> s
 
-  stage = register (FLTSquare, minBound ∷ Index (FLTIterations m))
+fltCtmiE ∷
+  ∀ p dom.
+  (HiddenClockResetEnable dom, KnownNat p, 3 ≤ p) ⇒
+  -- | input
+  Channel dom (Mod p) →
+  -- | shared multiplier with modulo output
+  Channel dom (Mod p) →
+  ( -- | shared multiplier with modulo input
+    Channel dom (Mod p, Mod p)
+  , -- | output
+    Channel dom (Mod p)
+  )
+fltCtmiE (fmap bitCoerce → input) smmOut
+  = (smmIn, bitCoerce <$> guardC done cur)
+ where
+  cur = keepD $ join input $ fmap bitCoerce smmOut
+  smmIn = zipC cur $ muxC (fst <$> stage) input $ guardC (not <$> done) cur
+
+  stage = register (FLTSquare, minBound ∷ Index (FLTIterations p))
     $ apWhen input.hasUpdates (const (FLTSquare, maxBound))
     $ apWhen cur.hasUpdates nextStage
       stage
    where
-    k = natToNum @(m - 2) ∷ BitVector (ModSize (m - 2))
+    k = natToNum @(p - 2) ∷ BitVector (ModSize (p - 2))
 
     nextStage (m, i)
       | FLTSquare ← m, i > 0
