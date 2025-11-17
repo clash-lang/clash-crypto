@@ -340,7 +340,7 @@ fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
     $ join input
     $ fmap bitCoerce
     $ computeModuloSigned @m
-    $ splitNumberSeq
+    $ fmap splitNumber
     $ delayC
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     $ zipC cur
