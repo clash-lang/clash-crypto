@@ -70,6 +70,7 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.ECDSA.Curves
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo

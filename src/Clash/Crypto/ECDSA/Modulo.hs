@@ -19,16 +19,22 @@ module Clash.Crypto.ECDSA.Modulo
   , createMod
   , computeModuloUnsigned
   , computeModuloSigned
+  , computeModuloPrime
   , moduloShift
+  , splitNumber
   ) where
 
 import Clash.Crypto.ECDSA.Utils
 import Clash.Num.Wrapping (Wrapping (Wrapping))
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude hiding (Mod, SNat (..))
 import Clash.Signal.Channel
 
 import Data.Coerce (coerce)
 import Language.Haskell.Unicode (type (≤))
+
+import qualified Data.List as L (replicate)
+import Data.Type.Equality
+import GHC.TypeLits (SNat)
 
 -- * Useful types
 
@@ -67,7 +73,7 @@ computeModuloUnsigned = enhance put get compute
   put n = (n, maxBound ∷ Index (shifts + 1))
   get _ = Mod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
-  shiftedm = shiftL (natToNum @m) . fromEnum
+  shiftedm = shiftL (natToNum @m) . fromEnum  
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on signed values.
@@ -82,21 +88,44 @@ computeModuloSigned ∷
 computeModuloSigned = enhance put get compute
  where
   put n = (signedToUnsigned n, maxBound ∷ Index (shifts + 1), msb n)
-  get _ (a, _, sign) = Mod @m . bitCoerce . resize $ if bitToBool sign && a /= 0 then natToNum @m - a else a
-  compute _ (n, j, sign) = ((subIfGE n $ shiftedm j, satPred SatBound j, sign), j > 0)
+  get _ (a, _, sign) = Mod @m . bitCoerce . resize $
+   if bitToBool sign && a /= 0 then natToNum @m - a else a
+  compute _ (n, j, sign) =
+   ((subIfGE n $ shiftedm j, satPred SatBound j, sign), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
-  -- put n = (signedToUnsigned n, maxBound ∷ Index (shifts + 1), signum n)
-  -- get _ (a, _, sign) = Mod @m . bitCoerce . resize $
-  --     if sign < 0 then natToNum @m - a else a
-  -- -- compute _ (n, j, sign) = ((next n j, if j > 0 then j - 1 else j, sign), j > 0)
-  -- compute _ (n, j, sign) = ((subIfGE n $ shiftedm j, satPred SatBound j, sign), j > 0)
-  -- ^ using `satPred SatBound j` instead does not work here because of
-  -- https://github.com/clash-lang/ghc-typelits-natnormalise/issues/94
-  -- next n j
-  --   | j == maxBound = n + if n < 0 then shiftedm (j - 1) else 0
-  --   | otherwise     = subIfGE n $ shiftedm j
 
-  -- shiftedm = shiftL (natToNum @m) . fromEnum
+-- Add a step from the ECDSA document.
+-- Has the restriction than the number must be < p^2.
+splitNumber :: Unsigned (ModSize Q * 2) -> Signed (ModSize Q + 7)
+splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
+ where
+  vA :: Vec 16 (Unsigned 32)
+  vA = reverse $ bitCoerce a -- To have the right indices.
+  fromIndices :: Vec 8 (Maybe (Index 16)) -> Signed 263
+  fromIndices = extend . unsignedToSigned . bitCoerce . map (maybe 0 (vA !!))
+  t,s1,s2,s3,s4,id1,id2,id3,id4 :: Signed 263
+  t  = fromIndices $(listToVecTH $ fmap Just [7,6,5,4,3,2,1,0 :: Index 16])
+  s1 = fromIndices $(listToVecTH $ fmap Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
+  s2 = fromIndices $(listToVecTH $ Nothing : (fmap Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
+  s3 = fromIndices $(listToVecTH $ fmap Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> fmap Just [10,9,8])
+  s4 = fromIndices $(listToVecTH $ fmap Just [8,13,15,14,13,11,10,9 :: Index 16])
+  id1 = fromIndices $(listToVecTH $ fmap Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> fmap Just [13,12,11])
+  id2 = fromIndices $(listToVecTH $ fmap Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> fmap Just [15,14,13,12])
+  id3 = fromIndices $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> fmap Just [10,9,8,15,14,13])
+  id4 = fromIndices $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> fmap Just [11,10,9] <> [Nothing] <> fmap Just [15,14])
+
+-- TODO: Factor it out.
+type Q = 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
+
+-- Number has to be smaller than m ^ 2.
+computeModuloPrime ::
+  ∀ m dom. ( KnownNat m, HiddenClockResetEnable dom, 1 ≤ m ) ⇒
+  Channel dom (Unsigned (ModSize m * 2)) →
+  Channel dom (Mod m)
+computeModuloPrime =
+  case testEquality (natSing :: SNat m) (natSing :: SNat Q) of
+    Just Refl -> computeModuloSigned @Q . fmap splitNumber . delayC
+    Nothing   -> computeModuloUnsigned @m
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.

@@ -18,10 +18,8 @@ module Clash.Crypto.ECDSA.InverseModulo
   , bea
   , fastGcdSequential
   , fltCtmi
-  , fltCtmiExtended
   , sictMiSequential
   , deriveSictPrecomp
-  , splitNumber
   ) where
 
 import Clash.Prelude hiding (Mod)
@@ -38,10 +36,9 @@ import Clash.Crypto.ECDSA.InverseModulo.Internal
 import Clash.Crypto.ECDSA.Fraction (HWFraction (HWFraction), shiftRFraction)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
 import Clash.Crypto.ECDSA.Modulo
-  (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
+  (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned,
+  computeModuloPrime)
 import Clash.Crypto.ECDSA.Utils (unsignedToSigned, signedToUnsigned)
-
-import qualified Data.List as L
 
 -- * Binary Euclidean Algorithm
 
@@ -215,78 +212,18 @@ pattern FLTMul, FLTSquare ∷ Bool
 pattern FLTSquare = False
 pattern FLTMul = True
 
--- Add a step from the ECDSA document.
--- Has the restriction than the number must be < p^2.
-splitNumber :: Unsigned 512 -> Signed 263
-splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
-  where
-    vA :: Vec 16 (Unsigned 32)
-    vA = reverse $ bitCoerce a -- To have the right indices.
-    fromIndices :: Vec 8 (Maybe (Index 16)) -> Signed 263
-    fromIndices = extend . unsignedToSigned . bitCoerce . map (maybe 0 (vA !!))
-    t,s1,s2,s3,s4,id1,id2,id3,id4 :: Signed 263
-    t  = fromIndices $(listToVecTH $ L.map Just [7,6,5,4,3,2,1,0 :: Index 16])
-    s1 = fromIndices $(listToVecTH $ L.map Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
-    s2 = fromIndices $(listToVecTH $ Nothing : (L.map Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
-    s3 = fromIndices $(listToVecTH $ L.map Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [10,9,8])
-    s4 = fromIndices $(listToVecTH $ L.map Just [8,13,15,14,13,11,10,9 :: Index 16])
-    id1 = fromIndices $(listToVecTH $ L.map Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> L.map Just [13,12,11])
-    id2 = fromIndices $(listToVecTH $ L.map Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> L.map Just [15,14,13,12])
-    id3 = fromIndices $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> L.map Just [10,9,8,15,14,13])
-    id4 = fromIndices $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> L.map Just [11,10,9] <> [Nothing] <> L.map Just [15,14])
-
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
-  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m) =>
-  Channel dom (Mod m) ->
+  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m) ⇒
+  Channel dom (Mod m) →
   Channel dom (Mod m)
 fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
  where
   cur = keepD
     $ join input
     $ fmap bitCoerce
-    $ computeModuloUnsigned @m
-    $ delayC
-    $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
-    $ zipC cur
-    $ muxC (fst <$> stage) input
-    $ guardC (not <$> done)
-      cur
-
-  stage = register (FLTSquare, minBound ∷ Index (FLTIterations m))
-    $ apWhen input.hasUpdates (const (FLTSquare, maxBound))
-    $ apWhen cur.hasUpdates nextStage
-      stage
-   where
-    k = natToNum @(m - 2) ∷ BitVector (ModSize (m - 2))
-
-    nextStage (m, i)
-      | FLTSquare ← m, i > 0
-      , testBit k $ fromEnum $ i - 1
-      = (FLTMul, i)
-
-      | otherwise
-      = (FLTSquare, if i > 0 then i - 1 else i)
-
-  done = stage .== (FLTSquare, minBound)
-
--- | A working implementation of Inverse Modulo based on Fermat's Little
--- Theorem. Fine up to 256 bits, and only works with prime moduli.
-fltCtmiExtended ∷
-  ∀ m n dom. (KnownNat m, KnownNat n, HiddenClockResetEnable dom, 3 ≤ m) ⇒
-  (Channel dom (Unsigned (ModSize m * 2)) -> Channel dom (Signed (ModSize m + n + 1))) ->
-  Channel dom (Mod m) ->
-  Channel dom (Mod m)
-fltCtmiExtended extender (fmap bitCoerce → input)
-  = bitCoerce <$> guardC done cur
- where
-  cur = keepD
-    $ join input
-    $ fmap bitCoerce
-    $ computeModuloSigned @m
-    $ extender
-    $ delayC
+    $ computeModuloPrime @m
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
     $ zipC cur
     $ muxC (fst <$> stage) input
