@@ -10,13 +10,13 @@ import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
-import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
+import Clash.Crypto.ECDSA.Curves (Curve (SECP256), CurveModulo)
 
 import Clash.Crypto.ECDSA.InverseModulo (sictMiSequential, deriveSictPrecomp)
 
-deriveSictPrecomp @Q
+deriveSictPrecomp @(CurveModulo SECP256)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -31,6 +31,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom12 Bit
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . sictMiSequential @Q . cachedFromMaybe . bulkRead
+  $ newsfeed . sictMiSequential @(CurveModulo SECP256) . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

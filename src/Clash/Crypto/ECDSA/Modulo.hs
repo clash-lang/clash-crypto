@@ -35,6 +35,7 @@ import Language.Haskell.Unicode (type (≤))
 import qualified Data.List as L (replicate)
 import Data.Type.Equality
 import GHC.TypeLits (SNat)
+import Clash.Crypto.ECDSA.Curves (Curve (SECP256), CurveModulo)
 
 -- * Useful types
 
@@ -96,7 +97,7 @@ computeModuloSigned = enhance put get compute
 
 -- Add a step from the ECDSA document.
 -- Has the restriction than the number must be < p^2.
-splitNumber :: Unsigned (ModSize Q * 2) -> Signed (ModSize Q + 7)
+splitNumber :: Unsigned (ModSize (CurveModulo SECP256) * 2) -> Signed (ModSize (CurveModulo SECP256) + 7)
 splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
  where
   vA :: Vec 16 (Unsigned 32)
@@ -104,18 +105,15 @@ splitNumber a = t + s1 * 2 + s2 * 2 + s3 + s4 - id1 - id2 - id3 - id4
   fromIndices :: Vec 8 (Maybe (Index 16)) -> Signed 263
   fromIndices = extend . unsignedToSigned . bitCoerce . map (maybe 0 (vA !!))
   t,s1,s2,s3,s4,id1,id2,id3,id4 :: Signed 263
-  t  = fromIndices $(listToVecTH $ fmap Just [7,6,5,4,3,2,1,0 :: Index 16])
-  s1 = fromIndices $(listToVecTH $ fmap Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
-  s2 = fromIndices $(listToVecTH $ Nothing : (fmap Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
-  s3 = fromIndices $(listToVecTH $ fmap Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> fmap Just [10,9,8])
-  s4 = fromIndices $(listToVecTH $ fmap Just [8,13,15,14,13,11,10,9 :: Index 16])
+  t   = fromIndices $(listToVecTH $ fmap Just [7,6,5,4,3,2,1,0 :: Index 16])
+  s1  = fromIndices $(listToVecTH $ fmap Just [15,14,13,12,11 :: Index 16] <> L.replicate 3 Nothing)
+  s2  = fromIndices $(listToVecTH $ Nothing : (fmap Just [15,14,13,12 :: Index 16]) <> L.replicate 3 Nothing)
+  s3  = fromIndices $(listToVecTH $ fmap Just [15,14 :: Index 16] <> L.replicate 3 Nothing <> fmap Just [10,9,8])
+  s4  = fromIndices $(listToVecTH $ fmap Just [8,13,15,14,13,11,10,9 :: Index 16])
   id1 = fromIndices $(listToVecTH $ fmap Just [10,8 :: Index 16] <> L.replicate 3 Nothing <> fmap Just [13,12,11])
   id2 = fromIndices $(listToVecTH $ fmap Just [11,9 :: Index 16] <> L.replicate 2 Nothing <> fmap Just [15,14,13,12])
   id3 = fromIndices $(listToVecTH $ [Just (12 :: Index 16), Nothing] <> fmap Just [10,9,8,15,14,13])
   id4 = fromIndices $(listToVecTH $ [Just (13 :: Index 16), Nothing] <> fmap Just [11,10,9] <> [Nothing] <> fmap Just [15,14])
-
--- TODO: Factor it out.
-type Q = 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
 
 -- Number has to be smaller than m ^ 2.
 computeModuloPrime ::
@@ -123,8 +121,8 @@ computeModuloPrime ::
   Channel dom (Unsigned (ModSize m * 2)) →
   Channel dom (Mod m)
 computeModuloPrime =
-  case testEquality (natSing :: SNat m) (natSing :: SNat Q) of
-    Just Refl -> computeModuloSigned @Q . fmap splitNumber . delayC
+  case testEquality (natSing :: SNat m) (natSing :: SNat (CurveModulo SECP256)) of
+    Just Refl -> computeModuloSigned @(CurveModulo SECP256) . fmap splitNumber . delayC
     Nothing   -> computeModuloUnsigned @m
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
