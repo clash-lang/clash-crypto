@@ -35,10 +35,10 @@ deriveSictPrecomp @Q
 
 tastyTests :: TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.InverseModulo"
-  [ -- localOption (HedgehogTestLimit (Just 1000)) $
-    --   testProperty "Functional equality of BEA" $ invModuloProperty bea,
-    -- localOption (HedgehogTestLimit (Just 100)) $
-    --   testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
+  [ localOption (HedgehogTestLimit (Just 1000)) $
+      testProperty "Functional equality of BEA" $ invModuloProperty bea,
+    localOption (HedgehogTestLimit (Just 100)) $
+      testProperty "Functional equality of FastGCD" $ invModuloProperty fastGcdSequential,
     localOption (HedgehogTestLimit (Just 10)) $
       testProperty "Functional equality of FLT-CTMI" $ invModuloProperty fltCtmi,
     localOption (HedgehogTestLimit (Just 100)) $

@@ -61,7 +61,7 @@ bea = enhance put get compute
 
   get _ ((_, _, _, y), _)
     | Rewrite ← using @(CLog2KeepsPositive m)
-    = bitCoerce $ truncateB @_ @_ @(ModSize m - 1) $ signedToUnsigned y
+    = bitCoerce $ truncateB @_ @_ @(ModSize m) $ signedToUnsigned y
 
   compute _ (s0@(u, v, x, y), mode0) = (, mode0 /= BeaEnd) $ case mode0 of
     BeaEnd                          → (s0,                   mode0    )

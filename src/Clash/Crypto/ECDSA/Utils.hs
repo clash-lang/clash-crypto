@@ -10,10 +10,12 @@ unsignedToSigned = bitCoerce . zeroExtend
 
 -- | `minBound` shouldn't be passed to `signedToUnsigned`, because
 -- `abs minBound == minBound`
-signedToUnsigned ∷ ∀ len. KnownNat len ⇒ Signed (len + 1) → Unsigned len
-signedToUnsigned n = bitCoerce
+-- Warning: We can't shave a bit off Signed in this direction because Signed's `minBound`
+-- is actually too big for the smaller Unsigned.
+signedToUnsigned ∷ ∀ len. KnownNat len ⇒ Signed len → Unsigned len
+signedToUnsigned n = truncateB . bitCoerce
   $ if result < 0
     then errorX "abs should not return a negative number"
     else result
  where
-  result = truncateB $ abs n
+  result = abs $ extend @_ @_ @1 n
