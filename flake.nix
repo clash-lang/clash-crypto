@@ -77,6 +77,7 @@
                     (with pkgs; [ opam gmp pkg-config ]);
           };
           hlsOverlay = _: prevA : {
+            name = prevA.name + " with HLS";
             nativeBuildInputs = prevA.nativeBuildInputs ++
                     (with myHsPkgs; [ haskell-language-server ]);
           };
