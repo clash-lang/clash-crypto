@@ -230,11 +230,12 @@ type RequiredBlocks (alg ∷ SHA) (ℓ ∷ Nat) =
 -- | All algorithms define an initial hash value H⁰, which is different
 -- for each algorithm. We use the 'SHAInitials' class to capture the
 -- differences among the 'SHA' instances.
-class SHAInitials (alg ∷ SHA) where
-  _H⁰# ∷ Proxy alg → HashValue alg
+class SHAInitials (alg ∷ SHA)
+ where
+  _H⁰ ∷ ∀ x → x ~ alg ⇒ HashValue alg
 
 instance SHAInitials SHA1 where
-  _H⁰# _
+  _H⁰ _
     = 0x67452301
    :> 0xefcdab89
    :> 0x98badcfe
@@ -243,7 +244,7 @@ instance SHAInitials SHA1 where
    :> Nil
 
 instance SHAInitials SHA224 where
-  _H⁰# _
+  _H⁰ _
     = 0xc1059ed8
    :> 0x367cd507
    :> 0x3070dd17
@@ -255,7 +256,7 @@ instance SHAInitials SHA224 where
    :> Nil
 
 instance SHAInitials SHA256 where
-  _H⁰# _
+  _H⁰ _
     = 0x6a09e667
    :> 0xbb67ae85
    :> 0x3c6ef372
@@ -267,7 +268,7 @@ instance SHAInitials SHA256 where
    :> Nil
 
 instance SHAInitials SHA384 where
-  _H⁰# _
+  _H⁰ _
     = 0xcbbb9d5dc1059ed8
    :> 0x629a292a367cd507
    :> 0x9159015a3070dd17
@@ -279,7 +280,7 @@ instance SHAInitials SHA384 where
    :> Nil
 
 instance SHAInitials SHA512 where
-  _H⁰# _
+  _H⁰ _
     = 0x6a09e667f3bcc908
    :> 0xbb67ae8584caa73b
    :> 0x3c6ef372fe94f82b
@@ -291,7 +292,7 @@ instance SHAInitials SHA512 where
    :> Nil
 
 instance SHAInitials SHA512224 where
-  _H⁰# _
+  _H⁰ _
     = 0x8C3D37C819544DA2
    :> 0x73E1996689DCD4D6
    :> 0x1DFAB7AE32FF9C82
@@ -303,7 +304,7 @@ instance SHAInitials SHA512224 where
    :> Nil
 
 instance SHAInitials SHA512256 where
-  _H⁰# _
+  _H⁰ _
     = 0x22312194FC2BF72C
    :> 0x9F555FA3C84C64C2
    :> 0x2393B86B6F53B151
@@ -313,9 +314,6 @@ instance SHAInitials SHA512256 where
    :> 0x2B0199FC2C85B8AA
    :> 0x0EB72DDC81C52CA2
    :> Nil
-
-_H⁰ ∷ ∀ alg → SHAInitials alg ⇒ HashValue alg
-_H⁰ alg = _H⁰# (Proxy @alg)
 
 ---------------------------------------
 -- Section 6: SECURE HASH ALGORITHMS --

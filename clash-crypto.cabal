@@ -71,12 +71,15 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.Calculator
     Clash.Crypto.Calculator.CLU
+    Clash.Crypto.Calculator.ISA
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
     Clash.Crypto.ECDSA.Karatsuba
     Clash.Crypto.ECDSA.Modulo
+    Clash.Crypto.ECDSA.Routines
     Clash.Crypto.ECDSA.Utils
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
@@ -88,6 +91,8 @@ library
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
     Clash.Crypto.MAC.HMAC
+    Clash.Promoted.Integer
+    Clash.Promoted.List
     Clash.Signal.Channel
     Clash.Signal.Delayed.Extra
     Clash.Signal.DataStream
@@ -160,6 +165,7 @@ library hitlt-instances
     SictMi
     SHA
     Stack
+    ISAPrint
 
 test-suite hitlt
   import: common-options

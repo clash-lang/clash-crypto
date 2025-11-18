@@ -36,7 +36,7 @@ import Language.Haskell.Unicode (type (≤))
 type ModSize n = CLog 2 n
 
 newtype Mod (n ∷ Nat) = Mod (Wrapping (Index n))
- deriving (Show, Eq, Generic, Ord) deriving newtype NFDataX
+ deriving (Eq, Generic, Ord) deriving newtype (NFDataX, Show)
 
 deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Num (Mod n)
 deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Enum (Mod n)

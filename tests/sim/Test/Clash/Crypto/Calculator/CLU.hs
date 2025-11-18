@@ -12,8 +12,6 @@ Test suite for 'Clash.Crypto.Calculator.CLU'.
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Test.Clash.Crypto.Calculator.CLU where
 
 import Clash.Prelude hiding (Mod)
@@ -31,22 +29,10 @@ import qualified Data.List as List
 import qualified Data.Modular as Modular
 import qualified Hedgehog.Range as Range
 
+import Clash.Crypto.Calculator.ISA
 import Clash.Crypto.Calculator.CLU
+
 import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
-
-data ECPrime
-  = SecP256Mod
-  | SecP256Ord
-  deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
-
-type family CPrime (p :: ECPrime) ∷ Nat where
-  CPrime SecP256Mod
-    = 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
-  CPrime SecP256Ord
-    = (2 ^ 256) - (2 ^ 224) + 2 ^ 192 - 0x4319055258E8617B0C46353D039CDAAF
-
-type CMod p = Mod (CPrime p)
-type ECMod = CMod SecP256Mod
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"

@@ -54,9 +54,7 @@ import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
-import Clash.Crypto.Calculator.CLU
-  ( CluInstruction(..)
-  )
+import Clash.Crypto.Calculator.ISA (CluInstruction(..))
 import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
 import Clash.Crypto.Hitlt.Shared
 

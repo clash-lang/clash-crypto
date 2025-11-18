@@ -28,11 +28,11 @@ module Clash.Crypto.Hash.SHA.Specification
     -- * Section 5.1 - Padding the Message
   , SizeBits, PaddingZeros, RequiredBlocks
     -- * Section 5.3 - Setting the Initial Hash Value
-  , SHAInitials, _H⁰
+  , SHAInitials(..)
     -- * Section 6 - SECURE HASH ALGORITHMS
   , SHAHashCompute, computeCycles, toDigest, hash, slidingWindowCycle
     -- * Derivable Properties
-  , KnownSHA, SHAFacts(..), knownSHA
+  , KnownSHA(..), SHAFacts(..)
   , -- * Utility types
     Digest
   ) where
