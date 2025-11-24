@@ -44,13 +44,14 @@ karatsuba ∷
   -- multiplication is used instead of another recursive call
   Unsigned n → Unsigned m → Unsigned (n + m)
 karatsuba regSize@SNat x y | Rewrite ← using @(HalfIsLess (Max n m)) =
-  case compareSNat (SNat @(n + m)) regSize of
-    SNatLE → extend x * extend y
-    SNatGT → karatsubaInternal size
+  case (compareSNat (SNat @(n + m)) regSize,
+        compareSNat (SNat @4)       (SNat @(Max n m))) of
+    (SNatGT, SNatLE) → karatsubaInternal size
+    _                → extend x * extend y
  where
   size = SNat ∷ SNat (Max n m)
 
-  karatsubaInternal ∷ ∀ s. Low s ≤ s ⇒ SNat s → Unsigned (n + m)
+  karatsubaInternal ∷ ∀ s. (4 ≤ s, Low s ≤ s) ⇒ SNat s → Unsigned (n + m)
   karatsubaInternal s@SNat = case compareSNat d4 s of
     SNatGT → extend x * extend y
     SNatLE → resize z0
