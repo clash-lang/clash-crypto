@@ -67,6 +67,7 @@ jobs:
           - Karatsuba
           - InverseModulo
           - CLU
+          - Stack
 
     steps:
       - name: "Checkout the repository"
