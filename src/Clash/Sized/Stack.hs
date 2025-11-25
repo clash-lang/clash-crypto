@@ -5,9 +5,9 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-A parameterized, block ram based stack supporting some additional
-actions beside the usual push and pop, which still all are realizable
-to be executed in a singe cycle.
+A parameterized block RAM based stack supporting some additional
+actions besides the usual push and pop, all of which run in a
+single cycle.
 -}
 
 module Clash.Sized.Stack
@@ -36,32 +36,38 @@ data StackAction n a
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
 
--- | A block ram based stack supporting the given list of actions,
--- each always requiring a single cycle until its result appears at
--- the output. Initially, the output is `(Nothing, 0)`.
+-- | A block RAM based stack supporting the given list of actions,
+-- each always requiring a single cycle until its result appears on
+-- the output. The inital output is `(Nothing, 0)`.
+--
+-- The term size refers to the fixed maximum size of the stack, whereas the
+-- term charge refers to its current load. A full stack has a charge equal
+-- to its size. A non-empty stack has a non-zero charge. An empty stack has
+-- a null charge. The charge is always less than or equal to the size.
 --
 -- * PUSH: adds the given element to the stack unless the stack is
---   full. `Just` the pushed element is output after a successful push
---   and `Nothing` on failure.
+--   full. After a successful push, the output is `Just` the pushed
+--   element. On failure, it is `Nothing`.
 --
--- * POP: removes the given amount of elements from the stack. If less
---   elements than given are on the stack then it is emptied. `Just` the
---   top element is output if the stack is still non-empty after the
---   operation an `Nothing` otherwise.
+-- * POP: removes a given number of elements from the top of the stack.
+--   If the argument is greater than the charge of the stack, the stack is
+--   emptied, and the output is `Nothing`. Otherwise, the stack is non-empty
+--   after operation, and the output is `Just` the value of the top element.
 --
--- * INSPECT: inspects the n-th element on the stack. `Just` the
---   element is output if the stack hosts an element at the given
---   position and `Nothing` otherwise.
+-- * INSPECT: inspects the n-th element on the stack. If `n` is strictly
+--   less than the current charge, the output is `Just` the value of the
+--   n-th element (`0` being the top). Otherwise, the output is `Nothing`.
 --
 -- * COPYUP: pushes a copy of the n-th element to the top of the
---   stack. `Just` the pushed element is output, if the stack hosts an
---   element at the given position and if the stack is not already
---   full. `Nothing` is output otherwise.
+--   stack. If the stack is not full and `n` is strictly less than the
+--   current charge, then the n-th element is copied to the top and
+--   the output is `Just` the value of this element. Otherwise, nothing
+--   happens and the output is `Nothing`.
 --
--- * SWAP: swaps the n-th element on the stack with the top
---   element. `Just` the element that is on top of the stack after the
---   swap is output if there is some n-th element on the sack and
---   `Nothing` otherwise.
+-- * SWAP: swaps the n-th element on the stack with the top element.
+--   If `n` is strictly less than the current charge, then the swap happens
+--   and the output is `Just` the value of the top of the stack after
+--   operation. Otherwise, nothing happens and the output is `Nothing`.
 stack ∷
   ∀ dom n a.
   (HiddenClockResetEnable dom, NFDataX a, KnownNat n) ⇒
@@ -69,7 +75,7 @@ stack ∷
   -- ^ the stack action to be performed
   Signal dom (Maybe a, Index (n + 1))
   -- ^ The result of the action + the number of elements currently
-  -- hold by the stack.
+  -- held by the stack.
 stack stackAction = case toUNat (SNat @n) of
   -- the empty stack
   UZero → pure (Nothing, 0)
@@ -84,7 +90,7 @@ stack stackAction = case toUNat (SNat @n) of
     (r      , c) ~~> Pop{}    = ((Nothing, Just ()), (c >> r , 1))
     (r      , c) ~~> _        = ((r      , Just ()), (c >> r , 1))
 
-  -- any stack with at least two elements
+  -- any stack of size 2 or more
   USucc un@(USucc _) → result
    where
     (raddr, writeAct, result) = mealyB (~~>) (Nothing, 0, False, False)
