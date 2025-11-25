@@ -6,6 +6,7 @@ import qualified Test.Clash.Crypto.MAC.HMAC as HMAC
 import qualified Test.Clash.Crypto.ECDSA.Karatsuba as Karatsuba
 import qualified Test.Clash.Crypto.ECDSA.Modulo as Modulo
 import qualified Test.Clash.Crypto.ECDSA.InverseModulo as InverseModulo
+import qualified Test.Clash.Sized.Stack as Stack
 
 import qualified Test.Clash.Crypto.Calculator.CLU as CLU
 
@@ -17,4 +18,5 @@ main = defaultMain $ testGroup "clash-crypto simulation tests"
   , Karatsuba.tastyTests
   , Modulo.tastyTests
   , CLU.tastyTests
+  , Stack.tastyTests
   ]
