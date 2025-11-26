@@ -105,6 +105,7 @@ test-suite simulation
   other-modules:
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.MAC.HMAC
+    Test.Clash.Crypto.Calculator.CLU
     Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
@@ -148,6 +149,7 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
   exposed-modules:
     BEA
+    CLU
     FastGCD
     FltCtmi
     HMAC

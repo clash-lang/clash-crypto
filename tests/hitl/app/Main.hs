@@ -40,8 +40,10 @@ import qualified Data.ByteString as BS
   (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
 import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
-import qualified Hedgehog.Gen    as Gen (bytes, integral)
+import qualified Hedgehog.Gen    as Gen (bytes, integral, enumBounded)
 import qualified Hedgehog.Range  as Range (linear, constantFrom)
+
+import Clash.Crypto.ECDSA.Modulo (Mod, ModSize)
 
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
 import qualified Crypto.Hash.SHA224  as SHA224 (hash)
@@ -52,12 +54,14 @@ import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 import qualified Crypto.MAC.HMAC     as HMAC (hmac)
 
 import Clash.Prelude
-  ( type Div, type (*), Nat, KnownNat, Unsigned, Vec
-  , toList, resize,  bitCoerce, natToNum
+  ( type Div, type (*), type (-)
+  , Nat, KnownNat, Unsigned, Vec, BitSize
+  , toList, resize,  bitCoerce, natToNum, testBit
   )
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
   )
+import Clash.Crypto.Calculator.CLU (CluInstruction(..))
 import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 
@@ -116,8 +120,26 @@ main = do
             -- It might be related to the following issue:
             -- https://github.com/YosysHQ/nextpnr/issues/208
             -- , testInverseModulo "SictMi" sem dev settings
+            ] ,
+          testGroup "Clash.Crypto.ECDSA.CLU"
+            [ testCLU "CLU" sem dev settings
             ]
         ]
+
+  testCLU ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testCLU name sem dev settings
+    = test sem dev settings name $ do
+        op ← forAll $ Gen.enumBounded
+        x ← forAll $ generator $ natToNum @(Q - 1)
+        y ← forAll $ generator $ natToNum @(Q - 1)
+        runHitltCLU sem dev settings (op, (x, y))
+    where
+      generator = Gen.integral . Range.constantFrom 1 1
 
   testInverseModulo ∷
     String →
@@ -131,6 +153,7 @@ main = do
         runHitltInverseModulo sem dev settings x
     where
       generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
+
 
   testModulo ∷
     String →
@@ -207,6 +230,33 @@ main = do
         ]
 
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
+
+runHitltCLU ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  (CluInstruction, (Mod Q, Mod Q)) →
+  PropertyT IO ()
+runHitltCLU sem dev settings i@(op , (x, y)) =
+  runHitlt @(BitSize (Mod Q) `Div` 8) sem dev settings bs eq
+ where
+  bs = pack $ toList $ bitCoerce (0 ∷ Unsigned (8 - BitSize CluInstruction), i)
+  eq = pack $ toList $ bitCoerce $ case op of
+    Add → x + y
+    Sub → x - y
+    Mul → x * y
+    Inv | x == 0 → y
+        | otherwise → invMod x
+    Bit | y < natToNum @(ModSize Q), testBit x (fromEnum y) → 1
+        | otherwise → 0
+
+  invMod
+    = fromInteger
+    . Modular.unMod
+    . fromMaybe (error "inverse always exists.")
+    . Modular.inv
+    . Modular.toMod @Q
+    . toInteger
 
 runHitltInverseModulo ∷
   QSem →

@@ -66,6 +66,7 @@ jobs:
           - Modulo.Modulo
           - Karatsuba
           - InverseModulo
+          - CLU
 
     steps:
       - name: "Checkout the repository"
@@ -102,6 +103,7 @@ jobs:
           - BEA
           - FastGCD
           - FltCtmi
+          - CLU
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4
