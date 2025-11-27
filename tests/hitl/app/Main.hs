@@ -20,7 +20,7 @@ import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
 import GHC.IO.Handle (Handle)
-import Hedgehog (PropertyT, (===), property, forAll)
+import Hedgehog (PropertyT, (===), property, forAll, TestLimit)
 import System.Exit (ExitCode, exitWith)
 import System.Environment (setEnv, withArgs)
 import System.Hardware.Serialport
@@ -40,7 +40,6 @@ import qualified Data.ByteString as BS
   (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
 import qualified Data.Modular    as Modular
 import qualified System.Timeout  as TO (timeout)
-import qualified Hedgehog.Gen    as Gen (bytes, integral, enumBounded)
 import qualified Hedgehog.Range  as Range (linear, constantFrom)
 
 import Clash.Crypto.ECDSA.Modulo (Mod, ModSize)
@@ -54,21 +53,29 @@ import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 import qualified Crypto.MAC.HMAC     as HMAC (hmac)
 
 import Clash.Prelude
-  ( type Div, type (*), type (-)
-  , Nat, KnownNat, Unsigned, Vec, BitSize
-  , toList, resize,  bitCoerce, natToNum, testBit
+  ( type Div, type (*), type (-), Nat, KnownNat, Unsigned, Vec
+  , toList, resize,  bitCoerce, natToNum, Index, System, sampleN
+  , withClockResetEnable, clockGen, resetGen, enableGen, fromList
+  , BitPack (BitSize), Bit, testBit
   )
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
   )
 import Clash.Crypto.Calculator.CLU (CluInstruction(..))
-import Clash.Crypto.Hitlt.Shared (Q, isReadyIndicator)
+import Clash.Crypto.Hitlt.Shared
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 
 import Shake
   ( ShakeOptions(..), Verbosity(..)
   , shakeOptions, shakeBuild, configLookup
   )
+import qualified Hedgehog.Internal.Gen as Gen
+import Clash.Sized.Stack
+import Clash.Hedgehog.Sized.Index (genIndex)
+import qualified Data.List as L
+import GHC.TypeLits (type (+))
+import Clash.XException
+import qualified Clash.Sized.Vector as V
 
 main ∷ IO ()
 main = do
@@ -123,23 +130,45 @@ main = do
             ] ,
           testGroup "Clash.Crypto.ECDSA.CLU"
             [ testCLU "CLU" sem dev settings
+            ] ,
+          testGroup "Clash.Sized.Stack"
+            [ testStack "Stack" sem dev settings
             ]
         ]
 
-  testCLU ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  genStackAction :: forall n size m .
+   (KnownNat n, KnownNat size, Gen.MonadGen m) =>
+   m (StackAction n (Unsigned size))
+  genStackAction = Gen.choice
+    [
+      Push    <$> genUnsigned (Range.linear minBound maxBound)
+    , Pop     <$> genIndex    (Range.linear minBound maxBound)
+    , Inspect <$> genIndex    (Range.linear 1 maxBound)
+    , CopyUp  <$> genIndex    (Range.linear 1 maxBound)
+    , Swap    <$> genIndex    (Range.linear 1 maxBound)
+    ]
+
   testCLU name sem dev settings
-    = test sem dev settings name $ do
+    = test sem dev settings name 100 $ do
         op ← forAll $ Gen.enumBounded
         x ← forAll $ generator $ natToNum @(Q - 1)
         y ← forAll $ generator $ natToNum @(Q - 1)
         runHitltCLU sem dev settings (op, (x, y))
     where
       generator = Gen.integral . Range.constantFrom 1 1
+
+  testStack ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testStack name sem dev settings
+    = test sem dev settings name 10 $ do
+        actions <- forAll $ Gen.list (Range.linear 20 1000) $
+                   genStackAction @StackSize @StackValueSize
+        runStack @(BitSize (Unsigned StackPadding, (Maybe (Unsigned StackValueSize), Index (StackSize + 1))) `Div` 8)
+         sem dev settings actions
 
   testInverseModulo ∷
     String →
@@ -148,7 +177,7 @@ main = do
     SerialPortSettings →
     TestTree
   testInverseModulo name sem dev settings
-    = test sem dev settings name $ do
+    = test sem dev settings name 100 $ do
         x ← forAll $ generator $ natToNum @Q
         runHitltInverseModulo sem dev settings x
     where
@@ -162,7 +191,7 @@ main = do
     SerialPortSettings →
     TestTree
   testModulo name sem dev settings
-    = test sem dev settings name $ do
+    = test sem dev settings name 100 $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltModulo sem dev settings x
 
@@ -173,7 +202,7 @@ main = do
     SerialPortSettings →
     TestTree
   testKaratsuba name sem dev settings
-    = test sem dev settings name $ do
+    = test sem dev settings name 100 $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
@@ -188,7 +217,7 @@ main = do
   testSHA sem dev settings
     | SHAFacts alg ← knownSHA @alg
     , name ← dropWhile (== '\'') $ show $ typeRep alg
-    = test sem dev settings name $ do
+    = test sem dev settings name 100 $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
         runHitltSHA @alg sem dev settings bs
 
@@ -202,7 +231,7 @@ main = do
   testHMACSHA sem dev settings
     | SHAFacts alg ← knownSHA @alg
     , name ← dropWhile (== '\'') $ show $ typeRep alg
-    = test sem dev settings ("HMAC" <> name) $ do
+    = test sem dev settings ("HMAC" <> name) 100 $ do
         let n = natToNum @(BlockSize alg `Div` 8)
         key ← forAll $ Gen.bytes $ Range.linear 1 n
         msg ← forAll $ Gen.bytes $ Range.linear 1 499
@@ -213,9 +242,10 @@ main = do
     FilePath →
     SerialPortSettings →
     String →
+    TestLimit →
     PropertyT IO () →
     TestTree
-  test sem dev settings name p
+  test sem dev settings name limit p
     = localOption (HedgehogTestLimit (Just 1))
     $ sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
@@ -225,7 +255,7 @@ main = do
             (upload shake sem dev settings name)
             (const $ return ())
             $ const
-            $ localOption (HedgehogTestLimit (Just 100))
+            $ localOption (HedgehogTestLimit (Just limit))
             $ testProperty "run HITLT" $ property p
         ]
 
@@ -257,6 +287,50 @@ runHitltCLU sem dev settings i@(op , (x, y)) =
     . Modular.inv
     . Modular.toMod @Q
     . toInteger
+
+runStack :: forall messageSize. KnownNat messageSize =>
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  [StackAction StackSize (Unsigned StackValueSize)] →
+  PropertyT IO ()
+runStack sem dev settings actions = do
+  let bsAction
+       = pack . toList . bitCoerce . (fmap (\b -> if hasUndefined b then 0 else b) . bitCoerce @_ @(Vec _ Bit))
+  let actionList
+       = Pop (natToNum @(StackSize)) : actions
+  let safeTail = maybe (error "unthinkable") snd . L.uncons
+
+  dutResponses
+    ← liftIO $ bracket_ (waitQSem sem) (signalQSem sem) $ mapM (sendRequest . bsAction) actionList
+  let boardResponses
+       = map (snd . bitCoerce @_ @(Unsigned StackPadding, _) . fromMaybe (error "unthinkable") . V.fromList . unpack) dutResponses
+
+  let simResponses
+            = sampleN @System (L.length actions + 3)
+            $ withClockResetEnable clockGen resetGen enableGen
+            $ stack @_ @StackSize @(Unsigned StackValueSize)
+            $ fromList
+            $ Pop 0 : actionList <> [Pop 0]
+
+
+  boardResponses === safeTail (safeTail simResponses)
+
+ where
+  sendRequest bs =
+    hWithSerial dev settings $ \serial → do
+          hSetBuffering serial NoBuffering
+          -- ensure that the receive buffer is empty before we place
+          -- the request
+          emptyBuffer @messageSize serial
+          -- send the request
+          hPut serial bs
+          -- wait for a response
+          let msgSize = natToNum @messageSize
+          TO.timeout hitltTimeoutTime (hGet serial msgSize) >>= \case
+            Just x  → return x
+            Nothing → hGetNonBlocking serial msgSize
+                         >>= throw . hitltTimeoutErr msgSize
 
 runHitltInverseModulo ∷
   QSem →

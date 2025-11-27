@@ -158,6 +158,7 @@ library hitlt-instances
     Modulo
     SictMi
     SHA
+    Stack
 
 test-suite hitlt
   import: common-options

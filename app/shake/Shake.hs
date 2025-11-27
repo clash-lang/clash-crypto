@@ -118,6 +118,7 @@ shakeRules cfgs wanted = do
   hitltRules "Karatsuba" "Karatsuba" []
   hitltRules "Modulo" "Modulo" []
   hitltRules "SictMi" "SictMi" []
+  hitltRules "Stack" "Stack" []
 
   -- project apps
 

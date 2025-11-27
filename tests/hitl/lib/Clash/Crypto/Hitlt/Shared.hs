@@ -1,4 +1,6 @@
-module Clash.Crypto.Hitlt.Shared (Byte, ByteSize, Q, isReadyIndicator) where
+module Clash.Crypto.Hitlt.Shared
+ (Byte, ByteSize, Q, isReadyIndicator, StackSize, StackValueSize, StackPadding)
+where
 
 import Clash.Prelude
 
@@ -13,3 +15,9 @@ type Q =
 -- host that the device is ready now.
 isReadyIndicator :: Byte
 isReadyIndicator = 0xAB
+
+-- | Related to the stack
+type StackSize = 50
+type StackValueSize = 13
+type StackPadding =
+  BitSize Byte - BitSize (Maybe (Unsigned StackValueSize), Index (StackSize + 1)) `Mod` BitSize Byte

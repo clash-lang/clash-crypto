@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-|
 Module      : Clash.Sized.Stack
 Copyright   : Copyright © 2025 QBayLogic B.V.
@@ -35,6 +36,8 @@ data StackAction n a
   | Swap (Index n)
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
+
+instance (1 <= n, KnownNat n, BitPack a) => BitPack (StackAction n a) where
 
 -- | A block RAM based stack supporting the given list of actions,
 -- each always requiring a single cycle until its result appears on
