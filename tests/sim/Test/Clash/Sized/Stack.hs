@@ -10,13 +10,15 @@ import Clash.Prelude
 import qualified Data.List as L
 import qualified Hedgehog.Range as Range
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Hedgehog.Gen hiding (resize)
+import Hedgehog.Gen hiding (resize, maybe)
 import GHC.Num (integerFromInt)
 import Clash.Hedgehog.Sized.Index (genIndex)
+import Data.Maybe (fromMaybe, listToMaybe)
 
 
 type StackSize = 50
 
+tastyTests :: TestTree
 tastyTests = testGroup "Clash.Sized.Stack"
   [ localOption (HedgehogTestLimit (Just 1000))
   $ testGroup "Tests on the charge of the stack"
@@ -71,7 +73,8 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "Inspect on a used index returns the right value" $ property $ do
       cmdsPush <- createStack 1 (natToNum @StackSize)
       idxInspect <- makeUsedIndex cmdsPush
-      let Push returnVal = (L.reverse cmdsPush) L.!! (fromEnum idxInspect)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxInspect (L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [Inspect idxInspect]) (Just returnVal)
     ,
       testProperty "Inspect on an unused index returns Nothing" $ property $ do
@@ -92,7 +95,8 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "CopyUp on an used index and a non-full stack returns the pushed element" $ property $ do
       cmdsPush <- createStack 1 (natToNum @StackSize - 1)
       idxCpu <- makeUsedIndex cmdsPush
-      let Push returnVal = (L.reverse cmdsPush) L.!! (fromEnum idxCpu)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxCpu (L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [CopyUp idxCpu]) (Just returnVal)
     ,
       testProperty "Swap on an unused index returns Nothing" $ property $ do
@@ -103,14 +107,16 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "Swap on a used index returns the pointed value" $ property $ do
       cmdsPush <- createStack 1 (natToNum @StackSize)
       idxSwap <- makeUsedIndex cmdsPush
-      let Push returnVal = (L.reverse cmdsPush) L.!! (fromEnum idxSwap)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxSwap (L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [Swap idxSwap]) (Just returnVal)
     ,
       testProperty "Pop m on a stack of charge n (m < n) gives the value at the top" $ property $ do
       cmdsPush <- createStack 1 (natToNum @StackSize)
       lenPop <- makeUsedIndex cmdsPush
-      let Push ret = (L.reverse cmdsPush) L.!! fromEnum lenPop
-      testReturned @StackSize (cmdsPush <> [Pop $ resize lenPop]) (Just ret)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush lenPop (L.reverse cmdsPush)
+      testReturned @StackSize (cmdsPush <> [Pop $ resize lenPop]) (Just returnVal)
     ,
       testProperty "Pop m on a stack of charge n (m >= n) gives Nothing" $ property $ do
       cmdsPush <- createStack 0 (natToNum @StackSize)
@@ -130,7 +136,8 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "Inspect on a used index returns the right value" $ property $ do
       cmdsPush <- createStack 2 (natToNum @StackSize)
       idxInspect <- satPred SatBound <$> makeUsedIndex cmdsPush
-      let Push returnVal = (L.tail $ L.reverse cmdsPush) L.!! (fromEnum $ idxInspect)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxInspect (safeTail $ L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [Pop 1, Inspect idxInspect])
        (Just returnVal)
     ,
@@ -147,7 +154,8 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "CopyUp on an used index and a non-full stack returns the pushed element" $ property $ do
       cmdsPush <- createStack 2 (natToNum @StackSize - 1)
       idxCpu <- satPred SatBound <$> makeUsedIndex cmdsPush
-      let Push returnVal = (L.tail $ L.reverse cmdsPush) L.!! (fromEnum idxCpu)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxCpu (safeTail $ L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [Pop 1, CopyUp idxCpu]) (Just returnVal)
     ,
       testProperty "Swap on an unused index returns Nothing" $ property $ do
@@ -158,22 +166,35 @@ tastyTests = testGroup "Clash.Sized.Stack"
       testProperty "Swap on a used index returns the pointed value" $ property $ do
       cmdsPush <- createStack 2 (natToNum @StackSize)
       idxSwap <- satPred SatBound <$> makeUsedIndex cmdsPush
-      let Push returnVal = (L.tail $ L.reverse cmdsPush) L.!! (fromEnum idxSwap)
+      let returnVal = fromMaybe (error "List should only be Push-es") $
+                      extractPush idxSwap (safeTail $ L.reverse cmdsPush)
       testReturned @StackSize (cmdsPush <> [Pop 1, Swap idxSwap]) (Just returnVal)
     ]
   ]
 
+safeTail :: [c] -> [c]
+safeTail = maybe (error "Action list shouldn't be empty") snd . L.uncons
+
+extractPush :: KnownNat n => Index n -> [StackAction n a] -> Maybe a
+extractPush idx lst =
+ case lst L.!! fromEnum idx of
+  Push i -> Just i
+  _      -> Nothing
+
 -- len should be less than StackSize.
+makeUnusedIndex :: (Foldable t, Monad m) => t a -> PropertyT m (Index StackSize)
 makeUnusedIndex cmds = do
  let len = L.length cmds
  forAll $ genIndex $ Range.linear (intToIndex len :: Index StackSize) maxBound
 
 -- len should be greater than 1.
+makeUsedIndex :: (Foldable t, Monad m) => t a -> PropertyT m (Index StackSize)
 makeUsedIndex cmds = do
  let len = L.length cmds
  forAll $ genIndex $ Range.linear 0
   (intToIndex (len - 1) :: Index StackSize)
 
+createStack :: Monad m => Int -> Int -> PropertyT m [StackAction n (Unsigned 16)]
 createStack minSize maxSize = do
  -- Random numbers to fill the stack
  let r = genUnsigned $ Range.linear 0 (maxBound :: Unsigned 16)
@@ -191,7 +212,8 @@ testReturned cmds expectedValue =
   actualValue === expectedValue
  where
   actualValue
-    = L.head
+    = fromMaybe (error "The returned list was empty")
+    $ listToMaybe
     $ L.reverse
     $ fmap fst
     $ sampleN @System (L.length cmds + 3)
@@ -206,7 +228,8 @@ testSize cmds expectedSize =
   actualSize === expectedSize
  where
   actualSize
-    = L.head
+    = fromMaybe (error "The returned list was empty")
+    $ listToMaybe
     $ L.reverse
     $ fmap snd
     $ sampleN @System (L.length cmds + 3)
