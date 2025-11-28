@@ -136,18 +136,6 @@ main = do
             ]
         ]
 
-  genStackAction :: forall n size m .
-   (KnownNat n, KnownNat size, Gen.MonadGen m) =>
-   m (StackAction n (Unsigned size))
-  genStackAction = Gen.choice
-    [
-      Push    <$> genUnsigned (Range.linear minBound maxBound)
-    , Pop     <$> genIndex    (Range.linear minBound maxBound)
-    , Inspect <$> genIndex    (Range.linear 1 maxBound)
-    , CopyUp  <$> genIndex    (Range.linear 1 maxBound)
-    , Swap    <$> genIndex    (Range.linear 1 maxBound)
-    ]
-
   testCLU name sem dev settings
     = test sem dev settings name 100 $ do
         op ← forAll $ Gen.enumBounded
@@ -156,6 +144,18 @@ main = do
         runHitltCLU sem dev settings (op, (x, y))
     where
       generator = Gen.integral . Range.constantFrom 1 1
+
+  genStackAction :: forall n size m .
+   (KnownNat n, KnownNat size, Gen.MonadGen m) =>
+   m (StackAction n (Unsigned size))
+  genStackAction = Gen.choice
+    [
+      Push    <$> genUnsigned (Range.linear minBound maxBound)
+    , Pop     <$> genIndex    (Range.linear minBound maxBound)
+    , Inspect <$> genIndex    (Range.linear minBound maxBound)
+    , CopyUp  <$> genIndex    (Range.linear minBound maxBound)
+    , Swap    <$> genIndex    (Range.linear minBound maxBound)
+    ]
 
   testStack ∷
     String →
@@ -167,7 +167,10 @@ main = do
     = test sem dev settings name 10 $ do
         actions <- forAll $ Gen.list (Range.linear 20 1000) $
                    genStackAction @StackSize @StackValueSize
-        runStack @(BitSize (Unsigned StackPadding, (Maybe (Unsigned StackValueSize), Index (StackSize + 1))) `Div` 8)
+        runStack @(BitSize (Unsigned StackPadding,
+                            (Maybe (Unsigned StackValueSize),
+                             Index (StackSize + 1)))
+                      `Div` 8)
          sem dev settings actions
 
   testInverseModulo ∷
@@ -288,23 +291,19 @@ runHitltCLU sem dev settings i@(op , (x, y)) =
     . Modular.toMod @Q
     . toInteger
 
-runStack :: forall messageSize. KnownNat messageSize =>
+runStack ∷ ∀ messageSize. KnownNat messageSize ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   [StackAction StackSize (Unsigned StackValueSize)] →
   PropertyT IO ()
 runStack sem dev settings actions = do
-  let bsAction
-       = pack . toList . bitCoerce . (fmap (\b -> if hasUndefined b then 0 else b) . bitCoerce @_ @(Vec _ Bit))
-  let actionList
-       = Pop (natToNum @(StackSize)) : actions
-  let safeTail = maybe (error "unthinkable") snd . L.uncons
-
-  dutResponses
-    ← liftIO $ bracket_ (waitQSem sem) (signalQSem sem) $ mapM (sendRequest . bsAction) actionList
-  let boardResponses
-       = map (snd . bitCoerce @_ @(Unsigned StackPadding, _) . fromMaybe (error "unthinkable") . V.fromList . unpack) dutResponses
+  let bsAction = pack . toList . bitCoerce
+       . fmap (\b -> if hasUndefined b then 0 else b) . bitCoerce @_ @(Vec _ Bit)
+  -- If we run the test multiple times, we want to empty the stack.
+  let actionList = Pop (natToNum @(StackSize)) : actions
+  dutResponses ← liftIO $ bracket_ (waitQSem sem) (signalQSem sem)
+   $ mapM (sendRequest @messageSize dev settings . bsAction) actionList
 
   let simResponses
             = sampleN @System (L.length actions + 3)
@@ -312,25 +311,11 @@ runStack sem dev settings actions = do
             $ stack @_ @StackSize @(Unsigned StackValueSize)
             $ fromList
             $ Pop 0 : actionList <> [Pop 0]
+  let boardResponses = map (snd . bitCoerce @_ @(Unsigned StackPadding, _)
+       . fromMaybe (error "unthinkable") . V.fromList . unpack) dutResponses
 
-
+  let safeTail = maybe (error "unthinkable") snd . L.uncons
   boardResponses === safeTail (safeTail simResponses)
-
- where
-  sendRequest bs =
-    hWithSerial dev settings $ \serial → do
-          hSetBuffering serial NoBuffering
-          -- ensure that the receive buffer is empty before we place
-          -- the request
-          emptyBuffer @messageSize serial
-          -- send the request
-          hPut serial bs
-          -- wait for a response
-          let msgSize = natToNum @messageSize
-          TO.timeout hitltTimeoutTime (hGet serial msgSize) >>= \case
-            Just x  → return x
-            Nothing → hGetNonBlocking serial msgSize
-                         >>= throw . hitltTimeoutErr msgSize
 
 runHitltInverseModulo ∷
   QSem →
@@ -452,21 +437,29 @@ runHitlt sem dev settings bs eq = do
 
   dutResponse ← liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
-    $ hWithSerial dev settings $ \serial → do
-        hSetBuffering serial NoBuffering
-        -- ensure that the receive buffer is empty before we place
-        -- the request
-        emptyBuffer @messageSize serial
-        -- send the request
-        hPut serial bs
-        -- wait for the response
-        let msgSize =  natToNum @messageSize
-        TO.timeout hitltTimeoutTime (hGet serial msgSize) >>= \case
-          Just x  → return x
-          Nothing → hGetNonBlocking serial msgSize
-                       >>= throw . hitltTimeoutErr msgSize
+    $ sendRequest @messageSize dev settings bs
 
   pr dutResponse === pr eq
+
+sendRequest ∷ ∀ messageSize. KnownNat messageSize ⇒
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  IO ByteString
+sendRequest dev settings bs =
+  hWithSerial dev settings $ \serial → do
+    hSetBuffering serial NoBuffering
+    -- ensure that the receive buffer is empty before we place
+    -- the request
+    emptyBuffer @messageSize serial
+    -- send the request
+    hPut serial bs
+    -- wait for a response
+    let msgSize = natToNum @messageSize
+    TO.timeout hitltTimeoutTime (hGet serial msgSize) >>= \case
+      Just x  → return x
+      Nothing → hGetNonBlocking serial msgSize
+                   >>= throw . hitltTimeoutErr msgSize
 
 emptyBuffer ∷
   ∀ (messageSize ∷ Nat). KnownNat messageSize ⇒

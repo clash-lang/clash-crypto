@@ -32,7 +32,9 @@ topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD) $
    (\(bulkRead @(StackAction StackSize (Unsigned StackValueSize)) -> val) ->
    mux (isJust <$> register Nothing val)
-       (Just <$> (fmap (minBound :: Unsigned StackPadding,) $ stack $ fromMaybe (Pop 0) <$> val))
+       (Just <$>
+        (minBound :: Unsigned StackPadding,) <$>
+         stack (fromMaybe (Pop 0) <$> val))
        (pure Nothing))
 
 makeTopEntity 'topEntity
