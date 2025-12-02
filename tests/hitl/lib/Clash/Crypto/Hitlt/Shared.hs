@@ -1,8 +1,18 @@
 module Clash.Crypto.Hitlt.Shared
- (Byte, ByteSize, Q, isReadyIndicator, StackSize, StackValueSize, StackPadding)
+  ( Byte
+  , ByteSize
+  , Q
+  , StackSize
+  , StackValueSize
+  , StackPadding
+  , CluInput
+  , isReadyIndicator
+  )
 where
 
 import Clash.Prelude
+
+import Clash.Crypto.Calculator.CLU (CluInstruction, ECPrime, ECMod)
 
 type Byte = BitVector 8
 type ByteSize a = BitSize a `Div` BitSize Byte
@@ -20,4 +30,12 @@ isReadyIndicator = 0xAB
 type StackSize = 50
 type StackValueSize = 13
 type StackPadding =
-  BitSize Byte - BitSize (Maybe (Unsigned StackValueSize), Index (StackSize + 1)) `Mod` BitSize Byte
+  BitSize Byte
+    - BitSize (Maybe (Unsigned StackValueSize), Index (StackSize + 1))
+        `Mod` BitSize Byte
+
+-- | Related to CLU
+type CluInput =
+  ( Unsigned (BitSize Byte - BitSize CluInstruction - BitSize ECPrime)
+  , (ECPrime, (CluInstruction, (ECMod, ECMod)))
+  )

@@ -26,6 +26,7 @@ import Clash.Prelude hiding (Mod)
 import Clash.Signal.Channel
 import Clash.Signal.Extra (apWhen)
 
+import Data.Bifunctor (bimap)
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
@@ -217,14 +218,16 @@ fltCtmi ∷
   ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
   Channel dom (Mod p) →
   Channel dom (Mod p)
-fltCtmi i = o
+fltCtmi input = output
  where
-  (s, o)
-    = fltCtmiE @p i
+  (output, s)
+    = fltCtmiE @p input
     $ computeModuloUnsigned @p
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
-    $ (\(a, b) → (bitCoerce a, bitCoerce b)) <$> s
+      s
 
+-- | A 'fltCtmi' variant that uses a shared multiplier and prime field
+-- modulo instead of shipping a local copy.
 fltCtmiE ∷
   ∀ p dom.
   (HiddenClockResetEnable dom, KnownNat p, 3 ≤ p) ⇒
@@ -232,15 +235,17 @@ fltCtmiE ∷
   Channel dom (Mod p) →
   -- | shared multiplier with modulo output
   Channel dom (Mod p) →
-  ( -- | shared multiplier with modulo input
-    Channel dom (Mod p, Mod p)
-  , -- | output
+  ( -- | output
     Channel dom (Mod p)
+  , -- | shared multiplier with modulo input
+    Channel dom (Unsigned (ModSize p), Unsigned (ModSize p))
   )
-fltCtmiE (fmap bitCoerce → input) smmOut
-  = (smmIn, bitCoerce <$> guardC done cur)
+fltCtmiE input smmOut
+  = ( guardC done cur
+    , bimap bitCoerce bitCoerce <$> smmIn
+    )
  where
-  cur = keepD $ join input $ fmap bitCoerce smmOut
+  cur = keepD $ join input smmOut
   smmIn = zipC cur $ muxC (fst <$> stage) input $ guardC (not <$> done) cur
 
   stage = register (FLTSquare, minBound ∷ Index (FLTIterations p))

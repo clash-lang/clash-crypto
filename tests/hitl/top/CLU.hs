@@ -7,14 +7,13 @@ module CLU where
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
 
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hitlt.Shared (Q)
+import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
+import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.Modulo (Mod)
-import Clash.Crypto.Calculator.CLU (CluInstruction, clu)
+import Clash.Crypto.Calculator.CLU
+import Clash.Crypto.Hitlt.Shared
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -25,16 +24,14 @@ type BAUD = HITLT_BAUD
 
 topEntity ∷
   "CLK" ::: Clock Dom48 →
-  "PMOD1_6" ::: Signal Dom24 Bit →
-  "PMOD1_5" ::: Signal Dom24 Bit
-topEntity (orangePll24 → (clk, rst))
+  "PMOD1_6" ::: Signal Dom12 Bit →
+  "PMOD1_5" ::: Signal Dom12 Bit
+topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-      . clu @Dom24 @Q @3 @36 SNat SNat
+      . clu d3 d36
       . cachedFromMaybe
       . fmap (snd <$>)
-      . bulkRead @( Unsigned (8 - BitSize CluInstruction)
-                  , (CluInstruction, (Mod Q, Mod Q))
-                  )
+      . bulkRead @CluInput
 
 makeTopEntity 'topEntity

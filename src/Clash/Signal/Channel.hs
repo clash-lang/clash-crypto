@@ -136,7 +136,7 @@ instance Alternative (Channel dom) where
 
 instance Foldable (Channel dom) where
   foldMap f = fold . fmap f
-  fold = fold . fmap fold . getContent
+  fold = foldMap fold . getContent
 
 instance Traversable (Channel dom) where
   traverse f = fmap Channel . traverse (traverse f) . getContent

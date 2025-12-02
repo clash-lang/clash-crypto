@@ -105,6 +105,7 @@ jobs:
           - FastGCD
           - FltCtmi
           - CLU
+          - Stack
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4

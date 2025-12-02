@@ -5,10 +5,11 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Test suite for 'Clash.Crypto.ECDSA.CLU'.
+Test suite for 'Clash.Crypto.Calculator.CLU'.
 -}
 
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE TypeAbstractions #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -30,79 +31,98 @@ import qualified Data.Modular as Modular
 import qualified Hedgehog.Range as Range
 
 import Clash.Crypto.Calculator.CLU
-import Clash.Crypto.ECDSA.InverseModulo (deriveSictPrecomp)
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
-
-
--- TODO: Once all PRs are merged, move this to one place.
-type Q = 115792089210356248762697446949407573530086143415290314195533631308867097853951
-
-deriveSictPrecomp @Q
+import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod, unMod)
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"
   [ localOption (HedgehogTestLimit (Just 500))
   $ testGroup "CLU Tests"
       [ testProperty "Addition" $ property $ do
-          a ← genMod
-          b ← genMod
-          testCLU (SNat @Q) Add a b
-            $ a + b
+          a ∷ CMod SecP256Mod ← genMod
+          b ∷ CMod SecP256Mod ← genMod
+          testCLU SecP256Mod Add a b $ a + b
+          c ∷ CMod SecP256Ord ← genMod
+          d ∷ CMod SecP256Ord ← genMod
+          testCLU SecP256Ord Add c d $ c + d
       , testProperty "Substraction" $ property $ do
-          a ← genMod
-          b ← genMod
-          testCLU (SNat @Q) Sub a b
-            $ a - b
+          a ∷ CMod SecP256Mod ← genMod
+          b ∷ CMod SecP256Mod ← genMod
+          testCLU SecP256Mod Sub a b $ a - b
+          c ∷ CMod SecP256Ord ← genMod
+          d ∷ CMod SecP256Ord ← genMod
+          testCLU SecP256Ord Sub c d $ c - d
       , localOption (HedgehogTestLimit (Just 20))
-      $ testProperty "Inverse" $ property $ do
-          a ← genMod
-          b ← genMod
-          testCLU (SNat @Q) Inv a b $ if
-            | a == 0 → b
-            | otherwise
-            → fromInteger
-            $ Modular.unMod
-            $ fromMaybe moduloError
-            $ Modular.inv
-            $ Modular.toMod @Q
-            $ toInteger a
+        $ testProperty "Inverse" $ property $ do
+          a ∷ CMod SecP256Mod ← genMod
+          b ∷ CMod SecP256Mod ← genMod
+          testCLU SecP256Mod Inv a b $ if
+            | a == 0    → b
+            | otherwise → invGolden a
+          c ∷ CMod SecP256Ord ← genMod
+          d ∷ CMod SecP256Ord ← genMod
+          testCLU SecP256Ord Inv c d $ if
+            | c == 0    → d
+            | otherwise → invGolden c
       , testProperty "Multiplication" $ property $ do
-          a ← genMod
-          b ← genMod
-          testCLU (SNat @Q) Mul a b $ a * b
+          a ∷ CMod SecP256Mod ← genMod
+          b ∷ CMod SecP256Mod ← genMod
+          testCLU SecP256Mod Mul a b $ a * b
+          c ∷ CMod SecP256Ord ← genMod
+          d ∷ CMod SecP256Ord ← genMod
+          testCLU SecP256Ord Mul c d $ c * d
       , testProperty "Test Bit" $ property $ do
-          a ← genMod
-          b ← genMod
-          testCLU (SNat @Q) Bit a b $ if
-            | b < natToNum @(ModSize Q), testBit a (fromEnum b) → 1
+          a ∷ CMod SecP256Mod ← genMod
+          b ∷ CMod SecP256Mod ← genMod
+          testCLU SecP256Mod Bit a b $ if
+            | b < natToNum @(ModSize (CPrime SecP256Mod))
+            , testBit a (fromEnum b) → 1
+            | otherwise → 0
+          c ∷ CMod SecP256Ord ← genMod
+          d ∷ CMod SecP256Ord ← genMod
+          testCLU SecP256Ord Bit c d $ if
+            | d < natToNum @(ModSize (CPrime SecP256Ord))
+            , testBit c (fromEnum d) → 1
             | otherwise → 0
       ]
   ]
  where
+  genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
   genMod = do
-    x ← forAll $ genIndex $ Range.linear minBound maxBound
-    return $ createMod @Q x
+    x ← forAll $ genIndex @p $ Range.linear minBound maxBound
+    return $ createMod @p x
 
-  moduloError =
-    error "Since the modulo of the field is prime, the inverse always exists."
-
-testCLU ∷ (Monad m, 3 ≤ p) ⇒
-  SNat p →
+testCLU ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p, p ≤ CPrime SecP256Mod) ⇒
+  ECPrime →
   CluInstruction →
   Mod p →
   Mod p →
   Mod p →
   PropertyT m ()
-testCLU SNat op a b
-  = (===)
+testCLU p op a b c
+  = (ex c ===)
   $ fromMaybe (error "The returned list was empty")
   $ getFirst
   $ foldMap First
   $ sampleN @System 1000000
   $ withClockResetEnable clockGen resetGen enableGen
   $ newsfeed
-  $ clu (SNat @4) (SNat @36)
+  $ clu d4 d36
   $ channel
-  $ fmap ((op, (a, b)), )
+  $ fmap ((p, (op, (ex a, ex b))), )
   $ fromList
   $ Keep : Keep : Release : List.repeat Keep
+ where
+  ex ∷ Mod p → CMod SecP256Mod
+  ex = createMod . extend @_ @_ @(CPrime SecP256Mod - p) . unMod
+
+invGolden ∷ ∀ p. Modular.Modulus p ⇒ Mod p → Mod p
+invGolden
+  = fromInteger
+  . Modular.unMod
+  . fromMaybe moduloError
+  . Modular.inv
+  . Modular.toMod @p
+  . toInteger
+ where
+  moduloError =
+    error "Since the modulo of the field is prime, the inverse always exists."

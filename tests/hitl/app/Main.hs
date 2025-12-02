@@ -4,6 +4,17 @@
 
 import Prelude
 
+import Clash.Prelude
+  ( type Div, type (*), type (-), type (+)
+  , Nat, KnownNat, Unsigned, Vec, BitPack(BitSize), Bit, Index, System
+  , toList, resize,  bitCoerce, natToNum, testBit, extend, fromList
+  , sampleN, withClockResetEnable, clockGen, resetGen, enableGen
+  )
+
+import Clash.Hedgehog.Sized.Index (genIndex)
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
+import Clash.XException (hasUndefined)
+
 import Control.Concurrent.QSem (QSem, newQSem, waitQSem, signalQSem)
 import Control.Exception
   ( SomeException, Exception, Handler(..)
@@ -20,7 +31,8 @@ import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
 import GHC.IO.Handle (Handle)
-import Hedgehog (PropertyT, (===), property, forAll, TestLimit)
+import Hedgehog (PropertyT, (===), property, forAll, TestLimit, MonadGen)
+import Language.Haskell.Unicode (type (≤))
 import System.Exit (ExitCode, exitWith)
 import System.Environment (setEnv, withArgs)
 import System.Hardware.Serialport
@@ -36,14 +48,33 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
-import qualified Data.ByteString as BS
-  (concatMap, empty, null, uncons, unsnoc, pack, length, replicate)
-import qualified Data.Modular    as Modular
-import qualified System.Timeout  as TO (timeout)
-import qualified Hedgehog.Range  as Range (linear, constantFrom)
+import Clash.Sized.Stack (StackAction(..), stack)
+import Clash.Crypto.Hash.SHA
+  ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
+  )
+import Clash.Crypto.Calculator.CLU
+  ( CluInstruction(..), ECPrime(..), CPrime, CMod
+  )
+import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod, unMod)
+import Clash.Crypto.Hitlt.Shared
+  ( Q, StackSize, StackValueSize, StackPadding, CluInput
+  , isReadyIndicator
+  )
 
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize)
+import Shake
+  ( ShakeOptions(..), Verbosity(..)
+  , shakeOptions, shakeBuild, configLookup
+  )
 
+import qualified Data.ByteString     as BS
+  ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate
+  )
+import qualified Data.Modular        as Modular
+import qualified Data.List           as List
+import qualified System.Timeout      as TO (timeout)
+import qualified Hedgehog.Range      as Range (linear, constantFrom)
+import qualified Hedgehog.Gen        as Gen
+import qualified Clash.Sized.Vector  as Vec
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
 import qualified Crypto.Hash.SHA224  as SHA224 (hash)
 import qualified Crypto.Hash.SHA256  as SHA256 (hash)
@@ -51,31 +82,6 @@ import qualified Crypto.Hash.SHA384  as SHA384 (hash)
 import qualified Crypto.Hash.SHA512  as SHA512 (hash)
 import qualified Crypto.Hash.SHA512t as SHA512t (hash)
 import qualified Crypto.MAC.HMAC     as HMAC (hmac)
-
-import Clash.Prelude
-  ( type Div, type (*), type (-), Nat, KnownNat, Unsigned, Vec
-  , toList, resize,  bitCoerce, natToNum, Index, System, sampleN
-  , withClockResetEnable, clockGen, resetGen, enableGen, fromList
-  , BitPack (BitSize), Bit, testBit
-  )
-import Clash.Crypto.Hash.SHA
-  ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
-  )
-import Clash.Crypto.Calculator.CLU (CluInstruction(..))
-import Clash.Crypto.Hitlt.Shared
-import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-
-import Shake
-  ( ShakeOptions(..), Verbosity(..)
-  , shakeOptions, shakeBuild, configLookup
-  )
-import qualified Hedgehog.Internal.Gen as Gen
-import Clash.Sized.Stack
-import Clash.Hedgehog.Sized.Index (genIndex)
-import qualified Data.List as L
-import GHC.TypeLits (type (+))
-import Clash.XException
-import qualified Clash.Sized.Vector as V
 
 main ∷ IO ()
 main = do
@@ -136,18 +142,35 @@ main = do
             ]
         ]
 
+  testCLU ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
   testCLU name sem dev settings
     = test sem dev settings name 100 $ do
-        op ← forAll $ Gen.enumBounded
-        x ← forAll $ generator $ natToNum @(Q - 1)
-        y ← forAll $ generator $ natToNum @(Q - 1)
-        runHitltCLU sem dev settings (op, (x, y))
-    where
-      generator = Gen.integral . Range.constantFrom 1 1
+        opMod ← forAll Gen.enumBounded
+        a ∷ CMod SecP256Mod ← genMod
+        b ∷ CMod SecP256Mod ← genMod
+        runHitltCLU @(CPrime SecP256Mod) sem dev settings
+          (SecP256Mod, (opMod, (a, b)))
 
-  genStackAction :: forall n size m .
-   (KnownNat n, KnownNat size, Gen.MonadGen m) =>
-   m (StackAction n (Unsigned size))
+        opOrd ← forAll Gen.enumBounded
+        c ∷ CMod SecP256Ord ← genMod
+        d ∷ CMod SecP256Ord ← genMod
+        runHitltCLU @(CPrime SecP256Ord) sem dev settings
+          (SecP256Ord, (opOrd, (c, d)))
+   where
+    genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
+    genMod = do
+      x ← forAll $ genIndex @p $ Range.linear minBound maxBound
+      return $ createMod @p x
+
+  genStackAction ∷
+    ∀ n size m.
+    (KnownNat n, KnownNat size, MonadGen m) ⇒
+    m (StackAction n (Unsigned size))
   genStackAction = Gen.choice
     [
       Push    <$> genUnsigned (Range.linear minBound maxBound)
@@ -265,31 +288,41 @@ main = do
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
 runHitltCLU ∷
+  ∀ (p ∷ Nat).
+  (KnownNat p, 1 ≤ p, p ≤ CPrime SecP256Mod) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
-  (CluInstruction, (Mod Q, Mod Q)) →
+  (ECPrime, (CluInstruction, (Mod p, Mod p))) →
   PropertyT IO ()
-runHitltCLU sem dev settings i@(op , (x, y)) =
-  runHitlt @(BitSize (Mod Q) `Div` 8) sem dev settings bs eq
+runHitltCLU sem dev settings (ec, (op, (x, y))) =
+  runHitlt @(ModSize p `Div` 8) sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce (0 ∷ Unsigned (8 - BitSize CluInstruction), i)
-  eq = pack $ toList $ bitCoerce $ case op of
-    Add → x + y
-    Sub → x - y
-    Mul → x * y
-    Inv | x == 0 → y
-        | otherwise → invMod x
-    Bit | y < natToNum @(ModSize Q), testBit x (fromEnum y) → 1
-        | otherwise → 0
+  bs = pack $ toList
+     $ bitCoerce @_ @(Vec (BitSize CluInput `Div` 8) Word8)
+         ((0, (ec, (op, (ex x, ex y)))) ∷ CluInput)
+
+  eq = pack $ toList
+    $ bitCoerce @_ @(Vec (ModSize (CPrime SecP256Mod) `Div` 8) Word8)
+    $ ex $ case op of
+        Add → x + y
+        Sub → x - y
+        Mul → x * y
+        Inv | x == 0 → y
+            | otherwise → invMod x
+        Bit | y < natToNum @(ModSize p), testBit x (fromEnum y) → 1
+            | otherwise → 0
 
   invMod
     = fromInteger
     . Modular.unMod
     . fromMaybe (error "inverse always exists.")
     . Modular.inv
-    . Modular.toMod @Q
+    . Modular.toMod @p
     . toInteger
+
+  ex ∷ Mod p → CMod SecP256Mod
+  ex = createMod . extend @_ @_ @(CPrime SecP256Mod - p) . unMod
 
 runStack ∷ ∀ messageSize. KnownNat messageSize ⇒
   QSem →
@@ -306,15 +339,15 @@ runStack sem dev settings actions = do
    $ mapM (sendRequest @messageSize dev settings . bsAction) actionList
 
   let simResponses
-            = sampleN @System (L.length actions + 3)
+            = sampleN @System (List.length actions + 3)
             $ withClockResetEnable clockGen resetGen enableGen
             $ stack @_ @StackSize @(Unsigned StackValueSize)
             $ fromList
             $ Pop 0 : actionList <> [Pop 0]
   let boardResponses = map (snd . bitCoerce @_ @(Unsigned StackPadding, _)
-       . fromMaybe (error "unthinkable") . V.fromList . unpack) dutResponses
+       . fromMaybe (error "unthinkable") . Vec.fromList . unpack) dutResponses
 
-  let safeTail = maybe (error "unthinkable") snd . L.uncons
+  let safeTail = maybe (error "unthinkable") snd . List.uncons
   boardResponses === safeTail (safeTail simResponses)
 
 runHitltInverseModulo ∷

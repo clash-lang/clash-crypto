@@ -11,6 +11,8 @@ actions besides the usual push and pop, all of which run in a
 single cycle.
 -}
 
+{-# LANGUAGE UndecidableInstances #-}
+
 module Clash.Sized.Stack
   ( StackAction(..)
   , stack
@@ -37,7 +39,7 @@ data StackAction n a
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
 
-instance (1 <= n, KnownNat n, BitPack a) => BitPack (StackAction n a) where
+deriving instance (KnownNat n, 1 <= n, BitPack a) ⇒ BitPack (StackAction n a)
 
 -- | A block RAM based stack supporting the given list of actions,
 -- each always requiring a single cycle until its result appears on
