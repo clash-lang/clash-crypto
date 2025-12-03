@@ -12,8 +12,8 @@ import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
 import Clash.Sized.Stack (stack)
-import Clash.Sized.Stack (StackAction(..))
-import Data.Maybe (isJust, fromMaybe)
+import Clash.Sized.Stack (StackAction(Pop))
+import Data.Maybe (fromMaybe)
 import Clash.Crypto.Hitlt.Shared
 
 -- allows to select the UART baud via a CPP define
@@ -23,7 +23,6 @@ type BAUD = 9600
 type BAUD = HITLT_BAUD
 #endif
 
-
 topEntity ∷
   "CLK" ::: Clock Dom48 →
   "PMOD1_6" ::: Signal Dom24 Bit →
@@ -31,10 +30,8 @@ topEntity ∷
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD) $
    (\(bulkRead @(StackAction StackSize (Unsigned StackValueSize)) -> val) ->
-   mux (isJust <$> register Nothing val)
-       (Just <$>
-        (minBound :: Unsigned StackPadding,) <$>
-         stack (fromMaybe (Pop 0) <$> val))
-       (pure Nothing))
+        (\v s -> v >> pure (0 :: Unsigned StackPadding, s))
+        <$> delay Nothing val
+        <*> stack (fromMaybe (Pop 0) <$> val))
 
 makeTopEntity 'topEntity

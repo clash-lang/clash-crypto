@@ -31,7 +31,7 @@ import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
 import GHC.IO.Handle (Handle)
-import Hedgehog (PropertyT, (===), property, forAll, TestLimit, MonadGen)
+import Hedgehog (PropertyT, (===), property, forAll, MonadGen)
 import Language.Haskell.Unicode (type (≤))
 import System.Exit (ExitCode, exitWith)
 import System.Environment (setEnv, withArgs)
@@ -103,7 +103,9 @@ main = do
     ]
  where
   run sem dev settings
-    = defaultMain $ testGroup "Clash Crytpo HITL tests"
+    = defaultMain
+    $ localOption (HedgehogTestLimit (Just 100))
+    $ testGroup "Clash Crytpo HITL tests"
         [
           testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
@@ -137,6 +139,7 @@ main = do
           testGroup "Clash.Crypto.ECDSA.CLU"
             [ testCLU "CLU" sem dev settings
             ] ,
+          localOption (HedgehogTestLimit (Just 10)) $
           testGroup "Clash.Sized.Stack"
             [ testStack "Stack" sem dev settings
             ]
@@ -149,7 +152,7 @@ main = do
     SerialPortSettings →
     TestTree
   testCLU name sem dev settings
-    = test sem dev settings name 100 $ do
+    = test sem dev settings name $ do
         opMod ← forAll Gen.enumBounded
         a ∷ CMod SecP256Mod ← genMod
         b ∷ CMod SecP256Mod ← genMod
@@ -187,7 +190,7 @@ main = do
     SerialPortSettings →
     TestTree
   testStack name sem dev settings
-    = test sem dev settings name 10 $ do
+    = test sem dev settings name $ do
         actions <- forAll $ Gen.list (Range.linear 20 1000) $
                    genStackAction @StackSize @StackValueSize
         runStack @(BitSize (Unsigned StackPadding,
@@ -203,7 +206,7 @@ main = do
     SerialPortSettings →
     TestTree
   testInverseModulo name sem dev settings
-    = test sem dev settings name 100 $ do
+    = test sem dev settings name $ do
         x ← forAll $ generator $ natToNum @Q
         runHitltInverseModulo sem dev settings x
     where
@@ -217,7 +220,7 @@ main = do
     SerialPortSettings →
     TestTree
   testModulo name sem dev settings
-    = test sem dev settings name 100 $ do
+    = test sem dev settings name $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltModulo sem dev settings x
 
@@ -228,7 +231,7 @@ main = do
     SerialPortSettings →
     TestTree
   testKaratsuba name sem dev settings
-    = test sem dev settings name 100 $ do
+    = test sem dev settings name $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
@@ -243,7 +246,7 @@ main = do
   testSHA sem dev settings
     | SHAFacts alg ← knownSHA @alg
     , name ← dropWhile (== '\'') $ show $ typeRep alg
-    = test sem dev settings name 100 $ do
+    = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
         runHitltSHA @alg sem dev settings bs
 
@@ -257,7 +260,7 @@ main = do
   testHMACSHA sem dev settings
     | SHAFacts alg ← knownSHA @alg
     , name ← dropWhile (== '\'') $ show $ typeRep alg
-    = test sem dev settings ("HMAC" <> name) 100 $ do
+    = test sem dev settings ("HMAC" <> name) $ do
         let n = natToNum @(BlockSize alg `Div` 8)
         key ← forAll $ Gen.bytes $ Range.linear 1 n
         msg ← forAll $ Gen.bytes $ Range.linear 1 499
@@ -268,12 +271,10 @@ main = do
     FilePath →
     SerialPortSettings →
     String →
-    TestLimit →
     PropertyT IO () →
     TestTree
-  test sem dev settings name limit p
-    = localOption (HedgehogTestLimit (Just 1))
-    $ sequentialTestGroup name AllSucceed
+  test sem dev settings name p
+    = sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
             $ liftIO $ shake [name <> ":bitstream"]
@@ -281,7 +282,6 @@ main = do
             (upload shake sem dev settings name)
             (const $ return ())
             $ const
-            $ localOption (HedgehogTestLimit (Just limit))
             $ testProperty "run HITLT" $ property p
         ]
 
