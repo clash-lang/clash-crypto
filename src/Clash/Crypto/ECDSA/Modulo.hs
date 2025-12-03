@@ -15,6 +15,7 @@ module Clash.Crypto.ECDSA.Modulo
   ( Mod(..)
   , Prime
   , ModSize
+  , ComputeModuloUnsignedCycles
   , unMod
   , createMod
   , computeModuloUnsigned
@@ -51,6 +52,9 @@ unMod = coerce
 
 createMod ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ Index n → Mod n
 createMod = coerce
+
+-- |The number of cycles an instance of 'computeModuloUnsigned` takes to run.
+type ComputeModuloUnsignedCycles m len = len - ModSize m
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on unsigned values.

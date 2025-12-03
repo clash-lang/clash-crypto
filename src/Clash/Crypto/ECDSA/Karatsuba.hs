@@ -13,7 +13,8 @@ algorithm.
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
-  ( karatsuba
+  ( KaratsubaCycles
+  , karatsuba
   , karatsubaSequentialGated
   ) where
 
@@ -75,6 +76,9 @@ karatsuba regSize@SNat x y | Rewrite ← using @(HalfIsLess (Max n m)) =
 
 -- -- * Sequential implementations
 
+-- |The number of cycles an instance of 'karatsubaSequentialGated` takes to run.
+type KaratsubaCycles stages = 2 * (3 ^ stages - 1)
+
 -- |A sequential implementation of the Karatsuba algorithm for multiplication.
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
@@ -88,8 +92,8 @@ karatsuba regSize@SNat x y | Rewrite ← using @(HalfIsLess (Max n m)) =
 -- @
 -- karatsubaSequentialGated @3 @36 @256 @256
 -- @
--- will produce a sequential circuit with latency '9 = 3 ^ 2' that is able
--- to multiply two 256-bit unsigned numbers.
+-- will produce a sequential circuit with latency '52 = 2 * (3 ^ cycles - 1)'
+-- that is able to multiply two 256-bit unsigned numbers.
 karatsubaSequentialGated ∷
   ∀ streamingStages regSize n m dom s.
   ( KnownNat streamingStages, KnownDomain dom, HiddenClockResetEnable dom
@@ -113,8 +117,7 @@ karatsubaSequentialGated# ∷
   Channel dom (Unsigned n, Unsigned m) →
   Channel dom (Unsigned (n + m))
 
--- run combinational karatsuba and release the result with one cycle
--- delay
+-- run combinational karatsuba and release the result
 karatsubaSequentialGated# UZero input
   = uncurry (karatsuba @regSize SNat) <$> input
 
