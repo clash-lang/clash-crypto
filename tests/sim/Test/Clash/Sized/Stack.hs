@@ -13,156 +13,205 @@ import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Hedgehog.Gen hiding (resize, maybe)
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Proxy (Proxy)
 
-
-type StackSize = 50
+type MaximumSize = 500
 
 tastyTests :: TestTree
 tastyTests = localOption (HedgehogTestLimit (Just 1000)) $
   testGroup "Clash.Sized.Stack"
   [ testGroup "Stack charge"
-    [ testProperty "Stack push - empty stack" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize)
-      testSize @StackSize (Push <$> cmdsPush) (toEnum $ L.length cmdsPush)
+    [ testProperty "Push - empty stack" $ property $ do
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 $ fromEnum stackSize
+      testSize @size (Push <$> cmdsPush) (toEnum $ L.length cmdsPush)
     ,
-      testProperty "Stack pop - non-empty stack" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize)
-      let len = toEnum $ L.length cmdsPush
-      lenPop <- forAll $ genIndex $ Range.linear 0 len
-      testSize @StackSize (cmdsPush <> [Pop lenPop]) (len - lenPop)
+      testProperty "Pop - non-empty stack" $ property $ do
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 $ fromEnum stackSize
+      let len   =  toEnum $ L.length cmdsPush
+      lenPop    <- forAll $ genIndex $ Range.linear 0 len
+      testSize @size (cmdsPush <> [Pop lenPop]) (len - lenPop)
     ,
       testProperty "Inspect" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize)
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush   <- createStack 0 (fromEnum stackSize)
       idxInspect <- forAll $ genIndex $ Range.linear 0 maxBound
-      testSize @StackSize (cmdsPush <> [Inspect idxInspect])
+      testSize @size (cmdsPush <> [Inspect idxInspect])
                           (toEnum $ L.length cmdsPush)
     ,
       testProperty "Swap" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize)
-      idxSwap <- forAll $ genIndex $ Range.linear 0 maxBound
-      testSize @StackSize (cmdsPush <> [Swap idxSwap])
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 (fromEnum stackSize)
+      idxSwap   <- forAll $ genIndex $ Range.linear 0 maxBound
+      testSize @size (cmdsPush <> [Swap idxSwap])
        (toEnum $ L.length cmdsPush)
     ,
       testProperty "CopyUp - unused index" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize - 1)
-      idxCopyUp <- makeUnusedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 0 $ fromEnum stackSize - 1
+      idxCopyUp <- makeUnusedIndex @size cmdsPush
       testSize (cmdsPush <> [CopyUp idxCopyUp]) (toEnum $ L.length cmdsPush)
     ,
-      testProperty "CopyUp - used index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
-      idxCopyUp <- makeUsedIndex cmdsPush
+      testProperty "CopyUp - used index - non-full stack" $ property $ do
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 $ fromEnum stackSize - 1
+      idxCopyUp <- makeUsedIndex @size cmdsPush
       testSize (cmdsPush <> [CopyUp idxCopyUp])
                (toEnum $ L.length cmdsPush + 1)
     ,
       testProperty "CopyUp - full stack" $ property $ do
-      cmdsPush <- createStack (natToNum @StackSize) (natToNum @StackSize)
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack (fromEnum stackSize) (fromEnum stackSize)
       idxCopyUp <- forAll $ genIndex $
-       Range.linear 0 (toEnum $ L.length cmdsPush - 1:: Index StackSize)
+       Range.linear 0 (toEnum $ L.length cmdsPush - 1:: Index size)
       testSize (cmdsPush <> [CopyUp idxCopyUp]) (toEnum $ L.length cmdsPush)
     ]
   , testGroup "Single return values"
     [
       testProperty "Push - non-full stack" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize - 1)
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 0 $ fromEnum stackSize - 1
       v <- forAll $ genUnsigned $ Range.linear 0 (maxBound :: Unsigned 16)
-      testReturned @StackSize (cmdsPush <> [Push v]) (Just v)
+      testReturned @size (cmdsPush <> [Push v]) (Just v)
     ,
       testProperty "Push - full stack" $ property $ do
-      cmdsPush <- createStack (natToNum @StackSize) (natToNum @StackSize)
+      stackSize <- forAll $ integral $ Range.linear 0 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack (fromEnum stackSize) $ fromEnum stackSize
       v <- forAll $ genUnsigned $ Range.linear 0 (maxBound :: Unsigned 16)
-      testReturned @StackSize (cmdsPush <> [Push v]) Nothing
+      testReturned @size (cmdsPush <> [Push v]) Nothing
     ,
       testProperty "Inspect - used index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize)
+      stackSize  <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush   <- createStack 1 $ fromEnum stackSize
       idxInspect <- makeUsedIndex cmdsPush
       let returnVal = extractPush idxInspect (L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Inspect idxInspect]) returnVal
+      testReturned @size (cmdsPush <> [Inspect idxInspect]) returnVal
     ,
       testProperty "Inspect - unused index" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize - 1)
-      idxInspect <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [Inspect idxInspect]) Nothing
+      stackSize  <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush   <- createStack 0 $ fromEnum stackSize - 1
+      idxInspect <- makeUnusedIndex @size cmdsPush
+      testReturned @size (cmdsPush <> [Inspect idxInspect]) Nothing
     ,
       testProperty "CopyUp - unused index" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize - 1)
-      idxCpu <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [CopyUp idxCpu]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 0 $ fromEnum stackSize - 1
+      idxCpu    <- makeUnusedIndex cmdsPush
+      testReturned @size (cmdsPush <> [CopyUp idxCpu]) Nothing
     ,
       testProperty "CopyUp - full stack" $ property $ do
-      cmdsPush <- createStack (natToNum @StackSize) (natToNum @StackSize)
-      idxCpu <- forAll $ genIndex $ Range.linear minBound maxBound
-      testReturned @StackSize (cmdsPush <> [CopyUp idxCpu]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack (fromEnum stackSize) (fromEnum stackSize)
+      idxCpu    <- forAll $ genIndex $ Range.linear minBound maxBound
+      testReturned @size (cmdsPush <> [CopyUp idxCpu]) Nothing
     ,
       testProperty "CopyUp - used index - non-full stack" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
-      idxCpu <- makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 $ fromEnum stackSize - 1
+      idxCpu    <- makeUsedIndex cmdsPush
       let returnVal = extractPush idxCpu (L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [CopyUp idxCpu]) returnVal
+      testReturned @size (cmdsPush <> [CopyUp idxCpu]) returnVal
     ,
       testProperty "Swap - unused index" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize - 1)
-      idxSwap <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [Swap idxSwap]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 0 $ fromEnum stackSize - 1
+      idxSwap   <- makeUnusedIndex cmdsPush
+      testReturned @size (cmdsPush <> [Swap idxSwap]) Nothing
     ,
       testProperty "Swap - used index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize)
-      idxSwap <- makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 (fromEnum stackSize)
+      idxSwap   <- makeUsedIndex cmdsPush
       let returnVal = extractPush idxSwap (L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Swap idxSwap]) returnVal
+      testReturned @size (cmdsPush <> [Swap idxSwap]) returnVal
     ,
       testProperty "Pop - used index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize)
-      lenPop <- makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 1 $ fromEnum stackSize
+      lenPop    <- makeUsedIndex cmdsPush
       let returnVal = extractPush lenPop (L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Pop $ resize lenPop]) returnVal
+      testReturned @size (cmdsPush <> [Pop $ resize lenPop]) returnVal
     ,
       testProperty "Pop m - unused index" $ property $ do
-      cmdsPush <- createStack 0 (natToNum @StackSize)
-      let len = L.length cmdsPush
-      lenPop <- forAll $ genIndex $
-       Range.linear (toEnum len :: Index (StackSize + 1)) maxBound
-      testReturned @StackSize (cmdsPush <> [Pop lenPop]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 0 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush  <- createStack 0 (fromEnum stackSize)
+      lenPop    <- forAll $ genIndex $
+       Range.linear (toEnum $ L.length cmdsPush :: Index (size + 1)) maxBound
+      testReturned @size (cmdsPush <> [Pop lenPop]) Nothing
     ]
   , testGroup "Single return values after a Pop 1"
     [
       testProperty "Push - non-full stack" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 1 $ fromEnum stackSize
       v <- forAll $ genUnsigned $ Range.linear 0 (maxBound :: Unsigned 16)
-      testReturned @StackSize (cmdsPush <> [Pop 1, Push v]) (Just v)
+      testReturned @size (cmdsPush <> [Pop 1, Push v]) (Just v)
     ,
       testProperty "Inspect - used index" $ property $ do
-      cmdsPush <- createStack 2 (natToNum @StackSize)
-      idxInspect <- satPred SatBound <$> makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 2 (fromEnum stackSize)
+      idxInspect <-makeUsedIndex $ safeTail cmdsPush
       let returnVal = extractPush idxInspect (safeTail $ L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Pop 1, Inspect idxInspect])
+      testReturned @size (cmdsPush <> [Pop 1, Inspect idxInspect])
                               returnVal
     ,
       testProperty "Inspect - unused index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
-      idxInspect <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [Pop 1, Inspect idxInspect]) Nothing
+      stackSize  <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush   <- createStack 1 $ fromEnum stackSize
+      idxInspect <- makeUnusedIndex $ safeTail cmdsPush
+      testReturned @size (cmdsPush <> [Pop 1, Inspect idxInspect]) Nothing
     ,
       testProperty "CopyUp - unused index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
-      idxCpu <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [Pop 1, CopyUp idxCpu]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 1 $ fromEnum stackSize
+      idxCpu   <- makeUnusedIndex $ safeTail cmdsPush
+      testReturned @size (cmdsPush <> [Pop 1, CopyUp idxCpu]) Nothing
     ,
       testProperty "CopyUp - used index - non-full stack" $ property $ do
-      cmdsPush <- createStack 2 (natToNum @StackSize - 1)
-      idxCpu <- satPred SatBound <$> makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 2 $ fromEnum stackSize
+      idxCpu   <- makeUsedIndex $ safeTail cmdsPush
       let returnVal = extractPush idxCpu (safeTail $ L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Pop 1, CopyUp idxCpu]) returnVal
+      testReturned @size (cmdsPush <> [Pop 1, CopyUp idxCpu]) returnVal
     ,
       testProperty "Swap - unused index" $ property $ do
-      cmdsPush <- createStack 1 (natToNum @StackSize - 1)
-      idxSwap <- makeUnusedIndex cmdsPush
-      testReturned @StackSize (cmdsPush <> [Pop 1, Swap idxSwap]) Nothing
+      stackSize <- forAll $ integral $ Range.linear 1 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 1 $ fromEnum stackSize
+      idxSwap  <- makeUnusedIndex $ safeTail cmdsPush
+      testReturned @size (cmdsPush <> [Pop 1, Swap idxSwap]) Nothing
     ,
       testProperty "Swap - used index" $ property $ do
-      cmdsPush <- createStack 2 (natToNum @StackSize)
-      idxSwap <- satPred SatBound <$> makeUsedIndex cmdsPush
+      stackSize <- forAll $ integral $ Range.linear 2 $ natToNum @MaximumSize
+      Just (SomeNat (_ :: Proxy size)) <- return $ someNatVal stackSize
+      cmdsPush <- createStack 2 (fromEnum stackSize)
+      idxSwap  <- makeUsedIndex $ safeTail cmdsPush
       let returnVal = extractPush idxSwap (safeTail $ L.reverse cmdsPush)
-      testReturned @StackSize (cmdsPush <> [Pop 1, Swap idxSwap]) returnVal
+      testReturned @size (cmdsPush <> [Pop 1, Swap idxSwap]) returnVal
     ]
   ]
 
@@ -175,15 +224,16 @@ extractPush idx lst =
   Push i -> Just i
   _      -> Nothing
 
--- len should be less than StackSize.
-makeUnusedIndex :: (Foldable t, Monad m) =>
- t a -> PropertyT m (Index StackSize)
+-- len should be less than size.
+makeUnusedIndex :: forall size t m a. (Foldable t, Monad m, KnownNat size) =>
+ t a -> PropertyT m (Index size)
 makeUnusedIndex cmds = do
  let len = L.length cmds
  forAll $ genIndex $ Range.linear (toEnum len) maxBound
 
 -- len should be greater than 1.
-makeUsedIndex :: (Foldable t, Monad m) => t a -> PropertyT m (Index StackSize)
+makeUsedIndex :: forall size t m a. (Foldable t, Monad m, KnownNat size) =>
+ t a -> PropertyT m (Index size)
 makeUsedIndex cmds = do
  let len = L.length cmds
  forAll $ genIndex $ Range.linear 0 $ toEnum $ len - 1
