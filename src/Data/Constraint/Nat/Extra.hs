@@ -37,6 +37,7 @@ module Data.Constraint.Nat.Extra
   , CLog2IsLessProduct
   , PositiveResultCond0
   , CLog2LECond0
+  , CLog2Monotone
   ) where
 
 import Clash.Prelude
@@ -547,3 +548,18 @@ CLog2LECond0 a b
           2 ^ (m * suc (n / m)) ∎
 /-}
 instance CLog2LECond0 a b ⇒ QED (CLog2LECond0 a b)
+
+instance
+  ( n <= m
+  ) ⇒ CLog2Monotone n m
+class
+  ( CLog 2 n <= CLog 2 m
+  ) ⇒ CLog2Monotone n m
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. n ≤ m → clog₂ n ≤ clog₂ m
+--
+{-/ Proof (Agda): CLog2Monotone
+CLog2Monotone m n = ⌈log₂⌉-mono-≤
+/-}
+instance CLog2Monotone a b ⇒ QED (CLog2Monotone a b)

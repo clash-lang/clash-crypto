@@ -112,11 +112,13 @@ shakeRules cfgs wanted = do
     hitltRules "HMAC" ("HMAC" <> show alg) [("HITLT_SHA", show alg)]
 
   hitltRules "BEA" "BEA" []
+  hitltRules "CLU" "CLU" []
   hitltRules "FastGCD" "FastGCD" []
   hitltRules "FltCtmi" "FltCtmi" []
   hitltRules "Karatsuba" "Karatsuba" []
   hitltRules "Modulo" "Modulo" []
   hitltRules "SictMi" "SictMi" []
+  hitltRules "Stack" "Stack" []
 
   -- project apps
 

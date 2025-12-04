@@ -17,6 +17,7 @@ module Clash.Crypto.ECDSA.InverseModulo
   , bea
   , fastGcdSequential
   , fltCtmi
+  , fltCtmiE
   , sictMiSequential
   , deriveSictPrecomp
   ) where
@@ -25,6 +26,7 @@ import Clash.Prelude hiding (Mod)
 import Clash.Signal.Channel
 import Clash.Signal.Extra (apWhen)
 
+import Data.Bifunctor (bimap)
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
@@ -213,27 +215,45 @@ pattern FLTMul = True
 -- | A working implementation of Inverse Modulo based on Fermat's Little
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
-  ∀ m dom. (KnownNat m,  HiddenClockResetEnable dom, 3 ≤ m) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
-fltCtmi (fmap bitCoerce → input) = bitCoerce <$> guardC done cur
+  ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
+  Channel dom (Mod p) →
+  Channel dom (Mod p)
+fltCtmi input = output
  where
-  cur = keepD
-    $ join input
-    $ fmap bitCoerce
-    $ computeModuloUnsigned @m
+  (output, s)
+    = fltCtmiE @p input
+    $ computeModuloUnsigned @p
     $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
-    $ zipC cur
-    $ muxC (fst <$> stage) input
-    $ guardC (not <$> done)
-      cur
+      s
 
-  stage = register (FLTSquare, minBound ∷ Index (FLTIterations m))
+-- | A 'fltCtmi' variant that uses a shared multiplier and prime field
+-- modulo instead of shipping a local copy.
+fltCtmiE ∷
+  ∀ p dom.
+  (HiddenClockResetEnable dom, KnownNat p, 3 ≤ p) ⇒
+  -- | input
+  Channel dom (Mod p) →
+  -- | shared multiplier with modulo output
+  Channel dom (Mod p) →
+  ( -- | output
+    Channel dom (Mod p)
+  , -- | shared multiplier with modulo input
+    Channel dom (Unsigned (ModSize p), Unsigned (ModSize p))
+  )
+fltCtmiE input smmOut
+  = ( guardC done cur
+    , bimap bitCoerce bitCoerce <$> smmIn
+    )
+ where
+  cur = keepD $ join input smmOut
+  smmIn = zipC cur $ muxC (fst <$> stage) input $ guardC (not <$> done) cur
+
+  stage = register (FLTSquare, minBound ∷ Index (FLTIterations p))
     $ apWhen input.hasUpdates (const (FLTSquare, maxBound))
     $ apWhen cur.hasUpdates nextStage
       stage
    where
-    k = natToNum @(m - 2) ∷ BitVector (ModSize (m - 2))
+    k = natToNum @(p - 2) ∷ BitVector (ModSize (p - 2))
 
     nextStage (m, i)
       | FLTSquare ← m, i > 0

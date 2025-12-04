@@ -70,6 +70,7 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.Calculator.CLU
     Clash.Crypto.ECDSA.Fraction
     Clash.Crypto.ECDSA.InverseModulo.Internal
     Clash.Crypto.ECDSA.InverseModulo
@@ -90,6 +91,7 @@ library
     Clash.Signal.Delayed.Extra
     Clash.Signal.DataStream
     Clash.Signal.Extra
+    Clash.Sized.Stack
     Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
@@ -103,9 +105,11 @@ test-suite simulation
   other-modules:
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.MAC.HMAC
+    Test.Clash.Crypto.Calculator.CLU
     Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
     Test.Clash.Crypto.ECDSA.Modulo
+    Test.Clash.Sized.Stack
   build-depends:
     , bytestring
     , clash-crypto
@@ -146,6 +150,7 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
   exposed-modules:
     BEA
+    CLU
     FastGCD
     FltCtmi
     HMAC
@@ -153,6 +158,7 @@ library hitlt-instances
     Modulo
     SictMi
     SHA
+    Stack
 
 test-suite hitlt
   import: common-options
