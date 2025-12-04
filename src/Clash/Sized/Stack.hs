@@ -92,7 +92,8 @@ stack stackAction = case toUNat (SNat @n) of
     (Nothing, _) ~~> _        = ((Nothing, Nothing), (Nothing, 0))
     (r      , c) ~~> Push{}   = ((r      , Nothing), (c >> r , 1))
     (r      , c) ~~> CopyUp{} = ((r      , Nothing), (c >> r , 1))
-    (r      , c) ~~> Pop{}    = ((Nothing, Just ()), (c >> r , 1))
+    (r      , c) ~~> Pop 0    = ((r      , c      ), (c >> r , 1))
+    (r      , c) ~~> Pop _    = ((Nothing, Just ()), (c >> r , 1))
     (r      , c) ~~> _        = ((r      , Just ()), (c >> r , 1))
 
   -- any stack of size 2 or more
