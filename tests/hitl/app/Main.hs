@@ -316,7 +316,7 @@ runHitltCLU sem dev settings (ec, (op, (x, y))) =
   invMod
     = fromInteger
     . Modular.unMod
-    . fromMaybe (error "inverse always exists.")
+    . fromMaybe (error "The inverse always exists in a prime field.")
     . Modular.inv
     . Modular.toMod @p
     . toInteger

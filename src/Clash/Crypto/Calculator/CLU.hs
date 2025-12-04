@@ -8,7 +8,6 @@ Portability : POSIX
 The Cryptographic Logic Unit (CLU).
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -24,7 +23,9 @@ import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.ECDSA.InverseModulo (fltCtmiE)
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, computeModuloUnsigned, createMod, unMod)
+import Clash.Crypto.ECDSA.Modulo
+  ( Mod, ModSize, computeModuloUnsigned, createMod, unMod
+  )
 import Clash.Signal.Channel (Channel, delayC, guardC, unzipC)
 
 data CluInstruction
@@ -34,8 +35,6 @@ data CluInstruction
   | Mul -- ^ multiplication
   | Bit -- ^ test bit
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
-
-type Prime = Nat
 
 data ECPrime
   = SecP256Mod
@@ -93,17 +92,17 @@ clu# ∷
   SNat p →
   -- | input
   Channel dom (CluInstruction, (Mod q, Mod q)) →
-  -- | shared multiplier
-  Channel dom (Unsigned (ModSize q + ModSize q)) →
+  -- | shared multiplier output
+  Channel dom (Unsigned (2 * ModSize q)) →
   ( -- | output
     Channel dom (Mod q)
-  , -- | shared multiplier
+  , -- | shared multiplier input
     Channel dom (Unsigned (ModSize q), Unsigned (ModSize q))
   )
 clu# SNat input mOut
   | Rewrite ← using @(LeTrans 3 p q)
   , Rewrite ← using @(CLog2Monotone p q)
-  , Rewrite ← using @(LeTrans (CLog 2 p) (CLog 2 q) (CLog 2 q + CLog 2 q))
+  , Rewrite ← using @(LeTrans (ModSize p) (ModSize q) (2 * ModSize q))
   = let
       (output, mIn)
         = clu## (second (bimap toP toP) <$> input)
@@ -111,8 +110,8 @@ clu# SNat input mOut
           mOut
 
       -- we know that `p` won't fit twice into `q`, hence switching to
-      -- a smaller modulo field only comes at the price of a signle
-      -- comparison and a single substraction
+      -- a smaller modulo field only comes at the price of a single
+      -- comparison and a single subtraction
       toP :: Mod q -> Mod p
       toP = createMod . truncateB @Index @_ @(q - p) . unMod . \z →
         z - if z <= natToNum @(p - 1) then 0 else natToNum @p
@@ -142,7 +141,7 @@ clu## input@(unzipC → (op, xy)) mOut
   (   whenOp Add (delayC (uncurry (+) <$> xy))
   <|> whenOp Sub (delayC (uncurry (-) <$> xy))
   <|> whenOp Bit (delayC (cluTestBit  <$> xy))
-  <|> whenOp Inv (liftA2 sndIfZero (delayC input) inv)
+  <|> whenOp Inv (sndIfZero <$> delayC input <*> inv)
   <|> whenOp Mul mOut
   , -- only inverse modulo and multiplication modulo need the
     -- shared multiplier with modulo circuitry

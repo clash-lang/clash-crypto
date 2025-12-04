@@ -100,7 +100,7 @@ testCLU ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p, p ≤ CPrime SecP256Mod) ⇒
   PropertyT m ()
 testCLU p op a b c
   = (ex c ===)
-  $ fromMaybe (error "The returned list was empty")
+  $ fromMaybe (error "The returned list was empty.")
   $ getFirst
   $ foldMap First
   $ sampleN @System 1000000
@@ -125,4 +125,4 @@ invGolden
   . toInteger
  where
   moduloError =
-    error "Since the modulo of the field is prime, the inverse always exists."
+    error "The inverse always exists in a prime field."
