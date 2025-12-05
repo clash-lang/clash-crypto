@@ -9,7 +9,6 @@ A streaming implementation of HMAC according to
 [RFC 2104](https://www.rfc-editor.org/info/rfc2104).
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
 
 module Clash.Crypto.MAC.HMAC
@@ -77,16 +76,15 @@ data HmacStage
 -- This implementation currently does __not__ support keys that
 -- require more than 'BlockSize' @alg@ many bits.
 hmac ∷
-  ∀ (alg ∷ SHA) dom.
-  ( KnownSHA alg, HiddenClockResetEnable dom
-  , 8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0
-  ) ⇒
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
   -- ^ input stream
   Channel dom (Digest alg)
   -- ^ response channel
-hmac (mapEnd (const (0 :: Index 8)) → input)
-  | SHAFacts _ ← knownSHA @alg
+hmac alg (mapEnd (const (0 :: Index 8)) → input)
+  | SHAFacts ← knownSHA alg
   = let
       -- mark the input key frames via counting the received number of frames
       isInputKeyFrame = input.hasData .&&. count .>. 0
@@ -116,7 +114,7 @@ hmac (mapEnd (const (0 :: Index 8)) → input)
         $ mapStart (const ()) input
 
       -- the output of the hashing function
-      digest = sha @alg @_ @8 $ do
+      digest = sha alg $ do
         -- immediately forward key & msg during the 'InnerHash' stage
         innerHashSel ← xorpad $ natToNum @IPad
         -- buffer @key XOR opad@ until we need it during the 'OuterKey' stage

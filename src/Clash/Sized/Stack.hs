@@ -1,4 +1,3 @@
-{-# LANGUAGE UndecidableInstances #-}
 {-|
 Module      : Clash.Sized.Stack
 Copyright   : Copyright © 2025 QBayLogic B.V.

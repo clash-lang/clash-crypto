@@ -106,7 +106,7 @@ testCLU p op a b c
   $ sampleN @System 1000000
   $ withClockResetEnable clockGen resetGen enableGen
   $ newsfeed
-  $ clu d4 d36
+  $ clu 4 36
   $ channel
   $ fmap ((p, (op, (ex a, ex b))), )
   $ fromList

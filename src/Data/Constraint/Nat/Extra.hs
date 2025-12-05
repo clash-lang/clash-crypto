@@ -8,7 +8,6 @@ Portability : POSIX
 Some extra type families and properties for type level naturals.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
@@ -40,7 +39,7 @@ module Data.Constraint.Nat.Extra
   , CLog2Monotone
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import GHC.TypeNats.Proof
 
 -- | Divisible division operation, which ensures that the dividend is

@@ -26,6 +26,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . karatsubaSequentialGated @3 @36 @128 @128 . cachedFromMaybe . bulkRead
+  $ newsfeed . karatsubaSequentialGated @128 @128 3 36 . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

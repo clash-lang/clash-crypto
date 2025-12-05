@@ -1,4 +1,5 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE TypeAbstractions #-}
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
@@ -6,7 +7,8 @@ import Prelude
 
 import Clash.Prelude
   ( type Div, type (*), type (-), type (+)
-  , Nat, KnownNat, Unsigned, Vec, BitPack(BitSize), Bit, Index, System
+  , SNat(..), Nat, KnownNat, Unsigned, Vec
+  , BitPack(BitSize), Bit, Index, System
   , toList, resize,  bitCoerce, natToNum, testBit, extend, fromList
   , sampleN, withClockResetEnable, clockGen, resetGen, enableGen
   )
@@ -50,7 +52,7 @@ import Text.Read (readMaybe)
 
 import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
-  ( SHA(..), MessageDigestSize, KnownSHA(..), SHAFacts(..), BlockSize
+  ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
 import Clash.Crypto.Calculator.CLU
   ( CluInstruction(..), ECPrime(..), CPrime, CMod
@@ -111,12 +113,12 @@ main = do
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
-              testSHA @SHA1   sem dev settings
-            , testSHA @SHA224 sem dev settings
-            , testSHA @SHA256 sem dev settings
+              testSHA SHA1   sem dev settings
+            , testSHA SHA224 sem dev settings
+            , testSHA SHA256 sem dev settings
             ] ,
           testGroup "Clash.Crypto.Hash.HMAC"
-            [ testHMACSHA @SHA256 sem dev settings
+            [ testHMACSHA SHA256 sem dev settings
             ] ,
           testGroup "Clash.Crypto.ECDSA.Karatsuba"
             [
@@ -190,14 +192,17 @@ main = do
     SerialPortSettings →
     TestTree
   testStack name sem dev settings
+    | SNat @s ← SNat @( BitSize
+                          ( Unsigned StackPadding
+                          , ( Maybe (Unsigned StackValueSize)
+                            , Index (StackSize + 1)
+                            )
+                          ) `Div` 8
+                      )
     = test sem dev settings name $ do
         actions <- forAll $ Gen.list (Range.linear 20 1000) $
                    genStackAction @StackSize @StackValueSize
-        runStack @(BitSize (Unsigned StackPadding,
-                            (Maybe (Unsigned StackValueSize),
-                             Index (StackSize + 1)))
-                      `Div` 8)
-         sem dev settings actions
+        runStack s sem dev settings actions
 
   testInverseModulo ∷
     String →
@@ -237,34 +242,32 @@ main = do
         runHitltKaratsuba sem dev settings x y
 
   testSHA ∷
-    ∀ alg.
-    (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
+    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
-  testSHA sem dev settings
-    | SHAFacts alg ← knownSHA @alg
-    , name ← dropWhile (== '\'') $ show $ typeRep alg
+  testSHA alg sem dev settings
+    | SHAFacts ← knownSHA alg
+    , name ← dropWhile (== '\'') $ show $ typeRep (Proxy @alg)
     = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
-        runHitltSHA @alg sem dev settings bs
+        runHitltSHA alg sem dev settings bs
 
   testHMACSHA ∷
-    ∀ alg.
-    (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
+    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
-  testHMACSHA sem dev settings
-    | SHAFacts alg ← knownSHA @alg
-    , name ← dropWhile (== '\'') $ show $ typeRep alg
+  testHMACSHA alg sem dev settings
+    | SHAFacts ← knownSHA alg
+    , name ← dropWhile (== '\'') $ show $ typeRep (Proxy @alg)
     = test sem dev settings ("HMAC" <> name) $ do
         let n = natToNum @(BlockSize alg `Div` 8)
         key ← forAll $ Gen.bytes $ Range.linear 1 n
         msg ← forAll $ Gen.bytes $ Range.linear 1 499
-        runHitltHMACSHA @alg sem dev settings key msg
+        runHitltHMACSHA alg sem dev settings key msg
 
   test ∷
     QSem →
@@ -288,15 +291,14 @@ main = do
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
 runHitltCLU ∷
-  ∀ (p ∷ Nat).
-  (KnownNat p, 1 ≤ p, p ≤ CPrime SecP256Mod) ⇒
+  ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, p ≤ CPrime SecP256Mod) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   (ECPrime, (CluInstruction, (Mod p, Mod p))) →
   PropertyT IO ()
 runHitltCLU sem dev settings (ec, (op, (x, y))) =
-  runHitlt @(ModSize p `Div` 8) sem dev settings bs eq
+  runHitlt (ModSize p `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList
      $ bitCoerce @_ @(Vec (BitSize CluInput `Div` 8) Word8)
@@ -324,19 +326,20 @@ runHitltCLU sem dev settings (ec, (op, (x, y))) =
   ex ∷ Mod p → CMod SecP256Mod
   ex = createMod . extend @_ @_ @(CPrime SecP256Mod - p) . unMod
 
-runStack ∷ ∀ messageSize. KnownNat messageSize ⇒
+runStack ∷
+  ∀ messageSize → KnownNat messageSize ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   [StackAction StackSize (Unsigned StackValueSize)] →
   PropertyT IO ()
-runStack sem dev settings actions = do
+runStack messageSize sem dev settings actions = do
   let bsAction = pack . toList . bitCoerce
        . fmap (\b -> if hasUndefined b then 0 else b) . bitCoerce @_ @(Vec _ Bit)
   -- If we run the test multiple times, we want to empty the stack.
   let actionList = Pop (natToNum @(StackSize)) : actions
   dutResponses ← liftIO $ bracket_ (waitQSem sem) (signalQSem sem)
-   $ mapM (sendRequest @messageSize dev settings . bsAction) actionList
+   $ mapM (sendRequest messageSize dev settings . bsAction) actionList
 
   let simResponses
             = sampleN @System (List.length actions + 3)
@@ -357,7 +360,7 @@ runHitltInverseModulo ∷
   Unsigned 256 →
   PropertyT IO ()
 runHitltInverseModulo sem dev settings x =
-  runHitlt @(256 `Div` 8) sem dev settings bs eq
+  runHitlt (256 `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
   eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) invMod
@@ -374,7 +377,7 @@ runHitltModulo ∷
   Unsigned 256 →
   PropertyT IO ()
 runHitltModulo sem dev settings x =
-  runHitlt @(256 `Div` 8) sem dev settings bs eq
+  runHitlt (256 `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
   eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ x `mod` natToNum @Q
@@ -390,37 +393,35 @@ runHitltKaratsuba ∷
   Unsigned HitlKaratsubaIntegerSize →
   PropertyT IO ()
 runHitltKaratsuba sem dev settings x y =
-  runHitlt @(HitlKaratsubaWordNumber) sem dev settings bs eq
+  runHitlt HitlKaratsubaWordNumber sem dev settings bs eq
  where
   bs = pack $ toList $ bitCoerce @_ @(Vec HitlKaratsubaWordNumber Word8) (x,y)
   eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $
    resize @_ @_ @(2 * HitlKaratsubaIntegerSize) x * resize y
 
 runHitltSHA ∷
-  ∀ (alg ∷ SHA).
-  (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   ByteString →
   PropertyT IO ()
-runHitltSHA sem dev settings input | SHAFacts alg ← knownSHA @alg =
+runHitltSHA alg sem dev settings input | SHAFacts ← knownSHA alg =
  let
   bs = escapeAndTerminate input
   eq = cryptoHash alg input
- in runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
+ in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
 runHitltHMACSHA ∷
-  ∀ (alg ∷ SHA).
-  (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   ByteString →
   ByteString →
   PropertyT IO ()
-runHitltHMACSHA sem dev settings key msg
-  | SHAFacts alg ← knownSHA @alg
+runHitltHMACSHA alg sem dev settings key msg
+  | SHAFacts ← knownSHA alg
   = let
       n = natToNum @(BlockSize alg `Div` 8)
       bs = withKeySize (BS.length key)
@@ -429,7 +430,7 @@ runHitltHMACSHA sem dev settings key msg
         <> escapeAndTerminate msg
       eq = HMAC.hmac (cryptoHash alg) n key msg
     in
-      runHitlt @(MessageDigestSize alg `Div` 8) sem dev settings bs eq
+      runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
  where
   withKeySize n
     | n > 0x00 && n < 0xFF = BS.pack [ 0x00, toEnum n ]
@@ -458,33 +459,34 @@ upload shake sem dev settings name
       $ waitForReadyByte serial
 
 runHitlt ∷
-  ∀ (messageSize ∷ Nat). KnownNat messageSize ⇒
+  ∀ (messageSize ∷ Nat) → KnownNat messageSize ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   ByteString →
   ByteString →
   PropertyT IO ()
-runHitlt sem dev settings bs eq = do
+runHitlt messageSize sem dev settings bs eq = do
   let pr = concatMap (printf "%02x " ∷ Word8 → String) . unpack
 
   dutResponse ← liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
-    $ sendRequest @messageSize dev settings bs
+    $ sendRequest messageSize dev settings bs
 
   pr dutResponse === pr eq
 
-sendRequest ∷ ∀ messageSize. KnownNat messageSize ⇒
+sendRequest ∷
+  ∀ (messageSize ∷ Nat) → KnownNat messageSize ⇒
   FilePath →
   SerialPortSettings →
   ByteString →
   IO ByteString
-sendRequest dev settings bs =
+sendRequest messageSize dev settings bs =
   hWithSerial dev settings $ \serial → do
     hSetBuffering serial NoBuffering
     -- ensure that the receive buffer is empty before we place
     -- the request
-    emptyBuffer @messageSize serial
+    emptyBuffer messageSize serial
     -- send the request
     hPut serial bs
     -- wait for a response
@@ -495,12 +497,12 @@ sendRequest dev settings bs =
                    >>= throw . hitltTimeoutErr msgSize
 
 emptyBuffer ∷
-  ∀ (messageSize ∷ Nat). KnownNat messageSize ⇒
+  ∀ (messageSize ∷ Nat) → KnownNat messageSize ⇒
   Handle →
   IO ()
-emptyBuffer serial = do
+emptyBuffer messageSize serial = do
   xs ← hGetNonBlocking serial $ natToNum @messageSize
-  unless (BS.null xs) $ emptyBuffer @messageSize serial
+  unless (BS.null xs) $ emptyBuffer messageSize serial
 
 -- | Serial timeout in microseconds
 hitltTimeoutTime ∷ Int
@@ -531,15 +533,18 @@ escape = BS.concatMap $ \case
   byte → singleton byte
 
 class CryptoHash (alg ∷ SHA) where
-  cryptoHash ∷ Proxy alg → ByteString → ByteString
+  cryptoHash# ∷ Proxy alg → ByteString → ByteString
 
-instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
-instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash
-instance CryptoHash SHA256    where cryptoHash _ = SHA256.hash
-instance CryptoHash SHA384    where cryptoHash _ = SHA384.hash
-instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
-instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 244
-instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
+instance CryptoHash SHA1      where cryptoHash# _ = SHA1.hash
+instance CryptoHash SHA224    where cryptoHash# _ = SHA224.hash
+instance CryptoHash SHA256    where cryptoHash# _ = SHA256.hash
+instance CryptoHash SHA384    where cryptoHash# _ = SHA384.hash
+instance CryptoHash SHA512    where cryptoHash# _ = SHA512.hash
+instance CryptoHash SHA512224 where cryptoHash# _ = SHA512t.hash 224
+instance CryptoHash SHA512256 where cryptoHash# _ = SHA512t.hash 256
+
+cryptoHash ∷ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
+cryptoHash alg = cryptoHash# (Proxy @alg)
 
 parseCS ∷ String → CommSpeed
 parseCS = \case

@@ -9,7 +9,6 @@ Algorithmic reference implementation of FIPS 180-4 using a purely
 functional description.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
 
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
@@ -38,14 +37,14 @@ import Data.Constraint.Nat.Extra
 -- | Purely functional reference implementation of the hashing
 -- algorithms defined in FIPS 180-4.
 hash ∷
-  ∀ (alg ∷ SHA) (ℓ ∷ Nat).
-  (KnownSHA alg, KnownNat ℓ) ⇒
+  ∀ (ℓ ∷ Nat). KnownNat ℓ ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   Message ℓ →
   -- ^ input message
   BitVector (MessageDigestSize alg)
   -- ^ resulting message digest
-hash msg
-  | SHAFacts alg ← knownSHA @alg
+hash alg msg
+  | SHAFacts ← knownSHA alg
   , Rewrite ← using @(ModBound ℓ (BlockSize alg))
   , Rewrite ← using @(CondMonotoneGE 1 1 2
       (1 + SizeBits alg <=? BlockSize alg - ℓ `Mod` BlockSize alg))
@@ -61,10 +60,10 @@ hash msg
            (BlockSize alg)
            (RequiredBlocks alg ℓ * BlockSize alg)
        )
-  , Rewrite ← lemma₀ @alg @ℓ
-  , Rewrite ← lemma₁ @alg @ℓ
-  , Rewrite ← lemma₂ @alg @ℓ
-  , Rewrite ← lemma₃ @alg @ℓ
+  , Rewrite ← lemma₀ alg ℓ
+  , Rewrite ← lemma₁ alg ℓ
+  , Rewrite ← lemma₂ alg ℓ
+  , Rewrite ← lemma₃ alg ℓ
   , Rewrite ← using @(CancelMultiple (PaddedMsgBits alg ℓ) (WordSize alg))
   , Rewrite ← using
       @( CancelFactor
@@ -98,50 +97,49 @@ hash msg
       hashValue ∷ HashValue alg
       hashValue = foldl computeBlock (_H⁰ alg) pmAsVBlocks
     in
-      toDigest @alg hashValue
+      toDigest alg hashValue
  where
   -- perform the steps 1 to 4 for one iteration of the loop
   computeBlock ∷ HashValue alg → MessageBlock alg → HashValue alg
   computeBlock hb mb
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     = -- step 4
       zipWith (+) hb
       -- steps 1 to 3
-    $ snd $ foldl (&) (mb, hb) (computeCycles @alg)
+    $ snd $ foldl (&) (mb, hb) (computeCycles alg)
 
   lemma₀ ∷
-    ∀ alg' n.
+    ∀ alg' n →
     Rewrite (PaddedMsgBits alg' n `Mod` BlockSize alg' ~ 0)
-  lemma₀ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
+  lemma₀ _ _ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
 
   lemma₁ ∷
-    ∀ alg' n.
+    ∀ alg' n →
     Rewrite (PaddedMsgBits alg' n `Mod` WordSize alg' ~ 0)
-  lemma₁ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
+  lemma₁ _ _ = unsafeCoerce (Rewrite ∷ Rewrite (0 ~ 0))
 
   lemma₂ ∷
-    ∀ alg' n.
+    ∀ alg' n →
     Rewrite (1 ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg')
-  lemma₂ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
+  lemma₂ _ _ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
   lemma₃ ∷
-    ∀ alg' n.
+    ∀ alg' n →
     Rewrite (SizeBits alg'
             ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg' - 1)
-  lemma₃ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
+  lemma₃ __ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
 -- | Truncates the resulting hash value to the left-most @n@ bits,
 -- where @n@ is defined by the returned 'MessageDigestSize'.
 toDigest ∷
-  ∀ (alg ∷ SHA). KnownSHA alg ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   HashValue alg →
   BitVector (MessageDigestSize alg)
-toDigest
-  | SHAFacts _ ← knownSHA @alg
-  = slice
-      (SNat @(HashValueWords alg * WordSize alg - 1))
-      (SNat @(HashValueWords alg * WordSize alg - MessageDigestSize alg))
-  . concatBitVector#
+toDigest alg
+  | SHAFacts ← knownSHA alg
+  , u ← SNat @(HashValueWords alg * WordSize alg - 1)
+  , l ← SNat @(HashValueWords alg * WordSize alg - MessageDigestSize alg)
+  = slice u l . concatBitVector#
 
 -- | The vector of computations performing
 --
@@ -149,12 +147,11 @@ toDigest
 --  - Step "/2. Initialize the five working variables/"
 --  - Step "/3. For t=0 to .../"
 computeCycles ∷
-  ∀ (alg ∷ SHA). KnownSHA alg ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   Vec (ScheduleCount alg)
     ( (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
       (Vec MessageBlockWords (SHAWord alg), HashValue alg)
     )
-computeCycles
-  | SHAFacts alg ← knownSHA @alg
-  = imap @(ScheduleCount alg) (flip slidingWindowCycle)
-  $ repeat @(ScheduleCount alg - 1 + 1) alg
+computeCycles alg
+  | SHAFacts ← knownSHA alg
+  = slidingWindowCycle alg <$> indicesI

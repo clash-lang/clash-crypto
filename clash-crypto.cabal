@@ -19,6 +19,7 @@ common common-options
     LambdaCase
     NoStarIsType
     OverloadedRecordDot
+    RequiredTypeArguments
     TypeFamilies
     UnicodeSyntax
     ViewPatterns
@@ -92,7 +93,6 @@ library
     Clash.Signal.DataStream
     Clash.Signal.Extra
     Clash.Sized.Stack
-    Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
 

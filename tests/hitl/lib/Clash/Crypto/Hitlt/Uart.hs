@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 module Clash.Crypto.Hitlt.Uart
   ( bulkRead
   , withUartRequestResponseHandler

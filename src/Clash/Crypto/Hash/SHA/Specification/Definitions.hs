@@ -8,7 +8,6 @@ Portability : POSIX
 Basic definitions covering the fundamentals of FIPS 180-4.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -21,12 +20,11 @@ import Clash.Prelude
 import Clash.Sized.Internal.BitVector
 
 import Control.Arrow (first)
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy(..))
 import Data.Type.Bool (If)
 import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Hash.SHA.Specification.Types
-import Clash.Sized.Vector.Extra ((‼))
 
 -------------------------------------------
 -- Section 2.2.2: Symbols and Operations --
@@ -48,24 +46,39 @@ infixl 6 ⊕
 (¬) = complement#
 
 infixl 5 ≪
-(≪) ∷ (KnownNat w, n ≤ w) ⇒ BitVector w → SNat n → BitVector w
-x ≪ n = shiftL# x $ snatToNum n
+(≪) ∷
+  KnownNat w ⇒ BitVector w →
+  ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
+  BitVector w
+x ≪ n = shiftL# x $ snatToNum (SNat @n)
 
 infixl 5 ≫
-(≫) ∷ (KnownNat w, n ≤ w) ⇒ BitVector w → SNat n → BitVector w
-x ≫ n = shiftR# x $ snatToNum n
+(≫) ∷
+  KnownNat w ⇒ BitVector w →
+  ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
+  BitVector w
+x ≫ n = shiftR# x $ snatToNum (SNat @n)
 
-_ROTL ∷ ∀ n w. (KnownNat w, n ≤ w) ⇒ SNat n → BitVector w → BitVector w
-_ROTL SNat x = (x ≪ SNat @n) ∨ (x ≫ SNat @(w - n))
+_ROTL ∷
+  ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
+  BitVector w →
+  BitVector w
+_ROTL n (x ∷ BitVector w) = (x ≪ n) ∨ (x ≫ (type (w - n)))
 
-_ROTR ∷ ∀ n w. (KnownNat w, n ≤ w) ⇒ SNat n → BitVector w → BitVector w
-_ROTR SNat x = (x ≫ SNat @n) ∨ (x ≪ SNat @(w - n))
+_ROTR ∷
+  ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
+  BitVector w →
+  BitVector w
+_ROTR n (x ∷ BitVector w) = (x ≫ n) ∨ (x ≪ (type (w - n)))
 
 -- TODO: prove that
 --   ROTL (SNat @n) x ≡ ROTR (SNat @(w - n)) x
 --   ROTR (SNat @n) x ≡ ROTL (SNat @(w - n)) x
 
-_SHR ∷ ∀ n w. (KnownNat w, n ≤ w) ⇒ SNat n → BitVector w → BitVector w
+_SHR ∷
+  ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
+  BitVector w →
+  BitVector w
 _SHR n x = x ≫ n
 
 ----------------------------
@@ -98,18 +111,18 @@ class SHAFunctions (alg ∷ SHA) where
   _σ₁ ∷ Proxy alg → SHAWord alg → SHAWord alg
 
 instance SHAFunctions SHA224 where
-  _Σ₀ _ x = _ROTR  @2 SNat x ⊕ _ROTR @13 SNat x ⊕ _ROTR @22 SNat x
-  _Σ₁ _ x = _ROTR  @6 SNat x ⊕ _ROTR @11 SNat x ⊕ _ROTR @25 SNat x
-  _σ₀ _ x = _ROTR  @7 SNat x ⊕ _ROTR @18 SNat x ⊕ _SHR   @3 SNat x
-  _σ₁ _ x = _ROTR @17 SNat x ⊕ _ROTR @19 SNat x ⊕ _SHR  @10 SNat x
+  _Σ₀ _ x = _ROTR  2 x ⊕ _ROTR 13 x ⊕ _ROTR 22 x
+  _Σ₁ _ x = _ROTR  6 x ⊕ _ROTR 11 x ⊕ _ROTR 25 x
+  _σ₀ _ x = _ROTR  7 x ⊕ _ROTR 18 x ⊕ _SHR   3 x
+  _σ₁ _ x = _ROTR 17 x ⊕ _ROTR 19 x ⊕ _SHR  10 x
 
 deriving via SHA224 instance SHAFunctions SHA256
 
 instance SHAFunctions SHA384 where
-  _Σ₀ _ x = _ROTR @28 SNat x ⊕ _ROTR @34 SNat x ⊕ _ROTR @39 SNat x
-  _Σ₁ _ x = _ROTR @14 SNat x ⊕ _ROTR @18 SNat x ⊕ _ROTR @41 SNat x
-  _σ₀ _ x = _ROTR  @1 SNat x ⊕ _ROTR  @8 SNat x ⊕ _SHR   @7 SNat x
-  _σ₁ _ x = _ROTR @19 SNat x ⊕ _ROTR @61 SNat x ⊕ _SHR   @6 SNat x
+  _Σ₀ _ x = _ROTR 28 x ⊕ _ROTR 34 x ⊕ _ROTR 39 x
+  _Σ₁ _ x = _ROTR 14 x ⊕ _ROTR 18 x ⊕ _ROTR 41 x
+  _σ₀ _ x = _ROTR  1 x ⊕ _ROTR  8 x ⊕ _SHR   7 x
+  _σ₁ _ x = _ROTR 19 x ⊕ _ROTR 61 x ⊕ _SHR   6 x
 
 deriving via SHA384 instance SHAFunctions SHA512
 deriving via SHA384 instance SHAFunctions SHA512224
@@ -218,81 +231,91 @@ type RequiredBlocks (alg ∷ SHA) (ℓ ∷ Nat) =
 -- for each algorithm. We use the 'SHAInitials' class to capture the
 -- differences among the 'SHA' instances.
 class SHAInitials (alg ∷ SHA) where
-  _H⁰ ∷ Proxy alg → HashValue alg
+  _H⁰# ∷ Proxy alg → HashValue alg
 
 instance SHAInitials SHA1 where
-  _H⁰ _ = 0x67452301
-       :> 0xefcdab89
-       :> 0x98badcfe
-       :> 0x10325476
-       :> 0xc3d2e1f0
-       :> Nil
+  _H⁰# _
+    = 0x67452301
+   :> 0xefcdab89
+   :> 0x98badcfe
+   :> 0x10325476
+   :> 0xc3d2e1f0
+   :> Nil
 
 instance SHAInitials SHA224 where
-  _H⁰ _ = 0xc1059ed8
-       :> 0x367cd507
-       :> 0x3070dd17
-       :> 0xf70e5939
-       :> 0xffc00b31
-       :> 0x68581511
-       :> 0x64f98fa7
-       :> 0xbefa4fa4
-       :> Nil
+  _H⁰# _
+    = 0xc1059ed8
+   :> 0x367cd507
+   :> 0x3070dd17
+   :> 0xf70e5939
+   :> 0xffc00b31
+   :> 0x68581511
+   :> 0x64f98fa7
+   :> 0xbefa4fa4
+   :> Nil
 
 instance SHAInitials SHA256 where
-  _H⁰ _ = 0x6a09e667
-       :> 0xbb67ae85
-       :> 0x3c6ef372
-       :> 0xa54ff53a
-       :> 0x510e527f
-       :> 0x9b05688c
-       :> 0x1f83d9ab
-       :> 0x5be0cd19
-       :> Nil
+  _H⁰# _
+    = 0x6a09e667
+   :> 0xbb67ae85
+   :> 0x3c6ef372
+   :> 0xa54ff53a
+   :> 0x510e527f
+   :> 0x9b05688c
+   :> 0x1f83d9ab
+   :> 0x5be0cd19
+   :> Nil
 
 instance SHAInitials SHA384 where
-  _H⁰ _ = 0xcbbb9d5dc1059ed8
-       :> 0x629a292a367cd507
-       :> 0x9159015a3070dd17
-       :> 0x152fecd8f70e5939
-       :> 0x67332667ffc00b31
-       :> 0x8eb44a8768581511
-       :> 0xdb0c2e0d64f98fa7
-       :> 0x47b5481dbefa4fa4
-       :> Nil
+  _H⁰# _
+    = 0xcbbb9d5dc1059ed8
+   :> 0x629a292a367cd507
+   :> 0x9159015a3070dd17
+   :> 0x152fecd8f70e5939
+   :> 0x67332667ffc00b31
+   :> 0x8eb44a8768581511
+   :> 0xdb0c2e0d64f98fa7
+   :> 0x47b5481dbefa4fa4
+   :> Nil
 
 instance SHAInitials SHA512 where
-  _H⁰ _ = 0x6a09e667f3bcc908
-       :> 0xbb67ae8584caa73b
-       :> 0x3c6ef372fe94f82b
-       :> 0xa54ff53a5f1d36f1
-       :> 0x510e527fade682d1
-       :> 0x9b05688c2b3e6c1f
-       :> 0x1f83d9abfb41bd6b
-       :> 0x5be0cd19137e2179
-       :> Nil
+  _H⁰# _
+    = 0x6a09e667f3bcc908
+   :> 0xbb67ae8584caa73b
+   :> 0x3c6ef372fe94f82b
+   :> 0xa54ff53a5f1d36f1
+   :> 0x510e527fade682d1
+   :> 0x9b05688c2b3e6c1f
+   :> 0x1f83d9abfb41bd6b
+   :> 0x5be0cd19137e2179
+   :> Nil
 
 instance SHAInitials SHA512224 where
-  _H⁰ _ = 0x8C3D37C819544DA2
-       :> 0x73E1996689DCD4D6
-       :> 0x1DFAB7AE32FF9C82
-       :> 0x679DD514582F9FCF
-       :> 0x0F6D2B697BD44DA8
-       :> 0x77E36F7304C48942
-       :> 0x3F9D85A86A1D36C8
-       :> 0x1112E6AD91D692A1
-       :> Nil
+  _H⁰# _
+    = 0x8C3D37C819544DA2
+   :> 0x73E1996689DCD4D6
+   :> 0x1DFAB7AE32FF9C82
+   :> 0x679DD514582F9FCF
+   :> 0x0F6D2B697BD44DA8
+   :> 0x77E36F7304C48942
+   :> 0x3F9D85A86A1D36C8
+   :> 0x1112E6AD91D692A1
+   :> Nil
 
 instance SHAInitials SHA512256 where
-  _H⁰ _ = 0x22312194FC2BF72C
-       :> 0x9F555FA3C84C64C2
-       :> 0x2393B86B6F53B151
-       :> 0x963877195940EABD
-       :> 0x96283EE2A88EFFE3
-       :> 0xBE5E1E2553863992
-       :> 0x2B0199FC2C85B8AA
-       :> 0x0EB72DDC81C52CA2
-       :> Nil
+  _H⁰# _
+    = 0x22312194FC2BF72C
+   :> 0x9F555FA3C84C64C2
+   :> 0x2393B86B6F53B151
+   :> 0x963877195940EABD
+   :> 0x96283EE2A88EFFE3
+   :> 0xBE5E1E2553863992
+   :> 0x2B0199FC2C85B8AA
+   :> 0x0EB72DDC81C52CA2
+   :> Nil
+
+_H⁰ ∷ ∀ alg → SHAInitials alg ⇒ HashValue alg
+_H⁰ alg = _H⁰# (Proxy @alg)
 
 ---------------------------------------
 -- Section 6: SECURE HASH ALGORITHMS --
@@ -307,43 +330,15 @@ instance SHAInitials SHA512256 where
 --
 -- The remaining steps are formalized separately.
 class SHAHashCompute alg where
-  computeCycle ∷
+  computeCycle# ∷
     Proxy alg →
     Index (ScheduleCount alg) →
-    -- ^ t
     Vec MessageBlockWords (SHAWord alg) →
-    -- ^ A slicing window over W from @Max MessageBlockWords t -
-    -- MessageBlockWords@ to @Max MessageBlockWords t - 1@ initially
-    -- holding M⁽ⁱ⁾, which shifts to the right with every increment of
-    -- @t@. Respectively, the content inside the window shifts to the
-    -- left. The window's size implicitly follows from the message
-    -- schedule preparation definition in FIPS 180-4, since every Wₜ
-    -- only depends on smaller Wⱼ that satisfy @j ≥ 0 @ and @t -
-    -- MessageBlockWords ≤ j < t@.
     HashValue alg →
-    -- ^ The working variables @a@, @b@, ... before the tᵗʰ
-    -- iteration, initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
-    ( SHAWord alg
-      -- ^ Wₜ
-    , HashValue alg
-      -- ^ The working variables @a@, @b@, ... after the tᵗʰ
-      -- iteration.
-    )
-
-  -- | Extends 'computeCycle' with a sliding window for W, as it
-  -- implicitly follows from the definition in FIPS 180-4.
-  slidingWindowCycle ∷
-    SHAHashCompute alg ⇒
-    Proxy alg →
-    Index (ScheduleCount alg) →
-    (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
-    (Vec MessageBlockWords (SHAWord alg), HashValue alg)
-  slidingWindowCycle alg t (w, h)
-    = first (fst . shiftInAtN w . singleton)
-    $ computeCycle alg t w h
+    (SHAWord alg, HashValue alg)
 
 instance SHAHashCompute SHA1 where
-  computeCycle (alg ∷ Proxy alg) t w v
+  computeCycle# alg t w v
     = (_Wₜ, a' :> b' :> c' :> d' :> e' :> Nil)
    where
     _Wₜ =
@@ -354,27 +349,27 @@ instance SHAHashCompute SHA1 where
         -- reading the first position in the window
         w ‼ 0
       else
-        _ROTL (SNat @1)
-          $ w ‼ (natToNum @(MessageBlockWords -  3))
-          ⊕ w ‼ (natToNum @(MessageBlockWords -  8))
-          ⊕ w ‼ (natToNum @(MessageBlockWords - 14))
-          ⊕ w ‼ (natToNum @(MessageBlockWords - 16))
+        _ROTL 1
+          $ w ‼ (type (MessageBlockWords -  3))
+          ⊕ w ‼ (type (MessageBlockWords -  8))
+          ⊕ w ‼ (type (MessageBlockWords - 14))
+          ⊕ w ‼ (type (MessageBlockWords - 16))
 
-    a = at @0 SNat v
-    b = at @1 SNat v
-    c = at @2 SNat v
-    d = at @3 SNat v
-    e = at @4 SNat v
+    a = v ‼ 0
+    b = v ‼ 1
+    c = v ‼ 2
+    d = v ‼ 3
+    e = v ‼ 4
 
-    _T = _ROTL @5 SNat a + _f t b c d + e + _K alg ‼ t + _Wₜ
+    _T = _ROTL 5 a + _f t b c d + e + _K alg !! t + _Wₜ
     e' = d
     d' = c
-    c' = _ROTL @30 SNat b
+    c' = _ROTL 30 b
     b' = a
     a' = _T
 
 instance SHAHashCompute SHA256 where
-  computeCycle (alg ∷ Proxy alg) t w v =
+  computeCycle# alg t w v =
     (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
     _Wₜ =
@@ -385,21 +380,21 @@ instance SHAHashCompute SHA256 where
         -- reading the first position in the window
         w ‼ 0
       else
-          _σ₁ alg (w ‼ (natToNum @(MessageBlockWords -  2)))
-        +          w ‼ (natToNum @(MessageBlockWords -  7))
-        + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
-        +          w ‼ (natToNum @(MessageBlockWords - 16))
+          _σ₁ alg (w ‼ (type (MessageBlockWords -  2)))
+        +          w ‼ (type (MessageBlockWords -  7))
+        + _σ₀ alg (w ‼ (type (MessageBlockWords - 15)))
+        +          w ‼ (type (MessageBlockWords - 16))
 
-    a = at @0 SNat v
-    b = at @1 SNat v
-    c = at @2 SNat v
-    d = at @3 SNat v
-    e = at @4 SNat v
-    f = at @5 SNat v
-    g = at @6 SNat v
-    h = at @7 SNat v
+    a = v ‼ 0
+    b = v ‼ 1
+    c = v ‼ 2
+    d = v ‼ 3
+    e = v ‼ 4
+    f = v ‼ 5
+    g = v ‼ 6
+    h = v ‼ 7
 
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg !! t + _Wₜ
     _T₂ = _Σ₀ alg a + _Mai a b c
     h' = g
     g' = f
@@ -413,7 +408,7 @@ instance SHAHashCompute SHA256 where
 deriving via SHA256 instance SHAHashCompute SHA224
 
 instance SHAHashCompute SHA512 where
-  computeCycle (alg ∷ Proxy alg) t w v =
+  computeCycle# alg t w v =
     (_Wₜ, a' :> b' :> c' :> d' :> e' :> f' :> g' :> h' :> Nil)
    where
     _Wₜ =
@@ -424,21 +419,21 @@ instance SHAHashCompute SHA512 where
         -- reading the first position in the window
         w ‼ 0
       else
-          _σ₁ alg (w ‼ (natToNum @(MessageBlockWords -  2)))
-        +          w ‼ (natToNum @(MessageBlockWords -  7))
-        + _σ₀ alg (w ‼ (natToNum @(MessageBlockWords - 15)))
-        +          w ‼ (natToNum @(MessageBlockWords - 16))
+          _σ₁ alg (w ‼ (type (MessageBlockWords -  2)))
+        +          w ‼ (type (MessageBlockWords -  7))
+        + _σ₀ alg (w ‼ (type (MessageBlockWords - 15)))
+        +          w ‼ (type (MessageBlockWords - 16))
 
-    a = at @0 SNat v
-    b = at @1 SNat v
-    c = at @2 SNat v
-    d = at @3 SNat v
-    e = at @4 SNat v
-    f = at @5 SNat v
-    g = at @6 SNat v
-    h = at @7 SNat v
+    a = v ‼ 0
+    b = v ‼ 1
+    c = v ‼ 2
+    d = v ‼ 3
+    e = v ‼ 4
+    f = v ‼ 5
+    g = v ‼ 6
+    h = v ‼ 7
 
-    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg ‼ t + _Wₜ
+    _T₁ = h + _Σ₁ alg e + _Ch e f g + _K alg !! t + _Wₜ
     _T₂ = _Σ₀ alg a + _Mai a b c
     h' = g
     g' = f
@@ -449,7 +444,45 @@ instance SHAHashCompute SHA512 where
     b' = a
     a' = _T₁ + _T₂
 
-
 deriving via SHA512 instance SHAHashCompute SHA384
 deriving via SHA512 instance SHAHashCompute SHA512224
 deriving via SHA512 instance SHAHashCompute SHA512256
+
+computeCycle ∷
+  ∀ (alg ∷ SHA) → SHAHashCompute alg ⇒
+  Index (ScheduleCount alg) →
+  -- ^ t
+  Vec MessageBlockWords (SHAWord alg) →
+  -- ^ A slicing window over W from @Max MessageBlockWords t -
+  -- MessageBlockWords@ to @Max MessageBlockWords t - 1@ initially
+  -- holding M⁽ⁱ⁾, which shifts to the right with every increment of
+  -- @t@. Respectively, the content inside the window shifts to the
+  -- left. The window's size implicitly follows from the message
+  -- schedule preparation definition in FIPS 180-4, since every Wₜ
+  -- only depends on smaller Wⱼ that satisfy @j ≥ 0 @ and @t -
+  -- MessageBlockWords ≤ j < t@.
+  HashValue alg →
+  -- ^ The working variables @a@, @b@, ... before the tᵗʰ
+  -- iteration, initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
+  ( SHAWord alg
+    -- ^ Wₜ
+  , HashValue alg
+    -- ^ The working variables @a@, @b@, ... after the tᵗʰ
+    -- iteration.
+  )
+computeCycle alg = computeCycle# (Proxy @alg)
+
+-- | Extends 'computeCycle' with a sliding window for W, as it
+-- implicitly follows from the definition in FIPS 180-4.
+slidingWindowCycle ∷
+  ∀ (alg ∷ SHA) → SHAHashCompute alg ⇒
+  Index (ScheduleCount alg) →
+  (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
+  (Vec MessageBlockWords (SHAWord alg), HashValue alg)
+slidingWindowCycle alg t (w, h)
+  = first (fst . shiftInAtN w . singleton)
+  $ computeCycle alg t w h
+
+-- | A variant of 'at' with a slightly different interface.
+(‼) ∷ ∀ m a. Vec m a → ∀ n → (KnownNat n, n + 1 ≤ m) ⇒ a
+v ‼ n = leToPlus @n @m $ at @n @(m - n - 1) (SNat @n) v

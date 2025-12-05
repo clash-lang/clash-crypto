@@ -8,8 +8,13 @@ Portability : POSIX
 Hardware representation for fractions where the denominator is a power of 2.
 -}
 
+{-# LANGUAGE NoTemplateHaskell #-}
+{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Safe #-}
+
 module Clash.Crypto.ECDSA.Fraction where
-import Clash.Prelude
+
+import Clash.Prelude.Safe
 
 -- * Fractions of the form n/2^m.
 
