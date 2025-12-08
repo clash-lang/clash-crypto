@@ -1,11 +1,11 @@
-module Clash.Crypto.Hitlt.Uart
+module Hitlt.Uart
   ( bulkRead
   , withUartRequestResponseHandler
   ) where
 
 import Clash.Prelude
 import Clash.Cores.Uart (ValidBaud, uart)
-import Clash.Crypto.Hitlt.Shared (Byte, ByteSize, isReadyIndicator)
+import Hitlt.Shared (Byte, ByteSize, isReadyIndicator)
 
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)

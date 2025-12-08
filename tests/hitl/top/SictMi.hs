@@ -10,11 +10,12 @@ import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
-import Clash.Crypto.Hitlt.Shared (Q)
-import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.ECDSA.InverseModulo (sictMiSequential, deriveSictPrecomp)
+
+import Hitlt.Shared (Q)
+import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
 deriveSictPrecomp Q
 

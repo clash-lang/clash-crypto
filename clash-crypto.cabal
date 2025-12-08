@@ -110,6 +110,7 @@ test-suite simulation
   other-modules:
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.MAC.HMAC
+    Test.Clash.Crypto.Calculator
     Test.Clash.Crypto.Calculator.CLU
     Test.Clash.Crypto.ECDSA.InverseModulo
     Test.Clash.Crypto.ECDSA.Karatsuba
@@ -136,6 +137,7 @@ library hitlt-shared
     , clash-lib
     , ghc-typelits-proof-assist
     , infinite-list
+    , modular-arithmetic
     , mtl
     , pretty-show
     , string-interpolate
@@ -144,8 +146,11 @@ library hitlt-shared
     Clash.Cores.LatticeSemi.ECP5.Domain
     Clash.Cores.LatticeSemi.ECP5.Pll
     Clash.Cores.Uart
-    Clash.Crypto.Hitlt.Shared
-    Clash.Crypto.Hitlt.Uart
+    Hitlt.Clash.Crypto.Calculator
+    Hitlt.Clash.Crypto.Calculator.CLU
+    Hitlt.Clash.Crypto.Calculator.InverseModulo
+    Hitlt.Shared
+    Hitlt.Uart
 
 library hitlt-instances
   import: common-options
@@ -155,6 +160,7 @@ library hitlt-instances
     , clash-crypto:hitlt-shared
   exposed-modules:
     BEA
+    Calculator
     CLU
     FastGCD
     FltCtmi
@@ -181,7 +187,6 @@ test-suite hitlt
     , clash-prelude-hedgehog
     , cryptohash
     , hedgehog >= 1.0
-    , modular-arithmetic
     , serialport >= 0.5.6
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5

@@ -121,6 +121,7 @@ shakeRules cfgs wanted = do
   hitltRules "SictMi" "SictMi" []
   hitltRules "Stack" "Stack" []
   hitltRules "ISAPrint" "ISAPrint" []
+  hitltRules "Calculator" "Calculator" []
 
   -- project apps
 

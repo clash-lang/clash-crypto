@@ -1,8 +1,14 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeAbstractions #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module CLU where
+module Calculator where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
@@ -11,9 +17,10 @@ import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.Calculator.CLU
+import Clash.Crypto.Calculator
+import Clash.Crypto.Calculator.ISA
 
-import Hitlt.Clash.Crypto.Calculator.CLU (CluInput)
+import Hitlt.Clash.Crypto.Calculator
 import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
@@ -30,9 +37,8 @@ topEntity ∷
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-      . clu 2 72
+      . calculator Main HitltIP 2 72
       . cachedFromMaybe
-      . fmap (snd <$>)
-      . bulkRead @CluInput
+      . bulkRead @(Vec 2 (CMod SecP256Mod))
 
 makeTopEntity 'topEntity

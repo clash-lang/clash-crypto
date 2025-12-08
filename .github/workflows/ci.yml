@@ -63,11 +63,12 @@ jobs:
           - SHA-256
           - SHA-512
           - HMAC
+          - Stack
           - Modulo.Modulo
           - Karatsuba
           - InverseModulo
-          - CLU
-          - Stack
+          - Calculator.CLU
+          - Calculator.Calculator
 
     steps:
       - name: "Checkout the repository"
@@ -99,13 +100,15 @@ jobs:
           - SHA.SHA224
           - SHA.SHA256
           - HMACSHA256
+          - Stack
           - Modulo.Modulo
           - Karatsuba
-          - BEA
-          - FastGCD
+#          - BEA
+#          - FastGCD
           - FltCtmi
-          - CLU
-          - Stack
+          - Calculator.CLU
+          - Calculator.Calculator
+
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4

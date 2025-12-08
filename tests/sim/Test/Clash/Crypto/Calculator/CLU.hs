@@ -1,5 +1,5 @@
 {-|
-Module      : Test.Clash.Crypto.ECDSA.CLU
+Module      : Test.Clash.Crypto.Calculator.CLU
 Copyright   : Copyright © 2025 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
@@ -35,7 +35,7 @@ import Clash.Crypto.Calculator.CLU
 import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
 
 tastyTests ∷ TestTree
-tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"
+tastyTests = testGroup "Clash.Crypto.Calculator.CLU"
   [ localOption (HedgehogTestLimit (Just 500))
   $ testGroup "CLU Tests"
       [ testProperty "Addition" $ property $ do

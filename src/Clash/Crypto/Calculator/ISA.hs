@@ -21,40 +21,41 @@ import Clash.Class.Counter (Counter(..))
 
 import Language.Haskell.Unicode (type (≤))
 
-import Data.Kind (Type, Constraint)
+import Data.Kind (Type)
 
 import Clash.Promoted.Integer
 import Clash.Promoted.List
 
 import Clash.Crypto.ECDSA.Modulo (Mod)
 
+--------------------------------------------------------------------------------
+
 -- | Calculator Instructions
 --
--- Requires the `n`, `m` and `k` parameters to have a `Num` instances
--- and the `a` parameter to have a `BitPack` and `Num` instance.
+-- Requires the `n`, `m` and `k` parameters to all have 'Num' instances
+-- and the `a` parameter to have both 'BitPack' and 'Num' instance.
 data Instruction r n m k p a
-  = PUT a
-    -- ^ pushes the given constant to the stack
-  | POP n
-    -- ^ pops n elements from the stack
-  | SWP m
-    -- ^ swaps the n-th element on the stack with the top element
-  | CUP m
-    -- ^ pushes a copy of the n-th element on the stack to the top of
+  = -- | pushes the given constant to the stack
+    PUT a
+  | -- | pops n elements from the stack
+    POP n
+  | -- | swaps the n-th element on the stack with the top element
+    SWP m
+  | -- | pushes a copy of the n-th element on the stack to the top of
     -- the stack
-  | RUN k r
-    -- ^ runs a given subroutine consisting of a fixed finite sequence
+    CUP m
+  | -- | runs a given subroutine consisting of a fixed finite sequence
     -- of instructions `k` times
-  | CLU p CluInstruction
-    -- ^ runs the given CLU instruction in the prime field p
-  deriving (Generic, NFDataX, Eq, Ord, Show)
+    RUN k r
+  | -- | runs the given CLU instruction in the prime field p
+    CLU p CluInstruction
+  deriving
+    ( Generic, NFDataX, Eq, Ord, Show )
 
 deriving instance
   ( BitPack r, BitPack n, BitPack m, BitPack k, BitPack p, BitPack a
   , 1 ≤ BitSize a
   ) ⇒ BitPack (Instruction r n m k p a)
-
---------------------------------------------------------------------------------
 
 -- | Crypto Logic Unit Instructions
 --
@@ -81,10 +82,12 @@ data CluInstruction
     -- `n` is out-of-range
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
 
-type KnownCluInstruction ∷ CluInstruction → Constraint
-class KnownCluInstruction ins
+--------------------------------------------------------------------------------
+
+-- | Reification of type-level 'CluInstruction's.
+class KnownCluInstruction (instr ∷ CluInstruction)
  where
-   cluInstruction ∷ ∀ x → x ~ ins ⇒ CluInstruction
+   cluInstruction ∷ ∀ x → x ~ instr ⇒ CluInstruction
 
 instance KnownCluInstruction Add where cluInstruction _ = Add
 instance KnownCluInstruction Sub where cluInstruction _ = Sub
@@ -116,11 +119,14 @@ type SecP256ModPrime
 type SecP256OrdPrime
   = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
 
+-- | A finite space to distinguish between the supported elliptic
+-- curve primes.
 data ECPrime
   = SecP256Mod
   | SecP256Ord
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
 
+-- | Maps the 'ECPrime' reference to the actual prime.
 type family CPrime (p :: ECPrime) ∷ Nat where
   CPrime SecP256Mod = SecP256ModPrime
   CPrime SecP256Ord = SecP256OrdPrime
@@ -130,6 +136,7 @@ type ECMod = CMod SecP256Mod
 
 --------------------------------------------------------------------------------
 
+-- | Reified type of an 'Instruction' at the term-level.
 type Instr group (rbound ∷ Nat) (stackSize ∷ Nat) (a ∷ Type) =
   Instruction
     group
@@ -139,6 +146,7 @@ type Instr group (rbound ∷ Nat) (stackSize ∷ Nat) (a ∷ Type) =
     ECPrime
     a
 
+-- | Identifies all instruction sequences that can be reified.
 class KnownInstructions
   (rbound ∷ Nat)
   (stackSize ∷ Nat)
@@ -196,6 +204,7 @@ instance
  where
   instructionVec _ = CLU SecP256Ord (cluInstruction ins) :> instructionVec is
 
+-- | The reified instruction vector of a routine.
 instructions ∷
   ∀ {group} (stackSize ∷ Nat) (a ∷ Type).
   ∀ (main ∷ group) →
@@ -207,14 +216,34 @@ instructions _ r = instructionVec (Instructions r)
 
 --------------------------------------------------------------------------------
 
+-- | Links a type-level list of instructions with a routine reference
+-- and all derivable proofs. Furthermore supports term-level
+-- reification of the provided reference.
 class KnownRoutine (routine ∷ group) where
+
+  -- | The linked type-level list of instructions
   type Instructions routine ∷ [Instruction group Nat Nat Nat Nat Nat]
+
+  -- | All proven facts that are derivable from the given routine.
   knownRoutine ∷ (Num a, BitPack a) ⇒ RoutineFacts routine a
+
+  -- | The reified term matching the given type.
   routine ∷ ∀ x → x ~ routine ⇒ group
 
+-- | Identifies the types that can serve as instruction pointers for
+-- particular routines supporting the operations associated with the
+-- class.
 class InstructionPointer (main ∷ group) ptr where
+  -- | Every instruction pointer can be incremented.
   inc ∷ ∀ x → x ~ main ⇒ ptr → ptr
+
+  -- | An instruction pointer has a dedicated start value.
   start ∷ ∀ x → x ~ main ⇒ group → Index (RepetitionBound main) → ptr
+
+  -- | A given routine and instruction pointer determines the
+  -- particular instruction to be executed. Nothing is returned after
+  -- reaching the end of the instruction sequence associated with the
+  -- routine.
   instr ∷
     (Num a, BitPack a) ⇒
     ∀ x → x ~ main ⇒
@@ -226,11 +255,16 @@ class InstructionPointer (main ∷ group) ptr where
         a
       )
 
+-- | A convenience type for defining instruction pointers.
 data RIndex (main ∷ group) (subroutine ∷ group) = RIndex
-  { iptr ∷ Index (InstructionCount subroutine)
-  , rbnd ∷ Index (RepetitionBound main)
+  { -- | The particular position being pointed to in the sequence
+    -- associated with the routine.
+    iptr ∷ Index (InstructionCount subroutine)
+  , -- | The number of rounds a particular sub-routine still must
+    -- be repeated.
+    rbnd ∷ Index (RepetitionBound main)
   }
-  deriving (Generic, NFDataX)
+  deriving (Generic, NFDataX, Show)
 
 -- TODO[investigate]: deriving BitPack currently causes a
 --   "solveWanteds: too many iterations" error
@@ -260,6 +294,8 @@ instance
 
 --------------------------------------------------------------------------------
 
+-- | All evidence that can be derived automatically for a known
+-- routine.
 data RoutineFacts (routine ∷ group) (a ∷ Type) where
   RoutineFacts ∷
     ( KnownInstructions
@@ -294,13 +330,15 @@ instance KnownNat (RequiredStackSize r) ⇒ KnownRequiredStackSize r
 class    KnownNat (InstructionBound r)  ⇒ KnownInstructionBound r
 instance KnownNat (InstructionBound r)  ⇒ KnownInstructionBound r
 
-class    KnownNat (RepetitionBound r)  ⇒ KnownRepetitionBound r
-instance KnownNat (RepetitionBound r)  ⇒ KnownRepetitionBound r
+class    KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
+instance KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
 
+-- | Lists all the sub-routines and the routine itself of a routine.
 type Routines routine = routine : SubRoutines routine
 type InstructionCount routine = Length (Instructions routine)
 type SubRoutineCount routine = Length (SubRoutines routine)
 
+-- | Lists all the sub-routines of a routine.
 type SubRoutines routine = SubRoutines# '[] (Instructions routine)
 type SubRoutines# ∷
   ∀ routine group n m k p a.
@@ -314,6 +352,8 @@ type family SubRoutines# a xs
   SubRoutines# a (_ : xr) = SubRoutines# a xr
   SubRoutines# a '[] = a
 
+-- | Retrieves the maximal length of the instruction sequences
+-- utilized by a given routine.
 type InstructionBound routine = InstructionBound# 0 (Routines routine)
 type InstructionBound# ∷ ∀ routine. Nat → [routine] → Nat
 type family InstructionBound# n rs
@@ -322,6 +362,8 @@ type family InstructionBound# n rs
   InstructionBound# n (x : xr) =
     InstructionBound# (Max n (InstructionCount x)) xr
 
+-- | Retrieves the maximum number of iterations of any sub-routine
+-- utilized by the given routine.
 type RepetitionBound routine = 1 + RepetitionBound# 0 (Instructions routine)
 type RepetitionBound# ∷ Nat → [Instruction group n m k p a] → Nat
 type family RepetitionBound# n rs
@@ -344,6 +386,7 @@ data StackProfile = StackProfile
   , lowerBound ∷ Nat
   }
 
+-- | Retrieves the stack requirement profile for a given routine.
 type GetProfile routine
   = GetProfile# ('StackProfile (Toℤ 0) 0 0) (Instructions routine)
 type GetProfile# ∷
@@ -355,26 +398,29 @@ type family GetProfile# p is
   GetProfile# p '[] = p
   GetProfile# p (i : is) = GetProfile# (Requirements p i) is
 
--- | Number of arguments being read from the stack.
+-- | The number of arguments being read from the stack.
 type ArgCount routine = ArgCount# (GetProfile routine)
 type ArgCount# ∷ StackProfile → Nat
 type family ArgCount# p
  where
   ArgCount# ('StackProfile _ _ l) = l
 
--- | Number of results remaining on the stack after execution.
+-- | The number of results remaining on the stack after execution.
 type ResultCount routine = ResultCount# (GetProfile routine)
 type ResultCount# ∷ StackProfile → Nat
 type family ResultCount# p
  where
   ResultCount# ('StackProfile p _ l) = Abs (Toℤ l .+. p)
 
+-- | The maximal stack size needed to run a routine with all its
+-- sub-routines.
 type RequiredStackSize routine = RequiredStackSize# (GetProfile routine)
 type RequiredStackSize# ∷ StackProfile → Nat
 type family RequiredStackSize# p
  where
   RequiredStackSize# ('StackProfile _ u l) = u + l
 
+-- | The folding function utilized by 'GetProfile'.
 type Requirements ∷
   StackProfile →
   Instruction group Nat Nat Nat Nat a →
@@ -398,6 +444,8 @@ type family Requirements p i
 
    Requirements p (RUN k r) = Attach k p (GetProfile r)
 
+-- | Combines the stack profile of a sub-routine with the one of the
+-- calling routine.
 type Attach ∷ Nat → StackProfile → StackProfile → StackProfile
 type family Attach k a b
  where

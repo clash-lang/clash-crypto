@@ -1,18 +1,11 @@
-{-# LANGUAGE UndecidableInstances #-}
-
-module Clash.Crypto.Hitlt.Shared
+module Hitlt.Shared
   ( Byte
   , ByteSize
   , Q
   , StackSize
   , StackValueSize
   , StackPadding
-  , CluInput
   , isReadyIndicator
-  , ECPrime(..)
-  , CMod
-  , ECMod
-  , CPrime
   )
 where
 
@@ -40,13 +33,3 @@ type StackPadding =
   BitSize Byte
     - BitSize (Maybe (Unsigned StackValueSize), Index (StackSize + 1))
         `Mod` BitSize Byte
-
--- | Related to CLU
-type CluInput =
-  ( Unsigned (BitSize Byte - BitSize CluInstruction)
-  , ( CluInstruction
-    , ( (Unsigned (ModSize Q), Unsigned (ModSize Q))
-      , Unsigned (ModSize Q)
-      )
-    )
-  )

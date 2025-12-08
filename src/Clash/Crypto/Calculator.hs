@@ -1,10 +1,20 @@
+{-|
+Module      : Clash.Crypto.Calculator
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+A calculator for running a compile-time known instruction sequence.
+-}
+
 {-# LANGUAGE RecordWildCards #-}
 
-module Clash.Crypto.Calculator where
+module Clash.Crypto.Calculator
+  ( calculator
+  ) where
 
 import Clash.Prelude hiding (Mod)
-
-import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Calculator.ISA
 import Clash.Crypto.Calculator.CLU
@@ -12,14 +22,19 @@ import Clash.Crypto.ECDSA.Modulo
 import Clash.Signal.Channel
 import Clash.Sized.Stack
 
+-- | Runs the instruction sequence referenced by the first required
+-- type argument.
 calculator ∷
   ∀ {group}
     (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (main ∷ group) → KnownRoutine main ⇒
-  ∀ (ptr ∷ Type)  → (InstructionPointer main ptr, NFDataX ptr) ⇒
+  -- ^ the routine referring to the executed instruction sequence
+  ∀ (ptr ∷ Type) → (InstructionPointer main ptr, NFDataX ptr) ⇒
+  -- ^ the instruction pointer type that is related to the routine type
   ∀ stages → KnownNat stages ⇒
+  -- ^ the staging depth of the Karatsuba based multiplier
   ∀ regs → KnownNat regs ⇒
-  (1 ≤ ArgCount main, 1 ≤ ResultCount main) ⇒
+  -- ^ the size of the base multiplier
   Channel dom (Vec (ArgCount main) (Mod (CPrime (SecP256Mod)))) →
   -- ^ initial stack content (rightmost element at the top)
   Channel dom (Vec (ResultCount main) (Mod (CPrime (SecP256Mod))))
@@ -87,7 +102,7 @@ calculator main ptr stages regs input
             CUP n → (next ip, out { dataStackAction = CopyUp n })
             RUN 0 _ → (next ip, out)
             RUN k sr →
-              ( Execute (start main sr k) None None
+              ( Execute (start main sr $ k - 1) None None
               , out { iptrStackAction = Push ip }
               )
             -- store the first argument
@@ -137,11 +152,16 @@ calculator main ptr stages regs input
     in
       Channel m.calculatorOutput
 
+-- | Internal state of the calculator's Mealy machine.
 data State routine ptr a
-  = WaitForInput
-  | PushArgs (Index (ArgCount routine))
-  | Execute ptr (Content a) (Content a)
-  | PopResult Bool (Vec (ResultCount routine) a)
+  = -- | wait for the input arguments
+    WaitForInput
+  | -- | push the arguments to the stack
+    PushArgs (Index (ArgCount routine))
+  | -- | run the sequence
+    Execute ptr (Content a) (Content a)
+  | -- | pop the result from the stack
+    PopResult Bool (Vec (ResultCount routine) a)
   deriving (Generic)
 
 deriving instance
@@ -149,19 +169,30 @@ deriving instance
   (NFDataX a, NFDataX ptr, KnownResultCount routine) ⇒
   NFDataX (State routine ptr a)
 
+-- | The input to the calculator's Mealy machine.
 data MealyInput routine ptr a = MealyInput
-  { calculatorInput ∷ Content (Vec (ArgCount routine) a)
-  , cluResponse ∷ Content a
-  , dataStackTop ∷ Maybe a
-  , iptrStackTop ∷ Maybe ptr
+  { -- | the input to the calculator
+    calculatorInput ∷ Content (Vec (ArgCount routine) a)
+  , -- | the output of the CLU
+    cluResponse ∷ Content a
+  , -- | the output of the data stack
+    dataStackTop ∷ Maybe a
+  , -- | the output of the instruction pointer stack
+    iptrStackTop ∷ Maybe ptr
   }
 
+-- | The output of the calculator's Mealy machine.
 data MealyOutput routine ptr a = MealyOutput
-  { calculatorOutput ∷ Content (Vec (ResultCount routine) a)
-  , cluAction ∷ Content (ECPrime, (CluInstruction, (a, a)))
-  , dataStackAction ∷ StackAction (RequiredStackSize routine) a
-    -- | the sub-routine count offers a sound upper bound for the stack
-    -- size here, as any routine can be pushed at most once and we
-    -- cannot use recursive calls
+  { -- | the output of the calculator
+    calculatorOutput ∷ Content (Vec (ResultCount routine) a)
+  , -- | the input to the CLU
+    cluAction ∷ Content (ECPrime, (CluInstruction, (a, a)))
+  , -- | the input to the data stack
+    dataStackAction ∷ StackAction (RequiredStackSize routine) a
+    -- | the input to the instruction pointer stack
+    --
+    -- (note that the sub-routine count offers a sound upper bound for
+    -- the stack size here, as any routine can be pushed at most once
+    -- and we cannot use recursive calls)
   , iptrStackAction ∷ StackAction (SubRoutineCount routine) ptr
   }

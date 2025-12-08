@@ -12,11 +12,12 @@ import Clash.Signal.DataStream (DataStream, Frame(..))
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hitlt.Shared (Byte)
-import Clash.Crypto.Hitlt.Uart (withUartRequestResponseHandler)
 
 import Clash.Crypto.MAC.HMAC (hmac)
 import Clash.Crypto.Hash.SHA (SHA(..), BlockSize)
+
+import Hitlt.Shared (Byte)
+import Hitlt.Uart (withUartRequestResponseHandler)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA

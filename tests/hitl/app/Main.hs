@@ -54,9 +54,18 @@ import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
-import Clash.Crypto.Calculator.ISA (CluInstruction(..))
+import Clash.Crypto.Calculator.ISA
+  ( CluInstruction(..), ECPrime(..), CPrime, CMod
+  )
 import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
-import Clash.Crypto.Hitlt.Shared
+
+import Hitlt.Clash.Crypto.Calculator.CLU (CluInput)
+import Hitlt.Shared
+  ( Q, StackSize, StackValueSize, StackPadding
+  , isReadyIndicator
+  )
+import Hitlt.Clash.Crypto.Calculator
+import Hitlt.Clash.Crypto.Calculator.InverseModulo
 
 import Shake
   ( ShakeOptions(..), Verbosity(..)
@@ -66,10 +75,9 @@ import Shake
 import qualified Data.ByteString     as BS
   ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate
   )
-import qualified Data.Modular        as Modular
 import qualified Data.List           as List
 import qualified System.Timeout      as TO (timeout)
-import qualified Hedgehog.Range      as Range (linear, constantFrom)
+import qualified Hedgehog.Range      as Range (linear)
 import qualified Hedgehog.Gen        as Gen
 import qualified Clash.Sized.Vector  as Vec
 import qualified Crypto.Hash.SHA1    as SHA1 (hash)
@@ -103,43 +111,42 @@ main = do
     = defaultMain
     $ localOption (HedgehogTestLimit (Just 100))
     $ testGroup "Clash Crytpo HITL tests"
-        [
-          testGroup "Clash.Crypto.Hash.SHA"
+        [ testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
               testSHA SHA1   sem dev settings
             , testSHA SHA224 sem dev settings
             , testSHA SHA256 sem dev settings
-            ] ,
-          testGroup "Clash.Crypto.Hash.HMAC"
+            ]
+        , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
-            ] ,
-          testGroup "Clash.Crypto.ECDSA.Karatsuba"
-            [
-              testKaratsuba "Karatsuba" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.ECDSA.Karatsuba"
+            [ testKaratsuba "Karatsuba" sem dev settings
             , testKaratsubaModulo "KaratsubaModulo" sem dev settings
-            ] ,
-          testGroup "Clash.Crypto.ECDSA.Modulo"
-            [
-              testModulo "Modulo" sem dev settings
-            ] ,
-          testGroup "Clash.Crypto.ECDSA.InverseModulo"
-            [
-              testInverseModulo "BEA" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.ECDSA.Modulo"
+            [ testModulo "Modulo" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.ECDSA.InverseModulo"
+            [ testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
             , testInverseModulo "FltCtmi" sem dev settings
             -- We don't enable the SictMi test because yosys can't synthesize it.
             -- It might be related to the following issue:
             -- https://github.com/YosysHQ/nextpnr/issues/208
             -- , testInverseModulo "SictMi" sem dev settings
-            ] ,
-          testGroup "Clash.Crypto.ECDSA.CLU"
-            [ testCLU "CLU" sem dev settings
-            ] ,
-          localOption (HedgehogTestLimit (Just 10)) $
-          testGroup "Clash.Sized.Stack"
+            ]
+        , localOption (HedgehogTestLimit (Just 10))
+        $ testGroup "Clash.Sized.Stack"
             [ testStack "Stack" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.Calculator.CLU"
+            [ testCLU "CLU" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.Calculator"
+            [ testCalculator "Calculator" sem dev settings
             ]
         ]
 
@@ -160,11 +167,18 @@ main = do
         c ∷ CMod SecP256Ord ← genMod
         d ∷ CMod SecP256Ord ← genMod
         runHitltCLU sem dev settings (opOrd, (c, d))
-   where
-    genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
-    genMod = do
-      x ← forAll $ genIndex @p $ Range.linear minBound maxBound
-      return $ createMod @p x
+
+  testCalculator ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testCalculator name sem dev settings
+    = test sem dev settings name $ do
+        a ∷ CMod SecP256Mod ← genMod
+        b ∷ CMod SecP256Mod ← genMod
+        runHitltCalculator sem dev settings a b
 
   genStackAction ∷
     ∀ n size m.
@@ -206,11 +220,8 @@ main = do
     TestTree
   testInverseModulo name sem dev settings
     = test sem dev settings name $ do
-        x ← forAll $ generator $ natToNum @Q
+        x ∷ Mod Q ← genMod
         runHitltInverseModulo sem dev settings x
-    where
-      generator m = Gen.integral (Range.constantFrom (1) 1 (m-1))
-
 
   testModulo ∷
     String →
@@ -246,11 +257,6 @@ main = do
         x ∷ Mod Q ← genMod
         y ∷ Mod Q ← genMod
         runHitltKaratsubaModulo sem dev settings x y
-   where
-    genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
-    genMod = do
-      x ← forAll $ genIndex @p $ Range.linear minBound maxBound
-      return $ createMod @p x
 
   testSHA ∷
     ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
@@ -326,15 +332,21 @@ runHitltCLU sem dev settings (op, (x, y)) =
         Bit | y < natToNum @(ModSize p), testBit x (fromEnum y) → 1
             | otherwise → 0
 
-  invMod
-    = fromInteger
-    . Modular.unMod
-    . fromMaybe (error "The inverse always exists in a prime field.")
-    . Modular.inv
-    . Modular.toMod @p
-    . toInteger
-
   pV = natToNum @(p - 1) + 1
+
+runHitltCalculator ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Mod Q → Mod Q →
+  PropertyT IO ()
+runHitltCalculator sem dev settings a b =
+  runHitlt (ModSize Q `Div` 8) sem dev settings bs eq
+ where
+  bs = pack $ toList
+     $ bitCoerce @_ @(Vec (BitSize (Mod Q, Mod Q) `Div` 8) Word8) (a, b)
+  eq = pack $ toList $ bitCoerce @_ @(Vec (BitSize (Mod Q) `Div` 8) Word8)
+     $ goldenRoutine a b
 
 runStack ∷
   ∀ messageSize → KnownNat messageSize ⇒
@@ -367,18 +379,12 @@ runHitltInverseModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Unsigned 256 →
+  Mod Q →
   PropertyT IO ()
-runHitltInverseModulo sem dev settings x =
-  runHitlt (256 `Div` 8) sem dev settings bs eq
+runHitltInverseModulo sem dev settings x = do
+  runHitlt (ModSize Q `Div` 8) sem dev settings (toBS x) (toBS $ invMod @Q x)
  where
-  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
-  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) invMod
-  invMod ∷ Unsigned 256
-  invMod = fromInteger $ Modular.unMod $ fromMaybe moduloError $ Modular.inv $
-           Modular.toMod @Q $ toInteger x
-  moduloError =
-    error "Since the modulo of the field is prime, the inverse always exists."
+  toBS = pack . toList . bitCoerce @_ @(Vec (ModSize Q `Div` 8) Word8)
 
 runHitltModulo ∷
   QSem →
@@ -392,7 +398,7 @@ runHitltModulo sem dev settings x =
   bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
   eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ x `mod` natToNum @Q
 
-type HitlKaratsubaIntegerSize = 128
+type HitlKaratsubaIntegerSize = 256
 type HitlKaratsubaWordNumber = HitlKaratsubaIntegerSize `Div` 4
 
 runHitltKaratsuba ∷
@@ -558,6 +564,11 @@ escape ∷ ByteString → ByteString
 escape = BS.concatMap $ \case
   0x00 → pack [0x00, 0x00]
   byte → singleton byte
+
+genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
+genMod = do
+  x ← forAll $ genIndex @p $ Range.linear minBound maxBound
+  return $ createMod @p x
 
 class CryptoHash (alg ∷ SHA) where
   cryptoHash# ∷ Proxy alg → ByteString → ByteString

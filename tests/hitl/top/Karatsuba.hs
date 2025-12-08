@@ -8,10 +8,11 @@ import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequential)
+
+import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -26,6 +27,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . karatsubaSequential @128 @128 3 36 . cachedFromMaybe . bulkRead
+  $ newsfeed . karatsubaSequential @256 @256 2 72 . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

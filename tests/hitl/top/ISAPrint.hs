@@ -1,11 +1,25 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-|
+Module      : ISAPrint
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+A small demo application for printing a type level list of
+instructions via UART. The main purpose of this application is to
+check the resource usage of the type-level reification as a known
+vector in hardware.
+-}
+
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
+
 module ISAPrint (topEntity) where
 
 import Clash.Prelude hiding (print, Mod)
 import Clash.Annotations.TH (makeTopEntity)
+import Language.Haskell.Unicode (type (≤))
 
 import Clash.Cores.Uart (uart)
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
@@ -26,16 +40,19 @@ type BAUD = HITLT_BAUD
 type I group routine prime = Instr
   group (RepetitionBound routine) (RequiredStackSize routine) (Mod prime)
 
+-- | State machine for printing a single instruction
 isaPrint ∷
-  ∀ {group} prime (routine ∷ group) dom.
-  ( HiddenClockResetEnable dom, KnownNat prime
-  , KnownNat (RequiredStackSize routine), 3 <= prime
-  ) ⇒
+  ∀ {group}
+    (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (prime ∷ Nat) → (KnownNat prime, 3 ≤ prime) ⇒
+  ∀ (routine ∷ group) → KnownNat (RequiredStackSize routine) ⇒
   Signal dom (I group routine prime, Bool, Bool) →
+  -- ^ (instruction, reset, step)
   Signal dom (Maybe (BitVector 8))
-isaPrint = mealy (~~>)
+  -- ^ character to be sent via UART
+isaPrint prime main = mealy (~~>)
   ( 0 ∷ Index 7
-  , 0 ∷ Index (1 + Max (RequiredStackSize routine) prime)
+  , 0 ∷ Index (1 + Max (RequiredStackSize main) prime)
   )
  where
   _ ~~> (_, True, _    ) = ((0, 0), Nothing)
@@ -87,7 +104,7 @@ topEntity (orangePll24 → (clk, rst)) rx = withClockResetEnable clk rst enableG
       reset = delay False upd
       step = isRising False ack
 
-      txReq = isaPrint @11 @Main $ bundle
+      txReq = isaPrint 11 Main $ bundle
         ( (instructions Main Main !!) <$> n
         , reset
         , step
