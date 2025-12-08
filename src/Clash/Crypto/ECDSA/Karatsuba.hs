@@ -96,7 +96,7 @@ type KaratsubaCycles stages = 2 * (3 ^ stages - 1)
 -- that is able to multiply two 256-bit unsigned numbers.
 karatsubaSequentialGated ∷
   ∀ (n ∷ Nat) (m ∷ Nat) (dom ∷ Domain).
-  ( KnownNat n, KnownNat m, HiddenClockResetEnable dom) ⇒
+  (KnownNat n, KnownNat m, HiddenClockResetEnable dom) ⇒
   ∀ stages → KnownNat stages ⇒
   ∀ k → KnownNat k ⇒
   Channel dom (Unsigned n, Unsigned m) →

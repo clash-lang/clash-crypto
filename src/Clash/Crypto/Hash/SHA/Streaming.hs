@@ -39,7 +39,7 @@ computeBlock alg stages input
   = let hvs = (`maybe` snd)
           <$> antiDelay d1 (delayedI @1 undefined hvs)
           <*> input
-     in ((zipWith (+) <$> forward (SNat @stages) hvs) <*>)
+     in (zipWith (+) <$> forward (SNat @stages) hvs <*>)
       $ snd <$> mealyStages stages (slidingWindowCycle alg) input
 
 -- | Streaming based implementation for the hashing algorithms defined

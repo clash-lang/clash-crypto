@@ -97,7 +97,7 @@ computeModuloSigned = enhance put get compute
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.
--- Takes constant time, taking `maxShifts` cycles.
+-- Runs in contant time, taking `shifts` cycles.
 -- That input will be constant for the max number of shifts.
 moduloShift ∷
   ∀ m shifts dom.
