@@ -9,12 +9,17 @@ Some extra utility functions that extend the functionality of
 'Clash.Signal.Delayed'.
 -}
 
+{-# LANGUAGE NoTemplateHaskell #-}
+{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Safe #-}
+
 module Clash.Signal.Delayed.Extra
   ( dsFold
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
+import Data.Kind (Type)
 import Data.Maybe (isJust)
 
 -- | Temporally folds a signal over time. The folding function is

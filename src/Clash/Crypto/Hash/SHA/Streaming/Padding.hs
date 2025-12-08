@@ -8,7 +8,6 @@ Portability : POSIX
 Streaming based padding implementation of FIPS 180-4.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -96,13 +95,14 @@ deriving instance
 -- | Extends the input message via adding some padding to ensure that
 -- the message's length is always a multiple of 'BlockSize alg'.
 padMessageStream ∷
-  ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat).
-  (KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom, KnownNat n) ⇒
-  (1 ≤ n, n ≤ BlockSize alg, BlockSize alg `Mod` n ~ 0) ⇒
+  ∀ (n ∷ Nat) (dom ∷ Domain).
+  (KnownNat n, HiddenClockResetEnable dom, 1 ≤ n) ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  (n ≤ BlockSize alg, BlockSize alg `Mod` n ~ 0) ⇒
   DataStream dom () (Index n) (BitVector n) →
   DataStream dom () () (BitVector n)
-padMessageStream
-  | SHAFacts{} ← knownSHA @alg
+padMessageStream alg
+  | SHAFacts ← knownSHA alg
   , Rewrite ← fact₁
   = mealy (~~>) $ Left $ MsgBits 0 0
  where
@@ -160,7 +160,6 @@ padMessageStream
 
   terminate dLast trim (ePad, meVec)
     | trim > 0
-    , SHAFacts{} ← knownSHA @alg
     , Rewrite ← fact₀
     , let c = fromEnum trim; bits = ((dLast `shiftR#` c) .<<+ 1) `shiftL#` c - 1
     = (ePad, or# bits <$> meVec)
@@ -173,7 +172,7 @@ padMessageStream
     (Either (MsgBits alg n) (MsgPad alg n), Frame () () (BitVector n))
   addPaddingWith p@MsgPad{..}
     | remainingFrames > remainingSizeFrames
-    , SHAFacts{} ← knownSHA @alg
+    , SHAFacts ← knownSHA alg
     = ( Right p { remainingFrames = remainingFrames - 1
                 , terminated      = True
                 }
@@ -181,7 +180,7 @@ padMessageStream
       )
 
     | otherwise
-    , SHAFacts{} ← knownSHA @alg
+    , SHAFacts ← knownSHA alg
     , Rewrite ← fact₁
     , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
     , let d = head @(ReqSizeFrames alg n - 1) msgSize
@@ -200,7 +199,7 @@ padMessageStream
 
   createMsgPad ∷ MsgBits alg n → MsgPad alg n
   createMsgPad (MsgBits s r)
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     = MsgPad
         { remainingFrames =
             let
@@ -245,7 +244,7 @@ padMessageStream
     Index ((2 ^ SizeBits alg) `DDiv` n) →
     BitVector (CLog 2 ((2 ^ SizeBits alg) `Div` n))
   pack₀
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     , Rewrite ← fact₀
     , Rewrite ← fact₁
     , Rewrite ← using @(LeTrans 1 (2 * BlockSize alg) (2 ^ SizeBits alg `Div` n))
@@ -255,7 +254,7 @@ padMessageStream
     BitVector (CLog 2 ((2 ^ SizeBits alg) `Div` n)) →
     BitVector (n * ReqSizeFrames alg n)
   extend₀
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     , Rewrite ← fact₀
     , Rewrite ← using
         @( LeTrans 1 (2 * BlockSize alg) ((2 ^ SizeBits alg) `Div` n)
@@ -269,7 +268,7 @@ padMessageStream
     BitVector (CLog 2 n) →
     BitVector (n * ReqSizeFrames alg n)
   extend₁
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     , Rewrite ← using @(PositiveResultCond0 (SizeBits alg) n)
     , Rewrite ← using @(CLog2IsLessProduct n (ReqSizeFrames alg n))
     = extend @BitVector
@@ -278,7 +277,7 @@ padMessageStream
 
   fact₀ ∷ Rewrite (2 * BlockSize alg <= (2 ^ SizeBits alg) `Div` n)
   fact₀
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     , Rewrite ← using @(ModBound (BlockSize alg) n)
     , Rewrite ← using @(DivisorIsLess (BlockSize alg) n)
     , Rewrite ← using
@@ -292,7 +291,7 @@ padMessageStream
 
   fact₁ ∷ Rewrite ((2 ^ SizeBits alg) `DDiv` n ~ (2 ^ SizeBits alg) `Div` n)
   fact₁
-    | SHAFacts{} ← knownSHA @alg
+    | SHAFacts ← knownSHA alg
     , Rewrite ← using
         @(TimesMod
             (BlockSize alg)

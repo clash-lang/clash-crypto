@@ -1,5 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-
 {-|
 Module      : Test.Clash.Crypto.ECDSA.Modulo
 Copyright   : Copyright © 2025 QBayLogic B.V.
@@ -30,27 +28,26 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit), testProperty)
 import qualified Data.List as List
 import qualified Hedgehog.Range as Range
 
-tastyTests :: HasCallStack => TestTree
+tastyTests ∷ HasCallStack ⇒ TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.Modulo"
   [ localOption (HedgehogTestLimit (Just 100))
   $  testGroup "Modulo"
       [ testProperty "Equality between sequential modulo and combinatorial modulo"
         $ property $ do
-          n <- forAll $ genUnsigned $ Range.linear 0 (50_000 :: Unsigned 64)
+          n <- forAll $ genUnsigned $ Range.linear 0 (50_000 ∷ Unsigned 64)
           modulus <- forAll $ genUnsigned $ Range.linear 2 500
           testMod n modulus
       ]
   ]
 
-testOutput ::
-  forall (modT :: Nat).
-  (KnownNat modT, 1 <= modT, ModSize modT <= 64) =>
-  Unsigned 64 ->
+testOutput ∷
+  ∀ (modT ∷ Nat) → (KnownNat modT, 1 <= modT, ModSize modT <= 64) ⇒
+  Unsigned 64 →
   -- ^ n
-  Unsigned 64 ->
+  Unsigned 64 →
   -- ^ Modulus
   Unsigned 64
-testOutput n modulus
+testOutput modT n modulus
   = fromMaybe (error "The returned list was empty")
   $ getFirst
   $ foldMap First
@@ -64,11 +61,11 @@ testOutput n modulus
   $ fromList
   $ Keep : Keep : Release : List.repeat Keep
 
-testMod :: (MonadFail m, MonadTest m) => Unsigned 64 -> Unsigned 64 -> m ()
+testMod ∷ (MonadFail m, MonadTest m) ⇒ Unsigned 64 → Unsigned 64 → m ()
 testMod n modulus = do
-  Just (SomeNat (_ :: Proxy modT)) <- return $ someNatVal $ toInteger modulus
-  case (Proxy :: Proxy 1) %<=? (Proxy :: Proxy modT) of
-    LE Refl -> case (Proxy :: Proxy (ModSize modT)) %<=? (Proxy :: Proxy 64) of
-      LE Refl -> testOutput @modT n modulus === fromIntegral n `mod` modulus
-      NLE _ _ -> error "ModSize modulus should be less than or equal to 64"
-    NLE _ _ -> error "The given modulus should be greater than 1"
+  Just (SomeNat (_ ∷ Proxy modT)) <- return $ someNatVal $ toInteger modulus
+  case (Proxy ∷ Proxy 1) %<=? (Proxy ∷ Proxy modT) of
+    LE Refl → case (Proxy ∷ Proxy (ModSize modT)) %<=? (Proxy ∷ Proxy 64) of
+      LE Refl → testOutput modT n modulus === fromIntegral n `mod` modulus
+      NLE _ _ → error "ModSize modulus should be less than or equal to 64"
+    NLE _ _ → error "The given modulus should be greater than 1"

@@ -1,9 +1,13 @@
+{-# LANGUAGE NoTemplateHaskell #-}
+{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Safe #-}
+
 module Clash.Crypto.ECDSA.Utils
  ( unsignedToSigned
  , signedToUnsigned
  ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 unsignedToSigned ∷ ∀ len. KnownNat len ⇒ Unsigned len → Signed (len + 1)
 unsignedToSigned = bitCoerce . zeroExtend

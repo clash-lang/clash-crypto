@@ -8,7 +8,6 @@ Portability : POSIX
 Test suite for 'Clash.Crypto.Hash.SHA'.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -59,12 +58,12 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
                   >>= hashPure
           | let inputs = [input1, input2, input3, input4] ∷ [ByteString]
           , (hashPure, algName) ←
-              [ (testHashPure @SHA1,      "1")
-              , (testHashPure @SHA224,    "224")
-              , (testHashPure @SHA256,    "256")
-              , (testHashPure @SHA512,    "512")
-              , (testHashPure @SHA512224, "512/224")
-              , (testHashPure @SHA512256, "512/246")
+              [ (testHashPure SHA1,      "1")
+              , (testHashPure SHA224,    "224")
+              , (testHashPure SHA256,    "256")
+              , (testHashPure SHA512,    "512")
+              , (testHashPure SHA512224, "512/224")
+              , (testHashPure SHA512256, "512/246")
               ]
           ]
   , testGroup "Streaming Implementation"
@@ -74,19 +73,19 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
               $ do xs ← forAll (Gen.bytes $ Range.linear 100 1000)
                    hashStream xs
           | (hashStream, algName) ←
-              [ (testHashCStream @SHA1,      "1")
-              , (testHashCStream @SHA224,    "224")
-              , (testHashCStream @SHA256,    "256")
-              , (testHashCStream @SHA512,    "512")
-              , (testHashCStream @SHA512224, "512/224")
-              , (testHashCStream @SHA512256, "512/246")
+              [ (testHashCStream SHA1,      "1")
+              , (testHashCStream SHA224,    "224")
+              , (testHashCStream SHA256,    "256")
+              , (testHashCStream SHA512,    "512")
+              , (testHashCStream SHA512224, "512/224")
+              , (testHashCStream SHA512256, "512/246")
               ]
           ]
       , testGroup "Non-contiguous Input"
           [ localOption (HedgehogTestLimit $ Just 1)
               $ testProperty "SHA-256 HITLT failure (reproducer)"
               $ property
-              $ testHashNCStream @SHA256
+              $ testHashNCStream SHA256
               $ List.zip
                   (List.replicate 64 0)
                   (List.replicate 62 0 <> [64, 0])
@@ -103,12 +102,12 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
                      $ Range.linear 50 100
                    hashStream $ List.zip (pack <$> BS.unpack bs) xs
           | (hashStream, algName) ←
-              [ (testHashNCStream @SHA1,      "1")
-              , (testHashNCStream @SHA224,    "224")
-              , (testHashNCStream @SHA256,    "256")
-              , (testHashNCStream @SHA512,    "512")
-              , (testHashNCStream @SHA512224, "512/224")
-              , (testHashNCStream @SHA512256, "512/246")
+              [ (testHashNCStream SHA1,      "1")
+              , (testHashNCStream SHA224,    "224")
+              , (testHashNCStream SHA256,    "256")
+              , (testHashNCStream SHA512,    "512")
+              , (testHashNCStream SHA512224, "512/224")
+              , (testHashNCStream SHA512256, "512/246")
               ]
           ]
       ]
@@ -117,13 +116,13 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
 -- | Purely functional hash computation according to the
 -- specification.
 testHashPure ∷
-  ∀ (alg ∷ SHA) m.
-  (Monad m, KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (m ∷ Type → Type). Monad m ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
   ByteString →
   -- ^ input data
   PropertyT m ()
-testHashPure bs
-  | SHAFacts alg ← knownSHA @alg
+testHashPure alg bs
+  | SHAFacts ← knownSHA alg
   , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = do
 
@@ -141,7 +140,7 @@ testHashPure bs
     inputAsBv = concatBitVector# inputAsVBv8
 
     resultDigestAsBv ∷ BitVector (MessageDigestSize alg)
-    resultDigestAsBv = Spec.hash @alg @(n * 8) inputAsBv
+    resultDigestAsBv = Spec.hash alg inputAsBv
 
     resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
     resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
@@ -153,31 +152,29 @@ testHashPure bs
 
 -- | Tests on a contiguous data input stream.
 testHashCStream ∷
-  ∀ (alg ∷ SHA) m.
-  ( Monad m, KnownSHA alg, CryptoHash alg
-  , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
-  ) ⇒
+  ∀ (m ∷ Type → Type). Monad m ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  (8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0) ⇒
   ByteString →
   -- ^ input data
   PropertyT m ()
-testHashCStream
-  = testHashNCStream @alg
+testHashCStream alg
+  = testHashNCStream alg
   . fmap ((, 0) . pack)
   . BS.unpack
 
 -- | Tests on a non-contiguous data input stream.
 testHashNCStream ∷
-  ∀ (alg ∷ SHA) m.
-  ( Monad m, KnownSHA alg, CryptoHash alg
-  , 8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0
-  ) ⇒
+  ∀ (m ∷ Type → Type). Monad m ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  (8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0) ⇒
   [(BitVector 8, Int)] →
   -- ^ input data, where each byte in the first component is followed
   -- by the number of idle cycles stated in the second component. The
   -- list must be non-empty.
   PropertyT m ()
-testHashNCStream xs
-  | SHAFacts alg ← knownSHA @alg
+testHashNCStream alg xs
+  | SHAFacts ← knownSHA alg
   , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       upd f (x, j) = f x : List.replicate j NoData
@@ -206,7 +203,7 @@ testHashNCStream xs
          <> List.replicate requiredSamples Idle <> i
 
       output ∷ [Maybe (Digest alg)]
-      output = sampleN (2 * (n + requiredSamples)) $ newsfeed $ sha @alg input
+      output = sampleN (2 * (n + requiredSamples)) $ newsfeed $ sha alg input
 
       resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
       resultDigestAsVBv8 = case List.take 2 $ catMaybes output of
@@ -221,15 +218,18 @@ testHashNCStream xs
       ref === dut
 
 class CryptoHash (alg ∷ SHA) where
-  cryptoHash ∷ Proxy alg → ByteString → ByteString
+  cryptoHash# ∷ Proxy alg → ByteString → ByteString
 
-instance CryptoHash SHA1      where cryptoHash _ = SHA1.hash
-instance CryptoHash SHA224    where cryptoHash _ = SHA224.hash
-instance CryptoHash SHA256    where cryptoHash _ = SHA256.hash
-instance CryptoHash SHA384    where cryptoHash _ = SHA384.hash
-instance CryptoHash SHA512    where cryptoHash _ = SHA512.hash
-instance CryptoHash SHA512224 where cryptoHash _ = SHA512t.hash 224
-instance CryptoHash SHA512256 where cryptoHash _ = SHA512t.hash 256
+instance CryptoHash SHA1      where cryptoHash# _ = SHA1.hash
+instance CryptoHash SHA224    where cryptoHash# _ = SHA224.hash
+instance CryptoHash SHA256    where cryptoHash# _ = SHA256.hash
+instance CryptoHash SHA384    where cryptoHash# _ = SHA384.hash
+instance CryptoHash SHA512    where cryptoHash# _ = SHA512.hash
+instance CryptoHash SHA512224 where cryptoHash# _ = SHA512t.hash 224
+instance CryptoHash SHA512256 where cryptoHash# _ = SHA512t.hash 256
+
+cryptoHash ∷ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
+cryptoHash alg = cryptoHash# (Proxy @alg)
 
 -- | Some example input for unit testing.
 input1 ∷ ByteString

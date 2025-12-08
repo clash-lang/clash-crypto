@@ -39,7 +39,7 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . sha @SHAX . descape
+  $ newsfeed . sha SHAX . descape
 
 -- | We use `0x00` as an escape symbol to mark the end of the input
 --

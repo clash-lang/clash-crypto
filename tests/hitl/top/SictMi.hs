@@ -16,7 +16,7 @@ import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.ECDSA.InverseModulo (sictMiSequential, deriveSictPrecomp)
 
-deriveSictPrecomp @Q
+deriveSictPrecomp Q
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

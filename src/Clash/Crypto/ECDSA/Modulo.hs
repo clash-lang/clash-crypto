@@ -9,7 +9,6 @@ Types and algorithms for modulo integers.
 -}
 
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Modulo
   ( Mod(..)
@@ -60,15 +59,15 @@ type ComputeModuloUnsignedCycles m len = len - ModSize m
 -- in a binary base. Works on unsigned values.
 -- This implementation is constant-time, as it runs in `shifts` operations.
 computeModuloUnsigned ∷
-  ∀ m len shifts dom.
-  ( KnownNat m, KnownNat len, KnownNat shifts, HiddenClockResetEnable dom
-  , 1 ≤ m, ModSize m ≤ len, shifts ~ len - ModSize m
+  ∀ (m ∷ Nat) (len ∷ Nat) dom.
+  ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
+  , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Unsigned len) →
   Channel dom (Mod m)
 computeModuloUnsigned = enhance put get compute
  where
-  put n = (n, maxBound ∷ Index (shifts + 1))
+  put n = (n, maxBound ∷ Index (len + 1 - ModSize m))
   get _ = Mod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
@@ -77,15 +76,15 @@ computeModuloUnsigned = enhance put get compute
 -- in a binary base. Works on signed values.
 -- This implementation is constant-time, as it runs in `shifts` operations.
 computeModuloSigned ∷
-  ∀ m len shifts dom.
-  ( KnownNat m, KnownNat len,  KnownNat shifts, HiddenClockResetEnable dom
-  , 1 ≤ m, ModSize m ≤ len, shifts ~ len - ModSize m
+  ∀ (m ∷ Nat) (len ∷ Nat) dom.
+  ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
+  , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Signed (len + 1)) →
   Channel dom (Mod m)
 computeModuloSigned = enhance put get compute
  where
-  put n = (n, maxBound ∷ Index (shifts + 2))
+  put n = (n, maxBound ∷ Index (len + 2 - ModSize m))
   get _ = Mod @m . bitCoerce . resize . signedToUnsigned . fst
   compute _ (n, j) = ((next n j, if j > 0 then j - 1 else j), j > 0)
   -- ^ using `satPred SatBound j` instead does not work here because of
@@ -98,20 +97,20 @@ computeModuloSigned = enhance put get compute
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.
--- Takes constant time, taking `maxShifts` cycles.
+-- Runs in contant time, taking `shifts` cycles.
 -- That input will be constant for the max number of shifts.
 moduloShift ∷
-  ∀ m maxShifts dom.
-  ( KnownNat m, KnownNat maxShifts, HiddenClockResetEnable dom
-  , 1 ≤ m, 1 ≤ maxShifts
+  ∀ m shifts dom.
+  ( KnownNat m, KnownNat shifts, HiddenClockResetEnable dom
+  , 1 ≤ m, 1 ≤ shifts
   ) ⇒
-  Channel dom (Mod m, Index maxShifts) →
+  Channel dom (Mod m, Index shifts) →
   -- ^ Number to shift, number of shifts
   Channel dom (Mod m)
 moduloShift = enhance put get compute
  where
-  put (n, _) = (extend $ bitCoerce n, maxBound ∷ Index maxShifts)
-  get _ = bitCoerce . truncateB . fst
+  put (n, _) = (extend $ bitCoerce n, maxBound ∷ Index shifts)
+  get _ = bitCoerce . truncateB @_ @_ @1 . fst
   compute (_, s) (n, j)
     | j > 0     = Computing (next s n j, satPred SatBound j)
     | otherwise = Releasing (n, j)

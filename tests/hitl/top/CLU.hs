@@ -29,7 +29,7 @@ topEntity ∷
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-      . clu d3 d36
+      . clu 3 36
       . cachedFromMaybe
       . fmap (snd <$>)
       . bulkRead @CluInput

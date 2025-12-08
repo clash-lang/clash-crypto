@@ -8,8 +8,6 @@ Portability : POSIX
 Streaming based implementation of FIPS 180-4.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
-
 module Clash.Crypto.Hash.SHA.Streaming
   ( hashStream
   , computeBlock
@@ -30,29 +28,31 @@ import Clash.Crypto.Hash.SHA.Streaming.Stages
 
 -- | Perform the steps 1 to 4 for one iteration of the loop.
 computeBlock ∷
-  ∀ (alg ∷ SHA). KnownSHA alg ⇒
-  ∀ stages. SNat stages →
-  ∀ dom n. (KnownDomain dom, HiddenClockResetEnable dom) ⇒
+  ∀ (n ∷ Nat) (dom ∷ Domain).
+  (KnownNat n, HiddenClockResetEnable dom) ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  ∀ (stages ∷ Nat) → KnownNat stages ⇒
   DSignal dom n (Maybe (MessageBlock alg, HashValue alg)) →
   DSignal dom (n + stages) (HashValue alg)
-computeBlock stages@SNat input
-  | SHAFacts alg ← knownSHA @alg
+computeBlock alg stages input
+  | SHAFacts ← knownSHA alg
   = let hvs = (`maybe` snd)
           <$> antiDelay d1 (delayedI @1 undefined hvs)
           <*> input
-     in ((zipWith (+) <$> forward stages hvs) <*>)
+     in (zipWith (+) <$> forward (SNat @stages) hvs <*>)
       $ snd <$> mealyStages stages (slidingWindowCycle alg) input
 
 -- | Streaming based implementation for the hashing algorithms defined
 -- in FIPS 180-4.
 hashStream ∷
-  ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat).
-  (KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
+  ∀ (n ∷ Nat) (dom ∷ Domain).
+  (KnownNat n, HiddenClockResetEnable dom, 1 ≤ n) ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  (n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
   DataStream dom () () (BitVector n) →
   Channel dom (HashValue alg)
-hashStream input
-  | SHAFacts alg ← knownSHA @alg
+hashStream alg input
+  | SHAFacts ← knownSHA alg
   , Rewrite ← using @(KeepsPositiveIfMultiple (BlockSize alg) n)
   , let lemma ∷
           ∀ (m ∷ Nat).
@@ -107,7 +107,7 @@ hashStream input
     hashValue ∷ Signal dom (HashValue alg)
     hashValue = toSignal
       $ dsFold (_H⁰ alg) (fromSignal input.atStartFrame)
-          (computeBlock @alg @(DDiv (BlockSize alg) n - 1) SNat)
+          (computeBlock alg (type (BlockSize alg `DDiv` n - 1)))
       $ mux (delayedI @1 False $ fromSignal blockComplete)
           (Just <$> msgBlock)
           (pure Nothing)

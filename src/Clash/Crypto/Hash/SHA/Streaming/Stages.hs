@@ -9,7 +9,6 @@ Stage introduction for automatically aligning the computation stages
 with the input rate resulting from the chosen input frame size.
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -100,8 +99,8 @@ instance
 -- selects between the constants zero and one.
 --
 -- prop> ∀ x y z ∈ ℕ. DistributedStages x y z ≤ 1
-atMostOnePerStage ∷ ∀ x y z. Rewrite (DistributedStages x y z ≤ 1)
-atMostOnePerStage = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
+atMostOnePerStage ∷ ∀ x y z → Rewrite (DistributedStages x y z ≤ 1)
+atMostOnePerStage _ _ _ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
 -- | Evenly distributes @d@ registers between @n@ combinational
 -- computations. The introduced registers are all initialized with the
@@ -117,47 +116,44 @@ atMostOnePerStage = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 --                            vᵢ            vᵢ
 -- @
 distributeStages ∷
-  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type).
-  (KnownNat n, NFDataX a) ⇒
-  SNat d →
+  ∀ (n ∷ Nat) (k ∷ Nat) (dom ∷ Domain) (a ∷ Type).
+  (KnownNat n, KnownNat k, HiddenClockResetEnable dom, NFDataX a) ⇒
+  ∀ (d ∷ Nat) → KnownNat d ⇒
   -- ^ number of stages
   a →
   -- ^ initial value (vᵢ) assigned to the introduced registers after
   -- coming out of the reset
   Vec n (a → a) →
   -- ^ the computations to be added in between the different stages.
-  ∀ (dom ∷ Domain) (k ∷ Nat).
-  (KnownDomain dom, HiddenClockResetEnable dom) ⇒
   DSignal dom k a →
   -- ^ the /front input/ that is fed at the beginning of the chain
   DSignal dom (k + d) a
   -- ^ the output coming out of the chain
-distributeStages d@SNat ival computations =
-  distributeStages# (SNat @0) d (reverse computations)
+distributeStages d ival computations
+  = distributeStages# 0 d $ reverse computations
  where
   distributeStages# ∷
-    ∀ (m ∷ Nat) (i ∷ Nat) (r ∷ Nat).
-    (KnownNat m, NFDataX a) ⇒
-    SNat i → SNat r →
+    ∀ (m ∷ Nat).
+    KnownNat m ⇒
+    ∀ (i ∷ Nat) → KnownNat i ⇒
+    ∀ (r ∷ Nat) → KnownNat r ⇒
     Vec m (a → a) →
-    ∀ (dom ∷ Domain) (k ∷ Nat).
-    (KnownDomain dom, HiddenClockResetEnable dom) ⇒
     DSignal dom k a →
     DSignal dom (k + r) a
-  distributeStages# i@SNat r@SNat cs = case toUNat @m SNat of
+  distributeStages# i r cs = case toUNat @m SNat of
     UZero   → delayedI ival
-    USucc _ → case toUNat r of
+    USucc _ → case toUNat (SNat @r) of
       UZero
         → fmap (head cs)
-        . distributeStages# (succSNat i) r (tail cs)
+        . distributeStages# (type (i + 1)) r (tail cs)
       USucc _
-        | Rewrite ← atMostOnePerStage @n @d @i
+        | Rewrite ← atMostOnePerStage n d i
         , Rewrite ← using @(LeTrans (DistributedStages n d i) 1 (r - 1 + 1))
         → delayedI @(DistributedStages n d i) ival
         . fmap (head cs)
         . distributeStages#
-            (succSNat i)
-            (SNat @(r - DistributedStages n d i))
+            (type (i + 1))
+            (type (r - DistributedStages n d i))
             (tail cs)
 
 -- | A less resource hungry variant of 'distributeStages', which
@@ -170,11 +166,9 @@ distributeStages d@SNat ival computations =
 --   allows to replace a register chain by a single state instance
 --   being iterated over by the Mealy machine.
 mealyStages ∷
-  ∀ (d ∷ Nat) (n ∷ Nat) (a ∷ Type) (dom ∷ Domain) (t ∷ Nat).
-  ( KnownNat n, 1 ≤ n, NFDataX a
-  , KnownDomain dom, HiddenClockResetEnable dom
-  ) ⇒
-  SNat d →
+  ∀ (n ∷ Nat) (t ∷ Nat) (dom ∷ Domain) (a ∷ Type).
+  (KnownNat n, KnownNat t, NFDataX a, HiddenClockResetEnable dom, 1 ≤ n) ⇒
+  ∀ (d ∷ Nat) → KnownNat d ⇒
   -- ^ number of stages
   (Index n → a → a) →
   -- ^ the computations
@@ -182,7 +176,7 @@ mealyStages ∷
   -- ^ the input initiating the state machine, where relevant inputs
   -- are 'Just'-wrapped
   DSignal dom (t + d) a
-mealyStages SNat compute
+mealyStages d compute
   | Rewrite ← using @(MinOverLE n (d + 1) 1)
   , SNat @k ← SNat @(n `Div` Min n (d + 1))
   , SNat @r ← SNat @(n `Mod` Min n (d + 1))

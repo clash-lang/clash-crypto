@@ -62,13 +62,12 @@ type ECMod = CMod SecP256Mod
 -- TODO: `stages == 0` currently is combinational and won't require a
 -- single cycle. Fix this.
 clu ∷
-  ∀ stages regs dom.
-  HiddenClockResetEnable dom ⇒
-  SNat stages →
-  SNat regs →
+  ∀ dom. HiddenClockResetEnable dom ⇒
+  ∀ stages → KnownNat stages ⇒
+  ∀ regs → KnownNat regs ⇒
   Channel dom (ECPrime, (CluInstruction, (ECMod, ECMod))) →
   Channel dom ECMod
-clu SNat SNat (unzipC → (cp, input))
+clu stages regs (unzipC → (cp, input))
   =   whenPrime SecP256Mod outMod
   <|> whenPrime SecP256Ord outOrd
  where
@@ -78,7 +77,7 @@ clu SNat SNat (unzipC → (cp, input))
   mIn = whenPrime SecP256Mod mInMod
     <|> whenPrime SecP256Ord mInOrd
 
-  mOut = karatsubaSequentialGated @stages @regs mIn
+  mOut = karatsubaSequentialGated stages regs mIn
 
   whenPrime ∷ ∀ a. ECPrime → Channel dom a → Channel dom a
   whenPrime s = guardC ((Just s ==) <$> cp.content)

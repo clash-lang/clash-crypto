@@ -199,7 +199,7 @@ fastGcdSequential ∷
   Channel dom (Mod m)
 fastGcdSequential (divSteps @m . fmap bitCoerce → divResult)
   = computeModuloUnsigned @m
-  $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+  $ karatsubaSequentialGated GCDStreamingStages MulRegisterSize
   $ fmap ((, natToNum @(Precomp m) ∷ Unsigned (ModSize m)) . bitCoerce)
   $ moduloShift @m
   $ zipRecent (flip (,) . fst) divResult
@@ -223,7 +223,7 @@ fltCtmi input = output
   (output, s)
     = fltCtmiE @p input
     $ computeModuloUnsigned @p
-    $ karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+    $ karatsubaSequentialGated GCDStreamingStages MulRegisterSize
       s
 
 -- | A 'fltCtmi' variant that uses a shared multiplier and prime field
@@ -328,7 +328,7 @@ sictMiSequential ∷
   Channel dom (Mod m)
 sictMiSequential
   = computeModuloUnsigned @m
-  . karatsubaSequentialGated @GCDStreamingStages @MulRegisterSize
+  . karatsubaSequentialGated GCDStreamingStages MulRegisterSize
   . fmap ((, getSictPrecomp @m ∷ Unsigned (ModSize m)) . bitCoerce)
   . computeModuloSigned @m @(SictIterations m * 2)
   . sictMiLoop @m

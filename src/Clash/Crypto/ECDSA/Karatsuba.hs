@@ -10,7 +10,6 @@ algorithm.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Clash.Crypto.ECDSA.Karatsuba
   ( KaratsubaCycles
@@ -18,7 +17,7 @@ module Clash.Crypto.ECDSA.Karatsuba
   , karatsubaSequentialGated
   ) where
 
-import Clash.Prelude hiding ((++))
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.Extra (apWhen)
 
@@ -39,21 +38,22 @@ type High n = n - n `Div` 2
 -- lower bound @k@. Not meant to be synthesized in the case of large
 -- numbers.
 karatsuba ∷
-  ∀ regSize n m. (KnownNat n, KnownNat m) ⇒
-  SNat regSize →
-  -- ^ The lower bound defining the base case at which standard
+  ∀ (n ∷ Nat) (m ∷ Nat). (KnownNat n, KnownNat m) ⇒
+  -- | The lower bound defining the base case at which standard
   -- multiplication is used instead of another recursive call
+  ∀ k → KnownNat k ⇒
   Unsigned n → Unsigned m → Unsigned (n + m)
-karatsuba regSize@SNat x y | Rewrite ← using @(HalfIsLess (Max n m)) =
-  case (compareSNat (SNat @(n + m)) regSize,
-        compareSNat (SNat @4)       (SNat @(Max n m))) of
-    (SNatGT, SNatLE) → karatsubaInternal size
+karatsuba k x y | Rewrite ← using @(HalfIsLess (Max n m)) =
+  case ( compareSNat (SNat @(n + m)) (SNat @k)
+       , compareSNat (SNat @4) (SNat @(Max n m))
+       ) of
+    (SNatGT, SNatLE) → karatsuba# (Max n m)
     _                → extend x * extend y
  where
-  size = SNat ∷ SNat (Max n m)
-
-  karatsubaInternal ∷ ∀ s. (4 ≤ s, Low s ≤ s) ⇒ SNat s → Unsigned (n + m)
-  karatsubaInternal s@SNat = case compareSNat d4 s of
+  karatsuba# ∷
+    ∀ s → (KnownNat s, 4 ≤ s, Low s ≤ s) ⇒
+    Unsigned (n + m)
+  karatsuba# s = case compareSNat (SNat @4) (SNat @s) of
     SNatGT → extend x * extend y
     SNatLE → resize z0
            + resize (extendRight @(Low s) z1)
@@ -69,9 +69,9 @@ karatsuba regSize@SNat x y | Rewrite ← using @(HalfIsLess (Max n m)) =
     ySum = resize yHigh + resize yLow
 
     z0, z1, z2 ∷ Unsigned ((High s + 1) + (High s + 1))
-    z0 = resize $ karatsuba regSize xLow yLow
-    z2 = resize $ karatsuba regSize xHigh yHigh
-    z3 = karatsuba regSize xSum ySum
+    z0 = resize $ karatsuba k xLow yLow
+    z2 = resize $ karatsuba k xHigh yHigh
+    z3 = karatsuba k xSum ySum
     z1 = z3 - z2 - z0
 
 -- -- * Sequential implementations
@@ -95,74 +95,71 @@ type KaratsubaCycles stages = 2 * (3 ^ stages - 1)
 -- will produce a sequential circuit with latency '52 = 2 * (3 ^ cycles - 1)'
 -- that is able to multiply two 256-bit unsigned numbers.
 karatsubaSequentialGated ∷
-  ∀ streamingStages regSize n m dom s.
-  ( KnownNat streamingStages, KnownDomain dom, HiddenClockResetEnable dom
-  , KnownNat regSize, KnownNat n, KnownNat m, KnownNat s, s ~ Max n m
-  ) ⇒
+  ∀ (n ∷ Nat) (m ∷ Nat) (dom ∷ Domain).
+  (KnownNat n, KnownNat m, HiddenClockResetEnable dom) ⇒
+  ∀ stages → KnownNat stages ⇒
+  ∀ k → KnownNat k ⇒
   Channel dom (Unsigned n, Unsigned m) →
   Channel dom (Unsigned (n + m))
-karatsubaSequentialGated
-  | Rewrite ← using @(HalfIsLess s)
-  = karatsubaSequentialGated# @streamingStages @regSize @n @m @dom @s
-      (toUNat (SNat @streamingStages))
-
--- |The internal function called by `karatsubaSequentialGated`.
-karatsubaSequentialGated# ∷
-  ∀ streamingStages regSize n m dom s.
-  ( KnownNat streamingStages, KnownNat regSize, KnownNat n, KnownNat m
-  , KnownDomain dom, HiddenClockResetEnable dom, KnownNat s, s ~ Max n m
-  , HalfIsLess s, Div2RoundsDown s
-  ) ⇒
-  UNat streamingStages →
-  Channel dom (Unsigned n, Unsigned m) →
-  Channel dom (Unsigned (n + m))
-
--- run combinational karatsuba and release the result
-karatsubaSequentialGated# UZero input
-  = uncurry (karatsuba @regSize SNat) <$> input
-
-karatsubaSequentialGated# (USucc _) input = fromVec <$> guardC done cur
+karatsubaSequentialGated stages k
+  | Rewrite ← using @(HalfIsLess (Max n m))
+  = karatsubaSequentialGated# (Max n m)
+  $ toUNat (SNat @stages)
  where
-  -- Collating these values into a vector on which the algorithm will iterate.
-  cur = keepD @(Vec 3 (BitVector (2 * (High s + 1)))) next
+  {-# NOINLINE karatsubaSequentialGated# #-}
+  karatsubaSequentialGated# ∷
+    ∀ s → (KnownNat s, s ~ Max n m, HalfIsLess s, Div2RoundsDown s) ⇒
+    UNat stages →
+    Channel dom (Unsigned n, Unsigned m) →
+    Channel dom (Unsigned (n + m))
 
-  next
-    = join (toVec <$> input)
-    $ zipRecent (<<+) cur
-    $ fmap pack
-    $ karatsubaSequentialGated @(streamingStages - 1) @regSize
-    $ guardC (not <$> done)
-    $ fmap (bitCoerce @_ @(Unsigned (High s + 1), Unsigned (High s + 1)) . head)
-      cur
+  -- run combinational karatsuba and release the result
+  karatsubaSequentialGated# _ UZero input
+    = uncurry (karatsuba k) <$> input
 
-  done = iteration .== 0
+  karatsubaSequentialGated# s (USucc _) input
+    = fromVec <$> guardC done cur
    where
-    iteration = register (minBound ∷ Index 4)
-      $ apWhen input.hasUpdates (const maxBound)
-      $ apWhen next.hasUpdates (satPred SatBound)
-        iteration
+    -- Collating these values into a vector on which the algorithm will iterate.
+    cur = keepD @(Vec 3 (BitVector (2 * (High s + 1)))) next
 
-  -- Separate the two numbers into a high part and a low part and
-  -- compute the values that'll be given to downstream
-  -- multiplications.
-  toVec (a, b) = bitCoerce
-    $  extend xHigh
-    :> extend yHigh
-    :> extend xLow
-    :> extend @_ @_ @(High s - Low s + 1) yLow
-    :> extend yHigh + extend yLow
-    :> extend xHigh + extend xLow
-    :> Nil
-   where
-    xLow, yLow   ∷ Unsigned (Low s)
-    xHigh, yHigh ∷ Unsigned (High s)
-    (xHigh, xLow) = bitCoerce $ resize a
-    (yHigh, yLow) = bitCoerce $ resize b
+    next
+      = join (toVec <$> input)
+      $ zipRecent (<<+) cur
+      $ fmap pack
+      $ karatsubaSequentialGated (type (stages - 1)) k
+      $ guardC (not <$> done)
+      $ fmap (bitCoerce @_ @(Unsigned (High s + 1), Unsigned (High s + 1)) . head)
+        cur
 
-  fromVec (bitCoerce → (z2, z0, z3))
-    = resize (z0 ∷ Unsigned ((High s + 1) * 2))
-    + resize (extendRight @(Low s) (computeZ1 z3 z2 z0))
-    + resize (extendRight @(Low s + Low s) z2)
+    done = iteration .== 0
+     where
+      iteration = register (minBound ∷ Index 4)
+        $ apWhen input.hasUpdates (const maxBound)
+        $ apWhen next.hasUpdates (satPred SatBound)
+          iteration
+
+    -- Separate the two numbers into a high part and a low part and
+    -- compute the values that'll be given to downstream
+    -- multiplications.
+    toVec (a, b) = bitCoerce
+      $  extend xHigh
+      :> extend yHigh
+      :> extend xLow
+      :> extend @_ @_ @(High s - Low s + 1) yLow
+      :> extend yHigh + extend yLow
+      :> extend xHigh + extend xLow
+      :> Nil
+     where
+      xLow, yLow   ∷ Unsigned (Low s)
+      xHigh, yHigh ∷ Unsigned (High s)
+      (xHigh, xLow) = bitCoerce $ resize a
+      (yHigh, yLow) = bitCoerce $ resize b
+
+    fromVec (bitCoerce → (z2, z0, z3))
+      = resize (z0 ∷ Unsigned ((High s + 1) * 2))
+      + resize (extendRight @(Low s) (computeZ1 z3 z2 z0))
+      + resize (extendRight @(Low s + Low s) z2)
 
 -- * Helper functions.
 
@@ -173,5 +170,5 @@ computeZ1 z3 z2 z0 = z3 - z2 - z0
 
 extendRight ∷
   ∀ b a. (KnownNat a, KnownNat b) ⇒
- Unsigned a → Unsigned (a + b)
+  Unsigned a → Unsigned (a + b)
 extendRight a = bitCoerce (a, 0 ∷ Unsigned b)

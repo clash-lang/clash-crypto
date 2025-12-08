@@ -9,14 +9,16 @@ Some properties that can be proven to be valid from the FIPS 180-4
 specification.
 -}
 
+{-# LANGUAGE MagicHash #-}
+
 module Clash.Crypto.Hash.SHA.Specification.Properties
   ( SHAFacts(..)
-  , KnownSHA(..)
+  , KnownSHA
+  , knownSHA
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
-import Data.Proxy (Proxy(..))
 import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Hash.SHA.Specification.Types
@@ -46,21 +48,23 @@ data SHAFacts (alg ∷ SHA) where
     , BlockSize alg ~ 16 * WordSize alg
     , MessageDigestSize alg `Mod` 8 ~ 0
     ) ⇒
-    Proxy alg →
     SHAFacts alg
 
 -- | We utilize the type checker to provide evidence for all of the
 -- required properties, which are proven automatically for each
 -- instance of the class.
-class    KnownSHA alg       where knownSHA ∷ SHAFacts alg
+class    KnownSHA alg       where knownSHA# ∷ SHAFacts alg
 instance
  {-# DEPRECATED
    [ "SHA1 phases out by Dec. 31, 2030 and shall not be used in modern"
    , "applications any more (cf. https://doi.org/10.6028/NIST.SP.800-131Ar2)."
-   ] #-} KnownSHA SHA1      where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA224    where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA256    where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA384    where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA512    where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA512224 where knownSHA = SHAFacts Proxy
-instance KnownSHA SHA512256 where knownSHA = SHAFacts Proxy
+   ] #-} KnownSHA SHA1      where knownSHA# = SHAFacts
+instance KnownSHA SHA224    where knownSHA# = SHAFacts
+instance KnownSHA SHA256    where knownSHA# = SHAFacts
+instance KnownSHA SHA384    where knownSHA# = SHAFacts
+instance KnownSHA SHA512    where knownSHA# = SHAFacts
+instance KnownSHA SHA512224 where knownSHA# = SHAFacts
+instance KnownSHA SHA512256 where knownSHA# = SHAFacts
+
+knownSHA ∷ ∀ (alg ∷ SHA) → KnownSHA alg ⇒ SHAFacts alg
+knownSHA alg = knownSHA# @alg

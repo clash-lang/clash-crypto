@@ -9,8 +9,6 @@ Streaming based secure hash algorithms according to
 [FIPS PUB 180-4: Secure Hash Standard (SHS)](http://dx.doi.org/10.6028/NIST.FIPS.180-4).
 -}
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
-
 module Clash.Crypto.Hash.SHA
   ( -- * Streaming Implementation
     SHA(..)
@@ -20,7 +18,7 @@ module Clash.Crypto.Hash.SHA
     WordSize, BlockSize, MessageDigestSize, HashValueWords
   , ScheduleCount, SHAWord, MessageBlock, HashValue, Message
     -- * Additional Evidence
-  , KnownSHA(..), SHAFacts(..)
+  , KnownSHA, SHAFacts(..), knownSHA
   ) where
 
 import Clash.Prelude
@@ -47,15 +45,15 @@ import Clash.Crypto.Hash.SHA.Streaming.Padding
 -- selected hash algorithm. It is released after the arrival of a
 -- message's end frame and the calculation of the hash.
 sha ∷
-  ∀ (alg ∷ SHA) (dom ∷ Domain) (n ∷ Nat).
-  (KnownSHA alg, KnownDomain dom, HiddenClockResetEnable dom) ⇒
-  (KnownNat n, 1 ≤ n, n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
+  ∀ (n ∷ Nat) (dom ∷ Domain).
+  (KnownNat n, HiddenClockResetEnable dom, 1 ≤ n) ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  (n ≤ BlockSize alg, Mod (BlockSize alg) n ~ 0) ⇒
   DataStream dom () (Index n) (BitVector n) →
   -- ^ streamed input messages
   Channel dom (Digest alg)
   -- ^ result channel
-sha
-  | SHAFacts{} ← knownSHA @alg
-  = fmap (toDigest @alg)
-  . hashStream @alg @dom @n
-  . padMessageStream @alg
+sha alg
+  = fmap (toDigest alg)
+  . hashStream alg
+  . padMessageStream alg
