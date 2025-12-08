@@ -218,6 +218,18 @@ instructions ∷
     (Instr (SomeRoutine group) (RepetitionBound main) stackSize a)
 instructions _ r = instructionVec (Instructions r)
 
+instructions' ∷
+  ∀ {group} (stackSize ∷ Nat) (a ∷ Type).
+  ∀ (main ∷ group) →
+  ∀ (routine ∷ group) →
+  KnownInstructions
+    (RepetitionBound main) stackSize a (Instructions routine) ⇒
+  Vec (InstructionCount routine)
+    (Instr group (RepetitionBound main) stackSize a)
+instructions' m r = mapInstructionR f <$> instructions m r
+ where
+  f (SomeRoutine @r' _) = routine r'
+
 --------------------------------------------------------------------------------
 
 -- | Links a type-level list of instructions with a routine reference
@@ -257,6 +269,15 @@ class InstructionPointer (main ∷ group) ptr where
         (RequiredStackSize main)
         a
       )
+
+mapInstructionR ∷ (r → r') → Instruction r n m k p a → Instruction r' n m k p a
+mapInstructionR f = \case
+  PUT a → PUT a
+  POP n → POP n
+  SWP m → SWP m
+  CUP m → CUP m
+  RUN k r → RUN k (f r)
+  CLU p i → CLU p i
 
 -- | A convenience type for defining instruction pointers.
 data RIndex (main ∷ group) (subroutine ∷ group) = RIndex

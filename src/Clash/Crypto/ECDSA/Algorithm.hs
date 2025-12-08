@@ -1,5 +1,7 @@
+{-# OPTIONS_GHC -funfolding-creation-threshold=0 #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 -- | Algorithm to sign a payload using ECDSA expressed in the instructions of
 -- the calculator. In the documentation stacks are represented as an
@@ -38,12 +40,12 @@ type family GY c where GY ('Curve _ _ _ _ '(_, y) _) = y
 type family N  c where N  ('Curve _ _ _ _ '(_, _) n) = n
 
 type KnownCurve c =
-  ( KnownNat (Q c)
-  , KnownNat (QL c)
+  ( KnownNat (QL c)
   , KnownNat (A c)
   , KnownNat (B c)
   , KnownNat (GX c)
   , KnownNat (GY c)
+  , KnownNat (Q c)
   , KnownNat (N c)
   )
 
