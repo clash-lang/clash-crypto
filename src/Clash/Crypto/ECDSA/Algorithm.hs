@@ -138,159 +138,166 @@ type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
 type instance Compare (r₁ ∷ Routine p a c) (r₂ ∷ Routine p a c) =
   Compare (RoutineIndex r₁) (RoutineIndex r₂)
 
-instance KnownCurve c => KnownRoutine (IsZero ∷ Routine Nat Nat c) where
+type Q'  = Q SECP256R1
+type N'  = N SECP256R1
+type QL' = QL SECP256R1
+type GX' = GX SECP256R1
+type GY' = GY SECP256R1
+type A'  = A SECP256R1
+
+instance KnownRoutine (IsZero ∷ Routine Nat Nat SECP256R1) where
   routine _ = IsZero
   knownRoutine = RoutineFacts
-  type Instructions (IsZero ∷ Routine Nat Nat c) =
+  type Instructions (IsZero ∷ Routine Nat Nat SECP256R1) =
     -- x
    '[ CUP 0
     , PUT 1
-    , SUB (Q c)
-    , PUT (QL c)
-    , BIT (Q c)
+    , SUB Q'
+    , PUT QL'
+    , BIT Q'
     -- (msb(x-1)=1) x
     , SWP 1
-    , PUT (QL c)
-    , BIT (Q c)
+    , PUT QL'
+    , BIT Q'
     -- (msb(x)=1) (msb(x-1)=1)
     , PUT 1
     , SWP 1
-    , SUB (Q c)
-    , MUL (Q c)
+    , SUB Q'
+    , MUL Q'
     -- (msb(x)=0 ∧ msb(x-1)=1)
     -- (x=0)
     ]
 
-instance KnownCurve c => KnownRoutine (PointAdd ∷ Routine Nat Nat c) where
+instance KnownRoutine (PointAdd ∷ Routine Nat Nat SECP256R1) where
   routine _ = PointAdd
   knownRoutine = RoutineFacts
-  type Instructions (PointAdd ∷ Routine Nat Nat c) =
+  type Instructions (PointAdd ∷ Routine Nat Nat SECP256R1) =
     -- {r₁} {r₂}
     -- x₁ y₁ x₂ y₂
    '[ CUP 3
     , CUP 2
-    , SUB (Q c)
+    , SUB Q'
     , RUN 1 IsZero
     -- (y₁=y₂) {r₁} {r₂}
     , CUP 3
     , CUP 2
-    , SUB (Q c)
+    , SUB Q'
     , RUN 1 IsZero
     -- (x₁=x₂) (y₁=y₂) {r₁} {r₂}
-    , MUL (Q c)
+    , MUL Q'
     -- (r₁=r₂) {r₁} {r₂}
     , PUT 1
     , CUP 1
-    , SUB (Q c)
+    , SUB Q'
     -- (r₁≠r₂) (r₁=r₂) {r₁} {r₂}
     , CUP 2
     , CUP 5
-    , SUB (Q c)
-    , MUL (Q c)
+    , SUB Q'
+    , MUL Q'
     -- (r₁≠r₂)·(x₁-x₂) (r₁=r₂) {r₁} {r₂}
     , CUP 3
     , CUP 0
-    , ADD (Q c)
+    , ADD Q'
     , CUP 2
-    , MUL (Q c)
+    , MUL Q'
     -- (r₁=r₂)·2y₁ (r₁≠r₂)·(x₁-x₂) (r₁=r₂) {r₁} {r₂}
-    , ADD (Q c)
+    , ADD Q'
     -- d (r₁=r₂) {r₁} {r₂}
     -- d (r₁=r₂) {r₁} {r₂}
     , CUP 5
     , RUN 1 IsZero
     , CUP 5
     , RUN 1 IsZero
-    , MUL (Q c)
+    , MUL Q'
     -- (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 4
     , RUN 1 IsZero
     , CUP 4
     , RUN 1 IsZero
-    , MUL (Q c)
+    , MUL Q'
     -- (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , PUT 1
     , CUP 3
     , RUN 1 IsZero
-    , SUB (Q c)
+    , SUB Q'
     -- (d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , PUT 1
     , CUP 3
-    , SUB (Q c)
+    , SUB Q'
     , PUT 1
     , CUP 3
-    , SUB (Q c)
-    , MUL (Q c)
-    , MUL (Q c)
+    , SUB Q'
+    , MUL Q'
+    , MUL Q'
     -- (r₁≠O ∧ r₂≠O ∧ d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     -- valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 6
     , CUP 9
-    , SUB (Q c)
+    , SUB Q'
     , PUT 1
     , CUP 6
-    , SUB (Q c)
-    , MUL (Q c)
+    , SUB Q'
+    , MUL Q'
     -- (r1≠r₂)·(y₁-y₂) valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 6
     , CUP 0
-    , MUL (Q c)
+    , MUL Q'
     , CUP 0
     , CUP 0
-    , ADD (Q c)
-    , ADD (Q c)
-    , PUT (A c)
-    , ADD (Q c)
+    , ADD Q'
+    , ADD Q'
+    , PUT A'
+    , ADD Q'
     , CUP 6
-    , MUL (Q c)
+    , MUL Q'
     -- (r₁=r₂)·(3x₁²+A) (r₁≠r₂)·(y₁-y₂) valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , ADD (Q c)
+    , ADD Q'
     , CUP 4
     , PUT 0
-    , INV (Q c)
-    , MUL (Q c)
+    , INV Q'
+    , MUL Q'
     -- s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 0
     , CUP 0
-    , MUL (Q c)
+    , MUL Q'
     , CUP 7
-    , SUB (Q c)
+    , SUB Q'
     , CUP 9
-    , SUB (Q c)
+    , SUB Q'
     -- (s²-x₁-x₂) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     -- x' s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 2
-    , MUL (Q c)
+    , MUL Q'
     -- x'·valid s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 7
     , CUP 5
-    , MUL (Q c)
-    , ADD (Q c)
+    , MUL Q'
+    , ADD Q'
     -- (x'·valid + x₁·(r₂=O)) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 9
     , CUP 4
-    , MUL (Q c)
-    , ADD (Q c)
+    , MUL Q'
+    , ADD Q'
     -- (x'·valid + x₁·(r₂=O) + x₂·(r₁=O)) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     -- x s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 7
     , CUP 1
-    , SUB (Q c)
+    , SUB Q'
     , CUP 2
-    , MUL (Q c)
+    , MUL Q'
     , CUP 9
-    , SUB (Q c)
+    , SUB Q'
     , CUP 3
-    , MUL (Q c)
+    , MUL Q'
     -- y·valid x s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , CUP 9
     , CUP 6
-    , MUL (Q c)
-    , ADD (Q c)
+    , MUL Q'
+    , ADD Q'
     , CUP 11
     , CUP 5
-    , MUL (Q c)
-    , ADD (Q c)
+    , MUL Q'
+    , ADD Q'
     -- y x s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
     , SWP 11
     , POP 1
@@ -301,21 +308,21 @@ instance KnownCurve c => KnownRoutine (PointAdd ∷ Routine Nat Nat c) where
     -- {r}
     ]
 
-instance KnownCurve c => KnownRoutine (PointScalarMulStep ∷ Routine Nat Nat c) where
+instance KnownRoutine (PointScalarMulStep ∷ Routine Nat Nat SECP256R1) where
   routine _ = PointScalarMulStep
   knownRoutine = RoutineFacts
-  type Instructions (PointScalarMulStep ∷ Routine Nat Nat c) =
+  type Instructions (PointScalarMulStep ∷ Routine Nat Nat SECP256R1) =
     -- {acc} {2^bit·r} s bit
    '[ CUP 4
     , CUP 6
-    , BIT (Q c)
+    , BIT Q'
     -- s[bit] {acc} {2^bit·r} s bit
     , CUP 0
     , CUP 5
-    , MUL (Q c)
+    , MUL Q'
     , SWP 1
     , CUP 4
-    , MUL (Q c)
+    , MUL Q'
     -- {s[bit]·2^bit·r} {acc} {2^bit·r} s bit
     , RUN 1 PointAdd
     -- {acc'} {2^bit·r} s bit
@@ -331,16 +338,16 @@ instance KnownCurve c => KnownRoutine (PointScalarMulStep ∷ Routine Nat Nat c)
     -- {acc'} {2^(bit+1)·r} s bit
     , CUP 5
     , PUT 1
-    , ADD (Q c)
+    , ADD Q'
     , SWP 6
     , POP 1
     -- {acc'} {2^bit'·r} s bit'
     ]
 
-instance KnownCurve c => KnownRoutine (PointScalarMul ∷ Routine Nat Nat c) where
+instance KnownRoutine (PointScalarMul ∷ Routine Nat Nat SECP256R1) where
   routine _ = PointScalarMul
   knownRoutine = RoutineFacts
-  type Instructions (PointScalarMul ∷ Routine Nat Nat c) =
+  type Instructions (PointScalarMul ∷ Routine Nat Nat SECP256R1) =
     -- {r} s
    '[ PUT 0
     , SWP 3
@@ -360,28 +367,28 @@ instance KnownCurve c => KnownRoutine (PointScalarMul ∷ Routine Nat Nat c) whe
     -- {s·r}
     ]
 
-instance KnownCurve c ⇒ KnownRoutine (SignHash ∷ Routine Nat Nat c) where
+instance KnownCurve c ⇒ KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
   routine _ = SignHash
   knownRoutine = RoutineFacts
-  type Instructions (SignHash ∷ Routine Nat Nat c) =
+  type Instructions (SignHash ∷ Routine Nat Nat SECP256R1) =
     -- h k d
    '[ CUP 1
-    , PUT (GY c)
-    , PUT (GX c)
+    , PUT GY'
+    , PUT GX'
     , RUN 1 PointScalarMul
     -- {kG} h k d
     , PUT 0
-    , ADD (N c)
+    , ADD N'
     -- r _ h k d
     , CUP 4
     , CUP 1
-    , MUL (N c)
+    , MUL N'
     , CUP 3
-    , ADD (N c)
+    , ADD N'
     , CUP 4
     , PUT 0
-    , INV (N c)
-    , MUL (N c)
+    , INV N'
+    , MUL N'
     -- s r _ h k d
     , SWP 5
     , POP 1
