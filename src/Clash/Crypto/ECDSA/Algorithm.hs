@@ -367,7 +367,7 @@ instance KnownRoutine (PointScalarMul ∷ Routine Nat Nat SECP256R1) where
     -- {s·r}
     ]
 
-instance KnownCurve c ⇒ KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
+instance KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
   routine _ = SignHash
   knownRoutine = RoutineFacts
   type Instructions (SignHash ∷ Routine Nat Nat SECP256R1) =
