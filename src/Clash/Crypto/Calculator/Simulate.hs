@@ -23,6 +23,7 @@ import Clash.Crypto.Calculator.ISA
   , Instruction(..)
   , RequiredStackSize
   , CluInstruction
+  , ECPrime
   )
 import qualified Clash.Crypto.Calculator.ISA as Calc
 
@@ -37,7 +38,7 @@ run r as
 
 runInstructions ∷
   (Foldable f, Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
-  f (Instruction (SomeRoutine r) n m k p a) →
+  f (Instruction (SomeRoutine r) n m k ECPrime a) →
   [a] → Maybe [a]
 runInstructions is as0 = foldl' step (Just as0) is
  where
@@ -60,12 +61,11 @@ traceInstructionsM ∷
   , Show r
   , Integral n, Integral m, Show n, Show m
   , Num k, Enum k, Show k
-  , Show p
   , CalculatorNum a
   ) ⇒
   (String → t ()) →
   (a → a) →
-  f (Instruction (SomeRoutine r) n m k p a) →
+  f (Instruction (SomeRoutine r) n m k ECPrime a) →
   [a] → t (Maybe [a])
 traceInstructionsM write simplify is (fmap simplify → as0) = do
   write (showStack $ Just as0)
@@ -77,7 +77,8 @@ traceInstructionsM write simplify is (fmap simplify → as0) = do
     return Nothing
   step (Just as) i = do
     write $ show i
-    as' ← fmap (fmap (fmap simplify)) $ traceInstructionM (const $ pure ()) simplify i as
+    as' ← fmap (fmap (fmap simplify))
+        $ traceInstructionM (const $ pure ()) simplify i as
     write (showStack as')
     rnf as' `seq` return as'
 
@@ -91,7 +92,7 @@ showStack (Just as) = intercalate " " $ map (($ "") . showsPrec 11) as
 
 runInstruction ∷
   (Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
-  Instruction (SomeRoutine r) n m k p a →
+  Instruction (SomeRoutine r) n m k ECPrime a →
   [a] → Maybe [a]
 runInstruction i as = runIdentity $ traceInstructionM (const $ pure ()) id i as
 
@@ -99,7 +100,7 @@ traceInstructionM ∷
   (Monad t, Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
   (String → t ()) →
   (a → a) →
-  Instruction (SomeRoutine r) n m k p a →
+  Instruction (SomeRoutine r) n m k ECPrime a →
   [a] → t (Maybe [a])
 traceInstructionM write simplify = go
  where
@@ -126,23 +127,23 @@ traceInstructionM write simplify = go
    where
     runMaybe Nothing = pure Nothing
     runMaybe (Just as) = traceM r write simplify as
-  go (CLU _ i) as
-    = pure $ runOp i as
+  go (CLU p i) as
+    = pure $ runOp p i as
 
 class (Num a, BitPack a, Show a, NFData a) ⇒ CalculatorNum a where
-  add ∷ a → a → a
-  sub ∷ a → a → a
-  mul ∷ a → a → a
-  inv ∷ a → a → a
-  bit ∷ a → a → a
+  add ∷ ECPrime → a → a → a
+  sub ∷ ECPrime → a → a → a
+  mul ∷ ECPrime → a → a → a
+  inv ∷ ECPrime → a → a → a
+  bit ∷           a → a → a
 
-runOp ∷ CalculatorNum a ⇒ CluInstruction → [a] → Maybe [a]
-runOp Calc.Add (a:b:as) = Just $ (add b a):as
-runOp Calc.Sub (a:b:as) = Just $ (sub b a):as
-runOp Calc.Inv (a:b:as) = Just $ (inv b a):as
-runOp Calc.Mul (a:b:as) = Just $ (mul b a):as
-runOp Calc.Bit (a:b:as) = Just $ (bit b a):as
-runOp _        _        = Nothing
+runOp ∷ forall a. CalculatorNum a ⇒  ECPrime → CluInstruction → [a] → Maybe [a]
+runOp p Calc.Add (a:b:as) = Just $ (add p b a):as
+runOp p Calc.Sub (a:b:as) = Just $ (sub p b a):as
+runOp p Calc.Inv (a:b:as) = Just $ (inv p b a):as
+runOp p Calc.Mul (a:b:as) = Just $ (mul p b a):as
+runOp _ Calc.Bit (a:b:as) = Just $ (bit b a):as
+runOp _ _        _        = Nothing
 
 data SymbolicNum l r where
   Lit ∷ l → SymbolicNum l r
@@ -237,16 +238,19 @@ instance BitPack (FixChoice (SymbolicNum l) r) where
   pack = error "unsupported"
   unpack = error "unsupported"
 
-instance (Show l, Num l, Eq l, NFData l) ⇒ CalculatorNum (Fix (SymbolicNum l)) where
-  x `add` y = Fix $ x `Add` y
-  x `sub` y = Fix $ x `Sub` y
-  x `mul` y = Fix $ x `Mul` y
-  inv x z   = Fix $ Inv x z
+instance (Show l, Num l, Eq l, NFData l) ⇒
+ CalculatorNum (Fix (SymbolicNum l)) where
+  add _ x y = Fix $ x `Add` y
+  sub _ x y = Fix $ x `Sub` y
+  mul _ x y = Fix $ x `Mul` y
+  inv _ x z = Fix $ Inv x z
   bit x b   = Fix $ Bit x b
 
-instance (Show l, Num l, Eq l, NFData l, forall r . Show r ⇒ Show (f r), forall r . NFData r => NFData (f r)) ⇒ CalculatorNum (FixChoice (SymbolicNum l) f) where
-  x `add` y = FixLeft $ x `Add` y
-  x `sub` y = FixLeft $ x `Sub` y
-  x `mul` y = FixLeft $ x `Mul` y
-  inv x z   = FixLeft $ Inv x z
+instance (Show l, Num l, Eq l, NFData l, forall r . Show r ⇒ Show (f r),
+ forall r . NFData r => NFData (f r)) ⇒
+ CalculatorNum (FixChoice (SymbolicNum l) f) where
+  add _ x y = FixLeft $ x `Add` y
+  sub _ x y = FixLeft $ x `Sub` y
+  mul _ x y = FixLeft $ x `Mul` y
+  inv _ x z = FixLeft $ Inv x z
   bit x b   = FixLeft $ Bit x b

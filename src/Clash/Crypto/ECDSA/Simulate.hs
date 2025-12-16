@@ -4,7 +4,6 @@ module Clash.Crypto.ECDSA.Simulate where
 
 import Prelude
 import Clash.Crypto.Calculator.Simulate (SymbolicNum, FixChoice(..))
-import Clash.Crypto.ECDSA.Algorithm (Curve(..))
 import qualified Clash.Crypto.Calculator.Simulate as Sim
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)

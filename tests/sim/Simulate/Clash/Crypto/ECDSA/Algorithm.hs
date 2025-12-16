@@ -1,5 +1,8 @@
 {-# LANGUAGE MagicHash #-}
-module Simulate.Clash.Crypto.ECDSA.Algorithm where
+
+{-# OPTIONS_GHC -Wno-orphans #-}
+
+module Simulate.Clash.Crypto.ECDSA.Algorithm (tastyTests) where
 
 import Clash.Crypto.ECDSA.Algorithm
 
@@ -9,7 +12,7 @@ import Clash.Prelude hiding (Mod)
 import Clash.Crypto.Calculator.Simulate
 
 import qualified Data.Modular as Modular
-import Clash.Crypto.Calculator.Modulo (Mod)
+import Clash.Crypto.Calculator.Modulo (Mod, ModSize)
 import Data.Maybe (fromMaybe)
 import Hedgehog
 import Control.DeepSeq (NFData)
@@ -22,13 +25,15 @@ import qualified Data.ByteString as BS
 import qualified Crypto.Hash as Hash
 import Crypto.Error (throwCryptoError)
 import Crypto.PubKey.ECC.P256
+import Clash.Crypto.Calculator.ISA (ECPrime(..))
+import Data.Bifunctor (Bifunctor(..))
 
 tastyTests :: TestTree
 tastyTests = localOption (HedgehogTestLimit (Just 100)) $
   testGroup "Clash.Crypto.ECDSA.Algorithm"
   [
     testProperty "Test SignHash against crypton" $ property $ do
-    uHash <- forAll $ genUnsigned $ Range.linear 1 (maxBound :: Unsigned 256)
+    uHash <- forAll $ genUnsigned $ Range.linear 0 (maxBound :: Unsigned 256)
     k     <- forAll $ genUnsigned
      $ Range.linear 1 (bitCoerce $ (maxBound :: Mod N') :: Unsigned 256)
     pKey  <- forAll $ genUnsigned
@@ -46,9 +51,11 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
         scalarKey = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy bsKey
         ref = signatureToIntegers Proxy
           <$> signDigestWith @Curve_P256R1 Proxy scalarK scalarKey bsDigest
-        impl = pointFromList <$> runSignHash (bitCoerce <$> [uHash, pKey, k])
+        impl = pointFromList <$> runSignHash (bitCoerce <$> [uHash, k, pKey])
     ref === impl
     ,
+    -- This test sometimes fails because of a bug in `crypton`. It tends to fail
+    -- when one of the points is O.
     testProperty "Test point addition" $ property $ do
     x1 <- forAll $ genUnsigned
      $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
@@ -84,7 +91,7 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
         ref  = pointToIntegers $ pointMul scal p1
         impl = pointFromList
              $ fromMaybe (error "Routines in tests should always return")
-             $ runPointAdd $ bitCoerce <$> [x,y,s]
+             $ runPointMul $ bitCoerce <$> [x,y,s]
     ref === impl
     ,
     testProperty "Test IsZero" $ property $ do
@@ -118,9 +125,10 @@ runPointMul = run (PointScalarMul :: Routine Nat Nat SECP256R1)
 runIsZero :: [Mod Q'] -> Maybe [Mod Q']
 runIsZero = run (IsZero :: Routine Nat Nat SECP256R1)
 
-invMod :: forall a. (KnownNat a, 1 <= a) => Mod a -> Integer
-invMod
-  = Modular.unMod
+invMod :: forall a -> (KnownNat a, 1 <= a) => Mod a -> Mod a
+invMod a
+  = fromInteger
+  . Modular.unMod
   . fromMaybe (error "The inverse always exists in a prime field.")
   . Modular.inv @a
   . Modular.toMod
@@ -128,11 +136,25 @@ invMod
 
 instance NFData (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff)
 
--- Weird enough
+makeOp :: forall a . (KnownNat a, 1 <= a) =>
+ forall b -> (KnownNat b, 1 <= b, ModSize a ~ ModSize b) =>
+  (forall f. (KnownNat f, 1 <= f) => Mod f -> Mod f -> Mod f) ->
+  Mod a -> Mod a -> Mod a
+makeOp b op = curry $ bitCoerce . uncurry (op @b) . bimap bitCoerce bitCoerce
+
 instance CalculatorNum (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff) where
-  add = (+)
-  sub = (-)
-  mul = (*)
-  inv a b = fromInteger $
-   if b == natToNum @Q' then invMod @Q' a else invMod @N' $ bitCoerce a
-  bit a = bitCoerce . resize . bitCoerce @_ @(Unsigned 1) . testBit a . fromEnum
+  add p = case p of
+    SecP256Mod -> (+)
+    SecP256Ord -> makeOp N' (+)
+  sub p = case p of
+    SecP256Mod -> (-)
+    SecP256Ord -> makeOp N' (-)
+  mul p = case p of
+    SecP256Mod -> (*)
+    SecP256Ord -> makeOp N' (*)
+  inv p a b =
+   if a == 0 then b else
+    (case p of
+     SecP256Mod -> invMod Q'
+     SecP256Ord -> bitCoerce . invMod N' . bitCoerce) a
+  bit a = bitCoerce . extend . bitCoerce @_ @(Unsigned 1) . testBit a . fromEnum

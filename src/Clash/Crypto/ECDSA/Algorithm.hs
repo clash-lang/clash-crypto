@@ -133,7 +133,7 @@ type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
   RoutineIndex PointScalarMul         = 1
   RoutineIndex PointScalarMulStep     = 2
   RoutineIndex PointAdd               = 3
-  RoutineIndex IsZero              = 4
+  RoutineIndex IsZero                 = 4
 
 type instance Compare (r₁ ∷ Routine p a c) (r₂ ∷ Routine p a c) =
   Compare (RoutineIndex r₁) (RoutineIndex r₂)
