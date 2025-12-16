@@ -21,14 +21,14 @@ import Clash.Prelude hiding (print, Mod)
 import Clash.Annotations.TH (makeTopEntity)
 import Language.Haskell.Unicode (type (≤))
 
-import Clash.Cores.Uart (uart)
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-
 import Clash.Promoted.List
 import Clash.Crypto.Calculator.ISA
+import Clash.Crypto.Calculator.Modulo
 import Clash.Crypto.ECDSA.Routines
-import Clash.Crypto.ECDSA.Modulo
+
+import Hitl.Clash.Cores.Uart (uart)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

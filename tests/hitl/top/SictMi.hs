@@ -7,17 +7,16 @@ module SictMi where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.InverseModulo (sictMiSequential, deriveSictPrecomp)
+import Clash.Crypto.Calculator.InverseModulo (sictMiSequential, deriveSictPrecomp)
+import Clash.Crypto.Calculator.ISA (SecP256ModPrime)
 
-import Hitlt.Shared (Q)
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
-deriveSictPrecomp Q
+deriveSictPrecomp SecP256ModPrime
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -32,6 +31,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom12 Bit
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . sictMiSequential @Q . cachedFromMaybe . bulkRead
+  $ newsfeed . sictMiSequential @SecP256ModPrime . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

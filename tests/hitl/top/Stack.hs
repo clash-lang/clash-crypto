@@ -8,14 +8,13 @@ import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
 import Data.Maybe (fromMaybe)
 
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-
 import Clash.Sized.Stack (stack)
 import Clash.Sized.Stack (StackAction(Pop))
 
-import Hitlt.Shared (StackPadding, StackSize, StackValueSize)
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Sized.Stack (StackPadding, StackSize, StackValueSize)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

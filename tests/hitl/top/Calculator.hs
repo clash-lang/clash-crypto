@@ -12,16 +12,15 @@ module Calculator where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.Calculator
 import Clash.Crypto.Calculator.ISA
 
-import Hitlt.Clash.Crypto.Calculator
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Test.Clash.Crypto.Calculator (TestRoutines(..), TestIP)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -37,8 +36,8 @@ topEntity ∷
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-      . calculator Main HitltIP 2 72
+      . calculator Main TestIP 2 72
       . cachedFromMaybe
-      . bulkRead @(Vec 2 (CMod SecP256Mod))
+      . bulkRead @(Vec 2 ECMod)
 
 makeTopEntity 'topEntity

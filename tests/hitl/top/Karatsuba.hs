@@ -5,14 +5,13 @@ module Karatsuba (topEntity) where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequential)
+import Clash.Crypto.Calculator.Karatsuba (karatsubaSequential)
 
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

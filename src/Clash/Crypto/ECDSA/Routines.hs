@@ -12,8 +12,6 @@ import Data.Type.Ord (Compare)
 
 import Clash.Crypto.Calculator.ISA
 
-type Q = CPrime SecP256Mod
-
 -- TODO
 data EcdsaRoutines
   = Main
@@ -42,16 +40,16 @@ instance KnownRoutine Main where
      , PUT 4
      , PUT 5
      , RUN 1 Increment
-     , ADD Q
+     , ADD SecP256ModPrime
      , RUN 2 Inc3
      , POP 1
      , PUT 7
      , CUP 0
-     , SUB Q
+     , SUB SecP256ModPrime
      , PUT 8
-     , MUL Q
+     , MUL SecP256ModPrime
      , CUP 2
-     , INV Q
+     , INV SecP256ModPrime
      ]
 
 instance KnownRoutine Increment where
@@ -59,7 +57,7 @@ instance KnownRoutine Increment where
   knownRoutine = RoutineFacts
   type Instructions Increment =
     '[ PUT 1
-     , ADD Q
+     , ADD SecP256ModPrime
      ]
 
 instance KnownRoutine Inc3 where

@@ -14,8 +14,8 @@ import Clash.Prelude hiding (Mod, Bit, unzip)
 
 import Clash.Crypto.Calculator.ISA (CluInstruction(..))
 
-import Clash.Crypto.ECDSA.InverseModulo (fltCtmiE)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialModulo)
+import Clash.Crypto.Calculator.InverseModulo (fltCtmiE)
+import Clash.Crypto.Calculator.Karatsuba (karatsubaSequentialModulo)
 import Clash.Signal.Channel (Channel, delayC, guardC, unzipC, zipRecent)
 
 -- | The Cryptographic Logic Unit (CLU) executing the given operation

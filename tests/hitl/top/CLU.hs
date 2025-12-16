@@ -6,15 +6,14 @@ module CLU where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.Calculator.CLU
+import Clash.Crypto.Calculator.CLU (clu)
 
-import Hitlt.Clash.Crypto.Calculator.CLU (CluInput)
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

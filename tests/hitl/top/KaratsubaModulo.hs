@@ -5,16 +5,15 @@ module KaratsubaModulo (topEntity) where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.Modulo (ModSize)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialModulo)
+import Clash.Crypto.Calculator.ISA (SecP256ModPrime)
+import Clash.Crypto.Calculator.Karatsuba (karatsubaSequentialModulo)
+import Clash.Crypto.Calculator.Modulo (ModSize)
 
-import Hitlt.Shared (Q)
-import Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -30,8 +29,8 @@ topEntity ∷
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-     . karatsubaSequentialModulo @(ModSize Q) 3 40
-     . fmap (, natToNum @Q)
+     . karatsubaSequentialModulo @(ModSize SecP256ModPrime) 3 40
+     . fmap (, natToNum @SecP256ModPrime)
      . cachedFromMaybe
      . bulkRead
 

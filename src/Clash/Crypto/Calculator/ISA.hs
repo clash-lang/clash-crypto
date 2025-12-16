@@ -26,7 +26,7 @@ import Data.Kind (Type)
 import Clash.Promoted.Integer
 import Clash.Promoted.List
 
-import Clash.Crypto.ECDSA.Modulo (Mod)
+import Clash.Crypto.Calculator.Modulo (Mod)
 
 --------------------------------------------------------------------------------
 

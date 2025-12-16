@@ -55,17 +55,16 @@ import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
 import Clash.Crypto.Calculator.ISA
-  ( CluInstruction(..), ECPrime(..), CPrime, CMod
+  ( CluInstruction(..), ECPrime(..), CPrime, CMod, ECMod, SecP256ModPrime
   )
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
+import Clash.Crypto.Calculator.Modulo (Mod, ModSize, createMod)
 
-import Hitlt.Clash.Crypto.Calculator.CLU (CluInput)
-import Hitlt.Shared
-  ( Q, StackSize, StackValueSize, StackPadding
-  , isReadyIndicator
-  )
-import Hitlt.Clash.Crypto.Calculator
-import Hitlt.Clash.Crypto.Calculator.InverseModulo
+import Test.Clash.Crypto.Calculator
+import Test.Clash.Crypto.Calculator.InverseModulo
+
+import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
+import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
+import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
 
 import Shake
   ( ShakeOptions(..), Verbosity(..)
@@ -111,7 +110,11 @@ main = do
     = defaultMain
     $ localOption (HedgehogTestLimit (Just 100))
     $ testGroup "Clash Crytpo HITL tests"
-        [ testGroup "Clash.Crypto.Hash.SHA"
+        [ localOption (HedgehogTestLimit (Just 10))
+        $ testGroup "Clash.Sized.Stack"
+            [ testStack "Stack" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
               -- times of the downstream tools for these are too
               -- exorbitant.
@@ -122,14 +125,14 @@ main = do
         , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
             ]
-        , testGroup "Clash.Crypto.ECDSA.Karatsuba"
+        , testGroup "Clash.Crypto.Calculator.Karatsuba"
             [ testKaratsuba "Karatsuba" sem dev settings
             , testKaratsubaModulo "KaratsubaModulo" sem dev settings
             ]
-        , testGroup "Clash.Crypto.ECDSA.Modulo"
+        , testGroup "Clash.Crypto.Calculator.Modulo"
             [ testModulo "Modulo" sem dev settings
             ]
-        , testGroup "Clash.Crypto.ECDSA.InverseModulo"
+        , testGroup "Clash.Crypto.Calculator.InverseModulo"
             [ testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
             , testInverseModulo "FltCtmi" sem dev settings
@@ -137,10 +140,6 @@ main = do
             -- It might be related to the following issue:
             -- https://github.com/YosysHQ/nextpnr/issues/208
             -- , testInverseModulo "SictMi" sem dev settings
-            ]
-        , localOption (HedgehogTestLimit (Just 10))
-        $ testGroup "Clash.Sized.Stack"
-            [ testStack "Stack" sem dev settings
             ]
         , testGroup "Clash.Crypto.Calculator.CLU"
             [ testCLU "CLU" sem dev settings
@@ -220,7 +219,7 @@ main = do
     TestTree
   testInverseModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ Mod Q ← genMod
+        x ∷ ECMod ← genMod
         runHitltInverseModulo sem dev settings x
 
   testModulo ∷
@@ -254,8 +253,8 @@ main = do
     TestTree
   testKaratsubaModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ Mod Q ← genMod
-        y ∷ Mod Q ← genMod
+        x ∷ ECMod ← genMod
+        y ∷ ECMod ← genMod
         runHitltKaratsubaModulo sem dev settings x y
 
   testSHA ∷
@@ -318,11 +317,11 @@ runHitltCLU sem dev settings (op, (x, y)) =
   runHitlt (ModSize p `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(Vec (BitSize CluInput `Div` 8) Word8)
+     $ bitCoerce @_ @(ByteVec (ByteSize CluInput))
          ((0, (op, ((bitCoerce x, bitCoerce y), pV))) ∷ CluInput)
 
   eq = pack $ toList
-    $ bitCoerce @_ @(Vec (ModSize (CPrime SecP256Mod) `Div` 8) Word8)
+    $ bitCoerce @_ @(ByteVec (ByteSize ECMod))
     $ case op of
         Add → x + y
         Sub → x - y
@@ -338,14 +337,14 @@ runHitltCalculator ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod Q → Mod Q →
+  ECMod → ECMod →
   PropertyT IO ()
 runHitltCalculator sem dev settings a b =
-  runHitlt (ModSize Q `Div` 8) sem dev settings bs eq
+  runHitlt (ByteSize ECMod) sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(Vec (BitSize (Mod Q, Mod Q) `Div` 8) Word8) (a, b)
-  eq = pack $ toList $ bitCoerce @_ @(Vec (BitSize (Mod Q) `Div` 8) Word8)
+     $ bitCoerce @_ @(ByteVec (ByteSize (ECMod, ECMod))) (a, b)
+  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod))
      $ goldenRoutine a b
 
 runStack ∷
@@ -379,12 +378,13 @@ runHitltInverseModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod Q →
+  ECMod →
   PropertyT IO ()
 runHitltInverseModulo sem dev settings x = do
-  runHitlt (ModSize Q `Div` 8) sem dev settings (toBS x) (toBS $ invMod @Q x)
+  runHitlt (ByteSize ECMod) sem dev settings (toBS x)
+    $ toBS $ invMod @SecP256ModPrime x
  where
-  toBS = pack . toList . bitCoerce @_ @(Vec (ModSize Q `Div` 8) Word8)
+  toBS = pack . toList . bitCoerce @_ @(ByteVec (ByteSize ECMod))
 
 runHitltModulo ∷
   QSem →
@@ -393,10 +393,11 @@ runHitltModulo ∷
   Unsigned 256 →
   PropertyT IO ()
 runHitltModulo sem dev settings x =
-  runHitlt (256 `Div` 8) sem dev settings bs eq
+  runHitlt (ByteSize (Unsigned 256)) sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce @_ @(Vec 32 Word8) x
-  eq = pack $ toList $ bitCoerce @_ @(Vec (256 `Div` 8) Word8) $ x `mod` natToNum @Q
+  bs = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256))) x
+  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256)))
+     $ x `mod` natToNum @SecP256ModPrime
 
 type HitlKaratsubaIntegerSize = 256
 type HitlKaratsubaWordNumber = HitlKaratsubaIntegerSize `Div` 4
@@ -411,26 +412,22 @@ runHitltKaratsuba ∷
 runHitltKaratsuba sem dev settings x y =
   runHitlt HitlKaratsubaWordNumber sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce @_ @(Vec HitlKaratsubaWordNumber Word8) (x,y)
-  eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $
+  bs = pack $ toList $ bitCoerce @_ @(ByteVec HitlKaratsubaWordNumber) (x,y)
+  eq = pack $ toList $ bitCoerce @_ @(ByteVec _) $
    resize @_ @_ @(2 * HitlKaratsubaIntegerSize) x * resize y
 
 runHitltKaratsubaModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod Q →
-  Mod Q →
+  ECMod →
+  ECMod →
   PropertyT IO ()
 runHitltKaratsubaModulo sem dev settings x y =
-  runHitlt (type (ModSize Q `Div` 8)) sem dev settings bs eq
+  runHitlt (ByteSize ECMod) sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce @_ @(Vec (2 * (ModSize Q `Div` 8)) Word8)
-       (x, y)
-
-  eq = pack $ toList
-     $ bitCoerce @_ @(Vec (ModSize Q `Div` 8) Word8)
-     $ x * y
+  bs = pack $ toList $ bitCoerce @_ @(ByteVec (2 * (ByteSize ECMod))) (x, y)
+  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod)) $ x * y
 
 runHitltSHA ∷
   ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
@@ -604,3 +601,5 @@ parseCS = \case
 newtype HitltTimeout = HitltTimeout String
 instance Show HitltTimeout where show (HitltTimeout msg) = msg
 instance Exception HitltTimeout
+
+type ByteVec n = Vec n Word8

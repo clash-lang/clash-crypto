@@ -16,9 +16,9 @@ module Clash.Crypto.Calculator
 
 import Clash.Prelude hiding (Mod)
 
-import Clash.Crypto.Calculator.ISA
 import Clash.Crypto.Calculator.CLU
-import Clash.Crypto.ECDSA.Modulo
+import Clash.Crypto.Calculator.ISA
+import Clash.Crypto.Calculator.Modulo
 import Clash.Signal.Channel
 import Clash.Sized.Stack
 

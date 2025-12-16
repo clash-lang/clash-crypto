@@ -64,9 +64,9 @@ jobs:
           - SHA-512
           - HMAC
           - Stack
-          - Modulo.Modulo
-          - Karatsuba
-          - InverseModulo
+          - Calculator.Karatsuba
+          - Calculator.Modulo
+          - Calculator.InverseModulo
           - Calculator.CLU
           - Calculator.Calculator
 
@@ -101,11 +101,11 @@ jobs:
           - SHA.SHA256
           - HMACSHA256
           - Stack
-          - Modulo.Modulo
-          - Karatsuba
-#          - BEA
-#          - FastGCD
-          - FltCtmi
+          - Calculator.Karatsuba
+          - Calculator.Modulo
+          - Calculator.InverseModulo.BEA
+          - Calculator.InverseModulo.FastGCD
+          - Calculator.InverseModulo.FltCtmi
           - Calculator.CLU
           - Calculator.Calculator
 
