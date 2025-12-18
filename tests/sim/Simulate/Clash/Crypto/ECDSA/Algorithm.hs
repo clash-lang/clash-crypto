@@ -27,9 +27,10 @@ import Crypto.Error (throwCryptoError)
 import Crypto.PubKey.ECC.P256
 import Clash.Crypto.Calculator.ISA (ECPrime(..))
 import Data.Bifunctor (Bifunctor(..))
+import qualified Hedgehog.Gen as Gen
 
 tastyTests :: TestTree
-tastyTests = localOption (HedgehogTestLimit (Just 100)) $
+tastyTests = localOption (HedgehogTestLimit (Just 100000)) $
   testGroup "Clash.Crypto.ECDSA.Algorithm"
   [
     testProperty "Test SignHash against crypton" $ property $ do
@@ -57,24 +58,44 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
     -- This test sometimes fails because of a bug in `crypton`. It tends to fail
     -- when one of the points is O.
     testProperty "Test point addition" $ property $ do
-    x1 <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    y1 <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    x2 <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    y2 <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    let xI1  = toInteger x1
-        yI1  = toInteger y1
-        xI2  = toInteger x2
-        yI2  = toInteger y2
-        p1   = pointFromIntegers (xI1, yI1)
-        p2   = pointFromIntegers (xI2, yI2)
+    coeff1 <- forAll $ Gen.integral
+     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
+    coeff2 <- forAll $ Gen.integral
+     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
+    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff1)
+        p2   = toPoint (throwCryptoError $ scalarFromInteger coeff2)
+        (x1, y1) = pointToIntegers p1
+        (x2, y2) = pointToIntegers p2
         ref  = pointToIntegers $ pointAdd p1 p2
         impl = pointFromList
              $ fromMaybe (error "Routines in tests should always return")
-             $ runPointAdd $ bitCoerce <$> [x1,y1,x2,y2]
+             $ runPointAdd $ fromInteger <$> [x1,y1,x2,y2]
+    ref === impl
+    ,
+    testProperty "Test point addition (first is infinity)" $ property $ do
+    coeff <- forAll $ Gen.integral
+     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
+    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
+        (x1, y1) = pointToIntegers p1
+        (x2, y2) = (0,0)
+        p2   = pointFromIntegers (x2, y2)
+        ref  = pointToIntegers $ pointAdd p2 p1
+        impl = pointFromList
+             $ fromMaybe (error "Routines in tests should always return")
+             $ runPointAdd $ fromInteger <$> [x2,y2,x1,y1]
+    ref === impl
+    ,
+    testProperty "Test point addition (second is infinity)" $ property $ do
+    coeff <- forAll $ Gen.integral
+     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
+    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
+        (x1, y1) = pointToIntegers p1
+        (x2, y2) = (0,0)
+        p2   = pointFromIntegers (x2, y2)
+        ref  = pointToIntegers $ pointAdd p1 p2
+        impl = pointFromList
+             $ fromMaybe (error "Routines in tests should always return")
+             $ runPointAdd $ fromInteger <$> [x1,y1,x2,y2]
     ref === impl
     ,
     testProperty "Test point multiplication" $ property $ do
