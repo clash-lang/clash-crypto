@@ -9,7 +9,7 @@ import Clash.Prelude
   ( type Div, type (*), type (-), type (+)
   , SNat(..), Nat, KnownNat, Unsigned, Vec
   , BitPack(BitSize), Bit, Index, System
-  , toList, resize,  bitCoerce, natToNum, testBit, extend, fromList
+  , toList, resize,  bitCoerce, natToNum, testBit, fromList
   , sampleN, withClockResetEnable, clockGen, resetGen, enableGen
   )
 
@@ -55,13 +55,10 @@ import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
 import Clash.Crypto.Calculator.CLU
-  ( CluInstruction(..), ECPrime(..), CPrime, CMod
+  ( CluInstruction(..)
   )
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod, unMod)
+import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
 import Clash.Crypto.Hitlt.Shared
-  ( Q, StackSize, StackValueSize, StackPadding, CluInput
-  , isReadyIndicator
-  )
 
 import Shake
   ( ShakeOptions(..), Verbosity(..)
@@ -123,6 +120,7 @@ main = do
           testGroup "Clash.Crypto.ECDSA.Karatsuba"
             [
               testKaratsuba "Karatsuba" sem dev settings
+            , testKaratsubaModulo "KaratsubaModulo" sem dev settings
             ] ,
           testGroup "Clash.Crypto.ECDSA.Modulo"
             [
@@ -158,14 +156,12 @@ main = do
         opMod ← forAll Gen.enumBounded
         a ∷ CMod SecP256Mod ← genMod
         b ∷ CMod SecP256Mod ← genMod
-        runHitltCLU @(CPrime SecP256Mod) sem dev settings
-          (SecP256Mod, (opMod, (a, b)))
+        runHitltCLU sem dev settings (opMod, (a, b))
 
         opOrd ← forAll Gen.enumBounded
         c ∷ CMod SecP256Ord ← genMod
         d ∷ CMod SecP256Ord ← genMod
-        runHitltCLU @(CPrime SecP256Ord) sem dev settings
-          (SecP256Ord, (opOrd, (c, d)))
+        runHitltCLU sem dev settings (opOrd, (c, d))
    where
     genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
     genMod = do
@@ -241,6 +237,23 @@ main = do
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
 
+  testKaratsubaModulo ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testKaratsubaModulo name sem dev settings
+    = test sem dev settings name $ do
+        x ∷ Mod Q ← genMod
+        y ∷ Mod Q ← genMod
+        runHitltKaratsubaModulo sem dev settings x y
+   where
+    genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
+    genMod = do
+      x ← forAll $ genIndex @p $ Range.linear minBound maxBound
+      return $ createMod @p x
+
   testSHA ∷
     ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
     QSem →
@@ -291,22 +304,22 @@ main = do
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
 runHitltCLU ∷
-  ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, p ≤ CPrime SecP256Mod) ⇒
+  ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize (CPrime SecP256Mod)) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
-  (ECPrime, (CluInstruction, (Mod p, Mod p))) →
+  (CluInstruction, (Mod p, Mod p)) →
   PropertyT IO ()
-runHitltCLU sem dev settings (ec, (op, (x, y))) =
+runHitltCLU sem dev settings (op, (x, y)) =
   runHitlt (ModSize p `Div` 8) sem dev settings bs eq
  where
   bs = pack $ toList
      $ bitCoerce @_ @(Vec (BitSize CluInput `Div` 8) Word8)
-         ((0, (ec, (op, (ex x, ex y)))) ∷ CluInput)
+         ((0, (op, ((bitCoerce x, bitCoerce y), pV))) ∷ CluInput)
 
   eq = pack $ toList
     $ bitCoerce @_ @(Vec (ModSize (CPrime SecP256Mod) `Div` 8) Word8)
-    $ ex $ case op of
+    $ case op of
         Add → x + y
         Sub → x - y
         Mul → x * y
@@ -323,8 +336,7 @@ runHitltCLU sem dev settings (ec, (op, (x, y))) =
     . Modular.toMod @p
     . toInteger
 
-  ex ∷ Mod p → CMod SecP256Mod
-  ex = createMod . extend @_ @_ @(CPrime SecP256Mod - p) . unMod
+  pV = natToNum @(p - 1) + 1
 
 runStack ∷
   ∀ messageSize → KnownNat messageSize ⇒
@@ -398,6 +410,23 @@ runHitltKaratsuba sem dev settings x y =
   bs = pack $ toList $ bitCoerce @_ @(Vec HitlKaratsubaWordNumber Word8) (x,y)
   eq = pack $ toList $ bitCoerce @_ @(Vec _ Word8) $
    resize @_ @_ @(2 * HitlKaratsubaIntegerSize) x * resize y
+
+runHitltKaratsubaModulo ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Mod Q →
+  Mod Q →
+  PropertyT IO ()
+runHitltKaratsubaModulo sem dev settings x y =
+  runHitlt (type (ModSize Q `Div` 8)) sem dev settings bs eq
+ where
+  bs = pack $ toList $ bitCoerce @_ @(Vec (2 * (ModSize Q `Div` 8)) Word8)
+       (x, y)
+
+  eq = pack $ toList
+     $ bitCoerce @_ @(Vec (ModSize Q `Div` 8) Word8)
+     $ x * y
 
 runHitltSHA ∷
   ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒

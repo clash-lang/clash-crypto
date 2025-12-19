@@ -18,6 +18,7 @@ module Clash.Crypto.ECDSA.Modulo
   , unMod
   , createMod
   , computeModuloUnsigned
+  , computeUnsignedModuloUnsigned
   , computeModuloSigned
   , moduloShift
   ) where
@@ -71,6 +72,24 @@ computeModuloUnsigned = enhance put get compute
   get _ = Mod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
+
+-- | A variant of 'computeModuloUnsigned', where the modulus is given
+-- at run-time via the second argument. The zero value is used to
+-- represent the modulus @2 ^ (BitSize (Mod m))@.
+computeUnsignedModuloUnsigned ∷
+  ∀ (m ∷ Nat) (len ∷ Nat) dom.
+  ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
+  , 1 ≤ m, m ≤ len
+  ) ⇒
+  Channel dom (Unsigned len, Unsigned m) →
+  Channel dom (Unsigned m)
+computeUnsignedModuloUnsigned = enhance put get compute
+ where
+  put (n, _) = (n, maxBound ∷ Index (len + 1 - m))
+  get _ = resize . fst
+  compute (_, 0) (n, _) = ((n, 0), False)
+  compute (_, k) (n, j) = ((subIfGE n $ shiftedm k j, satPred SatBound j), j > 0)
+  shiftedm k = shiftL (resize k) . fromEnum
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on signed values.

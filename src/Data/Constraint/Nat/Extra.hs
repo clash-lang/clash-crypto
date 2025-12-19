@@ -27,6 +27,7 @@ module Data.Constraint.Nat.Extra
   , CancelFactor
   , MinOverLE
   , HalfIsLess
+  , HalfIsLessInverse
   , CLog2KeepsPositive
   , Div2RoundsDown
   , KeepsPositiveIfMultiple
@@ -37,6 +38,7 @@ module Data.Constraint.Nat.Extra
   , PositiveResultCond0
   , CLog2LECond0
   , CLog2Monotone
+  , HalfLowerBound
   ) where
 
 import Clash.Prelude.Safe
@@ -242,6 +244,30 @@ class
   apply Nat.le_div2_diag_l.
 /-}
 instance HalfIsLess n ⇒ QED (HalfIsLess n)
+
+instance HalfIsLessInverse n
+class
+  ( n <= 2 * (n - (n `Div` 2))
+  ) ⇒ HalfIsLessInverse n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. n ≤ 2 · (n - (n div 2))
+--
+{-/ Proof (Coq): HalfIsLessInverse
+  Require Import Arith.
+  Import Nat.
+  intro n.
+  rewrite mul_sub_distr_l.
+  apply le_add_le_sub_l.
+  rewrite <- div2_div.
+  simpl. rewrite! add_0_r.
+  apply add_le_mono_r_proj_l2r.
+  rewrite <- (mul_1_l (div2 n)) at 1.
+  rewrite <- mul_succ_l.
+  rewrite div2_odd.
+  apply le_add_r.
+/-}
+instance HalfIsLessInverse n ⇒ QED (HalfIsLessInverse n)
 
 instance
   ( 2 <= n
@@ -562,3 +588,22 @@ class
 CLog2Monotone m n = ⌈log₂⌉-mono-≤
 /-}
 instance CLog2Monotone a b ⇒ QED (CLog2Monotone a b)
+
+instance
+  ( 2 <= n
+  ) ⇒ HalfLowerBound n
+class
+  ( 1 <= n `Div` 2
+  ) ⇒ HalfLowerBound n
+-- ^ Evidence for
+--
+-- prop> ∀ n ∈ ℕ. 2 ≤ n → 1 ≤ n div 2
+--
+{-/ Proof (Agda): HalfLowerBound
+open import Data.Nat.DivMod using (m≥n⇒m/n>0)
+open import Data.Nat.Properties using (<⇒≱; ≤-refl)
+open import Relation.Nullary.Negation.Core using (contradiction)
+HalfLowerBound (suc zero) 2≤n = contradiction 2≤n (<⇒≱ (s≤s ≤-refl))
+HalfLowerBound (2+ n) 2≤n = >-nonZero (m≥n⇒m/n>0 {2+ n} {2} (s≤s (s≤s z≤n)))
+/-}
+instance HalfLowerBound n ⇒ QED (HalfLowerBound n)
