@@ -59,27 +59,26 @@ deriving instance
 
 -- | Crypto Logic Unit Instructions
 --
--- All CLU instructions use the top two elements on the stack as their
+-- All CLU instructions use the top two elements on the stack as
 -- operands and replace them by the result of the computation, i.e.,
--- the number of elements on the stack decreases by one element when
--- executing the instruction.
+-- the number of elements on the stack decreases by one after the
+-- instruction has been executed.
 data CluInstruction
   = Add
     -- ^ adds the top two elements on the stack
   | Sub
-    -- ^ subtracts the top element on the stack from the element after
-    -- the top one
+    -- ^ subtracts the top element on the stack from the below-top one
   | Inv
-    -- ^ places the modulo inverse of the element after the top one on
-    -- the stack, unless that element is zero. In the zero case, the
-    -- top element is taken instead.
+    -- ^ if the below-top element is non-zero, then the top two
+    -- elements are replaced by its modulo inverse; otherwise they are
+    -- replaced by the unmodified top element
   | Mul
     -- ^ multiplies the top two elements on the stack
   | Bit
-    -- ^ places `1` on the stack if the `n`-th bit of the element
-    -- after the top one on the stack is set and `0` otherwise; the
-    -- index `n` is read from the top of the stack; places a `0` if
-    -- `n` is out-of-range
+    -- ^ pushes the `n`-th bit of the below-top element onto the stack
+    -- using the top element as the index `n` with zero indexing the
+    -- least significant bit; pushes `0` if the given index points
+    -- beyond the utilized bit width
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
 
 --------------------------------------------------------------------------------
@@ -240,10 +239,9 @@ class InstructionPointer (main ∷ group) ptr where
   -- | An instruction pointer has a dedicated start value.
   start ∷ ∀ x → x ~ main ⇒ group → Index (RepetitionBound main) → ptr
 
-  -- | A given routine and instruction pointer determines the
-  -- particular instruction to be executed. Nothing is returned after
-  -- reaching the end of the instruction sequence associated with the
-  -- routine.
+  -- | A routine + instruction pointer determines the particular
+  -- instruction to be executed. Returns `Nothing` after reaching the
+  -- end of the instruction sequence associated with the routine.
   instr ∷
     (Num a, BitPack a) ⇒
     ∀ x → x ~ main ⇒
@@ -260,7 +258,7 @@ data RIndex (main ∷ group) (subroutine ∷ group) = RIndex
   { -- | The particular position being pointed to in the sequence
     -- associated with the routine.
     iptr ∷ Index (InstructionCount subroutine)
-  , -- | The number of rounds a particular sub-routine still must
+  , -- | The number of rounds a particular subroutine still must
     -- be repeated.
     rbnd ∷ Index (RepetitionBound main)
   }
@@ -333,12 +331,13 @@ instance KnownNat (InstructionBound r)  ⇒ KnownInstructionBound r
 class    KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
 instance KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
 
--- | Lists all the sub-routines and the routine itself of a routine.
+-- | Lists all the subroutines of a routine, along with the routine
+-- itself.
 type Routines routine = routine : SubRoutines routine
 type InstructionCount routine = Length (Instructions routine)
 type SubRoutineCount routine = Length (SubRoutines routine)
 
--- | Lists all the sub-routines of a routine.
+-- | Lists all the subroutines of a routine.
 type SubRoutines routine = SubRoutines# '[] (Instructions routine)
 type SubRoutines# ∷
   ∀ routine group n m k p a.
@@ -352,7 +351,7 @@ type family SubRoutines# a xs
   SubRoutines# a (_ : xr) = SubRoutines# a xr
   SubRoutines# a '[] = a
 
--- | Retrieves the maximal length of the instruction sequences
+-- | Retrieves the maximum length of the instruction sequences
 -- utilized by a given routine.
 type InstructionBound routine = InstructionBound# 0 (Routines routine)
 type InstructionBound# ∷ ∀ routine. Nat → [routine] → Nat
@@ -362,7 +361,7 @@ type family InstructionBound# n rs
   InstructionBound# n (x : xr) =
     InstructionBound# (Max n (InstructionCount x)) xr
 
--- | Retrieves the maximum number of iterations of any sub-routine
+-- | Retrieves the maximum number of iterations of all subroutines
 -- utilized by the given routine.
 type RepetitionBound routine = 1 + RepetitionBound# 0 (Instructions routine)
 type RepetitionBound# ∷ Nat → [Instruction group n m k p a] → Nat
@@ -412,8 +411,8 @@ type family ResultCount# p
  where
   ResultCount# ('StackProfile p _ l) = Abs (Toℤ l .+. p)
 
--- | The maximal stack size needed to run a routine with all its
--- sub-routines.
+-- | The maximum stack size needed to run a routine and all its
+-- subroutines.
 type RequiredStackSize routine = RequiredStackSize# (GetProfile routine)
 type RequiredStackSize# ∷ StackProfile → Nat
 type family RequiredStackSize# p
@@ -444,7 +443,7 @@ type family Requirements p i
 
    Requirements p (RUN k r) = Attach k p (GetProfile r)
 
--- | Combines the stack profile of a sub-routine with the one of the
+-- | Combines the stack profile of a subroutine with the one of the
 -- calling routine.
 type Attach ∷ Nat → StackProfile → StackProfile → StackProfile
 type family Attach k a b

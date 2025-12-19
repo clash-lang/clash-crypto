@@ -191,8 +191,8 @@ data MealyOutput routine ptr a = MealyOutput
     dataStackAction ∷ StackAction (RequiredStackSize routine) a
     -- | the input to the instruction pointer stack
     --
-    -- (note that the sub-routine count offers a sound upper bound for
-    -- the stack size here, as any routine can be pushed at most once
-    -- and we cannot use recursive calls)
+    -- Note that the subroutine count is a sound upper bound for the
+    -- stack size, as any routine can be pushed at most once and we
+    -- do not allow recursive calls.
   , iptrStackAction ∷ StackAction (SubRoutineCount routine) ptr
   }

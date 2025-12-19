@@ -5,7 +5,7 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-A small demo application for printing a type level list of
+A small demo application for printing a type-level list of
 instructions via UART. The main purpose of this application is to
 check the resource usage of the type-level reification as a known
 vector in hardware.

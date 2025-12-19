@@ -28,7 +28,7 @@ import Data.Ord (Ordering(..))
 import Data.Type.Ord (Compare)
 import GHC.TypeNats (type (+), Nat)
 
--- | A type family for enforcing a constraint for all elements in a
+-- | A type family for attaching a constraint to all elements in a
 -- list. It is primarily used to ensure that all elements of a type
 -- level list have instances for a certain class.
 type InstanceAll ∷ [a] → (a → Constraint) → Constraint

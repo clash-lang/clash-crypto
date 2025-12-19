@@ -8,12 +8,6 @@ Portability : POSIX
 Simulation tests for 'Clash.Crypto.Calculator'.
 -}
 
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeAbstractions #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module Simulate.Clash.Crypto.Calculator where
 
 import Clash.Prelude hiding (Mod)
