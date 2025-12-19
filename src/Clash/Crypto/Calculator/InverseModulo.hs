@@ -45,6 +45,9 @@ import Clash.Crypto.Calculator.Utils (unsignedToSigned, signedToUnsigned)
 -- It computes the inverse of a positive integer modulo m.
 --
 -- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
+--
+-- Note that the algorithm currently won't terminate when providing
+-- zero as input.
 bea ∷
   ∀ m dom. (KnownNat m, HiddenClockResetEnable dom, 2 ≤ m) ⇒
   Channel dom (Mod m) →

@@ -220,7 +220,8 @@ main = do
   testInverseModulo name sem dev settings
     = test sem dev settings name $ do
         x ∷ ECMod ← genMod
-        runHitltInverseModulo sem dev settings x
+        unless (x == 0)
+          $ runHitltInverseModulo sem dev settings x
 
   testModulo ∷
     String →
