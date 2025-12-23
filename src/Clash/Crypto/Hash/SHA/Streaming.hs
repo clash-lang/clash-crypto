@@ -106,13 +106,13 @@ hashStream alg input
     -- apply the for loop "For i=1 to N:"
     hashValue ∷ Signal dom (HashValue alg)
     hashValue = toSignal
-      $ dsFold (_H⁰ alg) (fromSignal input.atStartFrame)
+      $ dsFold (_H⁰ alg) (delayedI False $ fromSignal input.atStartFrame)
           (computeBlock alg (type (BlockSize alg `DDiv` n - 1)))
       $ mux (delayedI @1 False $ fromSignal blockComplete)
           (Just <$> msgBlock)
           (pure Nothing)
   in
     channel $ bundle $ (hashValue, )
-      $ mux input.atStartFrame        (pure Clear)
-      $ mux (proceed .&&. afterInput) (pure Release)
-                                      (pure Keep)
+      $ mux (delay False input.atStartFrame) (pure Clear)
+      $ mux (proceed .&&. afterInput)        (pure Release)
+                                             (pure Keep)
