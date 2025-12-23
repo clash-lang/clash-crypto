@@ -39,7 +39,7 @@ dsFold ∷
   b →
   -- ^ initial value of the accumulator (only used after releasing the
   -- reset)
-  DSignal dom k Bool →
+  DSignal dom (k + 1) Bool →
   -- ^ resets only the accumulator iff positive
   (DSignal dom (k + 1) (Maybe (a, b)) → DSignal dom (k + 1 + m) b) →
   -- ^ function / circuit to be folded
