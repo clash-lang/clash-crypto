@@ -20,7 +20,8 @@ track of the temporal changes.
 
 module Clash.Signal.Channel
   ( -- * Channel Type
-    Channel
+    Content(..)
+  , Channel(..)
     -- * Construction
   , ProviderAction(..)
   , channel

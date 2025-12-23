@@ -24,9 +24,7 @@ module Clash.Crypto.ECDSA.InverseModulo
 
 import Clash.Prelude hiding (Mod)
 import Clash.Signal.Channel
-import Clash.Signal.Extra (apWhen)
 
-import Data.Bifunctor (bimap)
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
@@ -35,7 +33,8 @@ import qualified GHC.TypeLits as P (Mod)
 
 import Clash.Crypto.ECDSA.InverseModulo.Internal
 import Clash.Crypto.ECDSA.Fraction (HWFraction (HWFraction), shiftRFraction)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialGated)
+import Clash.Crypto.ECDSA.Karatsuba
+  (karatsubaSequential, karatsubaSequentialModulo)
 import Clash.Crypto.ECDSA.Modulo
   (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
 import Clash.Crypto.ECDSA.Utils (unsignedToSigned, signedToUnsigned)
@@ -199,14 +198,12 @@ fastGcdSequential ∷
   Channel dom (Mod m)
 fastGcdSequential (divSteps @m . fmap bitCoerce → divResult)
   = computeModuloUnsigned @m
-  $ karatsubaSequentialGated GCDStreamingStages MulRegisterSize
+  $ karatsubaSequential GCDStreamingStages MulRegisterSize
   $ fmap ((, natToNum @(Precomp m) ∷ Unsigned (ModSize m)) . bitCoerce)
   $ moduloShift @m
   $ zipRecent (flip (,) . fst) divResult
   $ computeModuloSigned @m
   $ snd <$> divResult
-
-type FLTIterations m = ModSize (m - 2)
 
 pattern FLTMul, FLTSquare ∷ Bool
 pattern FLTSquare = False
@@ -218,52 +215,62 @@ fltCtmi ∷
   ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
   Channel dom (Mod p) →
   Channel dom (Mod p)
-fltCtmi input = output
+fltCtmi (fmap bitCoerce → input) = fmap bitCoerce output
  where
   (output, s)
-    = fltCtmiE @p input
-    $ computeModuloUnsigned @p
-    $ karatsubaSequentialGated GCDStreamingStages MulRegisterSize
-      s
+    = fltCtmiE (fmap (, p) input)
+    $ karatsubaSequentialModulo GCDStreamingStages MulRegisterSize
+    $ fmap (, p) s
 
--- | A 'fltCtmi' variant that uses a shared multiplier and prime field
--- modulo instead of shipping a local copy.
+  p = natToNum @(p - 1) + 1
+
+-- | A 'fltCtmi' variant, which uses a shared multiplier and prime
+-- field modulo instead of shipping a local copy.
 fltCtmiE ∷
-  ∀ p dom.
-  (HiddenClockResetEnable dom, KnownNat p, 3 ≤ p) ⇒
+  ∀ n dom. (HiddenClockResetEnable dom, KnownNat n) ⇒
   -- | input
-  Channel dom (Mod p) →
+  Channel dom (Unsigned n, Unsigned n) →
   -- | shared multiplier with modulo output
-  Channel dom (Mod p) →
+  Channel dom (Unsigned n) →
   ( -- | output
-    Channel dom (Mod p)
+    Channel dom (Unsigned n)
   , -- | shared multiplier with modulo input
-    Channel dom (Unsigned (ModSize p), Unsigned (ModSize p))
+    Channel dom (Unsigned n, Unsigned n)
   )
-fltCtmiE input smmOut
-  = ( guardC done cur
-    , bimap bitCoerce bitCoerce <$> smmIn
-    )
+fltCtmiE (unzipC → (input, p)) smmOut =
+  (guardC (done .&&. (delay False input.isNonEmpty)) cur, smmIn)
  where
-  cur = keepD $ join input smmOut
-  smmIn = zipC cur $ muxC (fst <$> stage) input $ guardC (not <$> done) cur
+  cur
+    = keepD
+    $ join input
+    $ muxC (fst . snd <$> stage)
+        (zipRecent const cur smmOut)
+        smmOut
 
-  stage = register (FLTSquare, minBound ∷ Index (FLTIterations p))
-    $ apWhen input.hasUpdates (const (FLTSquare, maxBound))
-    $ apWhen cur.hasUpdates nextStage
-      stage
+  smmIn
+    = zipC cur
+    $ muxC (fst <$> stage) input
+    $ guardC (not <$> done) cur
+
+  stage = register (FLTSquare, (False, minBound ∷ Index n))
+    $ mux input.hasUpdates (pure (FLTSquare, (True, maxBound)))
+    $ mux cur.hasUpdates
+       (nextStage <$> (fmap (\x → x - 2) <$> p.content) <*> stage)
+       stage
    where
-    k = natToNum @(p - 2) ∷ BitVector (ModSize (p - 2))
+    nextStage Nothing  _ = (FLTSquare, (False, minBound ∷ Index n))
+    nextStage (Just k) (m, (skip, i))
+      | skip && not (testBit k $ fromEnum i)
+      = (FLTSquare, (True, i - 1))
 
-    nextStage (m, i)
       | FLTSquare ← m, i > 0
       , testBit k $ fromEnum $ i - 1
-      = (FLTMul, i)
+      = (FLTMul, (False, i))
 
       | otherwise
-      = (FLTSquare, if i > 0 then i - 1 else i)
+      = (FLTSquare, (False, if i > 0 then i - 1 else i))
 
-  done = stage .== (FLTSquare, minBound)
+  done = stage .== (FLTSquare, (False, minBound))
 
 -- * SictMi
 
@@ -327,9 +334,12 @@ sictMiSequential ∷
   Channel dom (Mod m) →
   Channel dom (Mod m)
 sictMiSequential
-  = computeModuloUnsigned @m
-  . karatsubaSequentialGated GCDStreamingStages MulRegisterSize
-  . fmap ((, getSictPrecomp @m ∷ Unsigned (ModSize m)) . bitCoerce)
+  = fmap bitCoerce
+  . karatsubaSequentialModulo GCDStreamingStages MulRegisterSize
+  . fmap ( (, natToNum @(m - 1) + 1)
+         . (, getSictPrecomp @m ∷ Unsigned (ModSize m))
+         . bitCoerce
+         )
   . computeModuloSigned @m @(SictIterations m * 2)
   . sictMiLoop @m
   . fmap bitCoerce

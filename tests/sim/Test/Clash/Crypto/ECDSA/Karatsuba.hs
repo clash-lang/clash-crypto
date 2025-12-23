@@ -10,35 +10,55 @@ Test suite for 'Clash.Crypto.ECDSA.Karatsuba'.
 
 module Test.Clash.Crypto.ECDSA.Karatsuba where
 
-import Clash.Crypto.ECDSA.Karatsuba (karatsuba, karatsubaSequentialGated)
-import Clash.Prelude
+import Clash.Crypto.ECDSA.Karatsuba
+import Clash.Prelude hiding (Mod)
+import Clash.Hedgehog.Sized.Index (genIndex)
 import Clash.Signal.Channel
+import Hedgehog.Gen hiding (resize, maybe)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
+import Language.Haskell.Unicode (type (≤))
+import Data.Type.Equality (type (:~:)(Refl))
+import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
 
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Hedgehog
 import Test.Tasty
 import Test.Tasty.Hedgehog
+import Data.Proxy
 
 import qualified Data.List as List
 import qualified Hedgehog.Range as Range
+import Clash.Crypto.ECDSA.Modulo
 
 tastyTests :: TestTree
-tastyTests = testGroup "Clash.Crypto.ECDSA.Karatsuba"
-  [ localOption (HedgehogTestLimit (Just 500))
-  $ testGroup "Tests for Karatsuba's algorithm"
-    [
-    testProperty "Karatsuba combinatorial algorithm" $ property $ do
-        a <- forAll $ genUnsigned $ Range.linear minBound maxBound
-        b <- forAll $ genUnsigned $ Range.linear minBound maxBound
-        testKaratsubaEqualityWithMultiplication a b
-    , testProperty "Karatsuba sequential algorithm" $ property $ do
-        a <- forAll $ genUnsigned $ Range.linear minBound maxBound
-        b <- forAll $ genUnsigned $ Range.linear minBound maxBound
-        testKaratsubaSequential a b
-    ]
-  ]
+tastyTests
+  = localOption (HedgehogTestLimit (Just 500))
+  $ testGroup "Clash.Crypto.ECDSA.Karatsuba"
+      [ testProperty "combinational" $ property $ do
+          a <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          b <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          testKaratsubaEqualityWithMultiplication a b
+      , testProperty "sequential" $ property $ do
+          a <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          b <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          testKaratsubaSequential a b
+      , testProperty "withModulo" $ property $ do
+          kT <- forAll $ integral $ Range.linear 1 (shiftL 1 256)
+          Just (SomeNat (_ :: Proxy k)) <- return $ someNatVal kT
+          case (Proxy ∷ Proxy 1) %<=? (Proxy ∷ Proxy k) of
+            NLE _ _ -> return ()
+            LE Refl -> do
+              a :: Mod k <- genMod
+              b :: Mod k <- genMod
+              testKSM (a, b) $ fromInteger
+                $ (toInteger a * toInteger b) `mod` kT
+      ]
+ where
+  genMod ∷ ∀ k m. (Monad m, KnownNat k, 1 ≤ k) ⇒ PropertyT m (Mod k)
+  genMod = do
+    x ← forAll $ genIndex @k $ Range.linear minBound maxBound
+    return $ createMod @k x
 
 type TestLen = 512
 
@@ -64,8 +84,29 @@ testKaratsubaSequential p1 p2 = do
     $ sampleN @System 4000
     $ withClockResetEnable clockGen resetGen enableGen
     $ newsfeed
-    $ karatsubaSequentialGated 4 36
+    $ karatsubaSequential 4 36
     $ channel
     $ fmap ((p1, p2), )
+    $ fromList
+    $ Keep : Keep : Release : List.repeat Keep
+
+testKSM ::
+  forall p m.
+  (Monad m, KnownNat p, 1 <= p) =>
+  (Mod p, Mod p) -> Mod p -> PropertyT m ()
+testKSM i r = do
+  actualOutput === r
+ where
+  actualOutput
+    = fromMaybe (error "The returned list was empty")
+    $ getFirst
+    $ foldMap First
+    $ sampleN @System 4000
+    $ withClockResetEnable clockGen resetGen enableGen
+    $ newsfeed
+    $ fmap bitCoerce
+    $ karatsubaSequentialModulo 4 36
+    $ channel
+    $ fmap ((bitCoerce i, natToNum @(p - 1) + 1), )
     $ fromList
     $ Keep : Keep : Release : List.repeat Keep

@@ -10,6 +10,7 @@ Test suite for 'Clash.Crypto.Calculator.CLU'.
 
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TypeAbstractions #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -31,7 +32,21 @@ import qualified Data.Modular as Modular
 import qualified Hedgehog.Range as Range
 
 import Clash.Crypto.Calculator.CLU
-import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod, unMod)
+import Clash.Crypto.ECDSA.Modulo (Mod, ModSize, createMod)
+
+data ECPrime
+  = SecP256Mod
+  | SecP256Ord
+  deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
+
+type family CPrime (p :: ECPrime) ∷ Nat where
+  CPrime SecP256Mod
+    = 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
+  CPrime SecP256Ord
+    = (2 ^ 256) - (2 ^ 224) + 2 ^ 192 - 0x4319055258E8617B0C46353D039CDAAF
+
+type CMod p = Mod (CPrime p)
+type ECMod = CMod SecP256Mod
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"
@@ -40,46 +55,46 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"
       [ testProperty "Addition" $ property $ do
           a ∷ CMod SecP256Mod ← genMod
           b ∷ CMod SecP256Mod ← genMod
-          testCLU SecP256Mod Add a b $ a + b
+          testCLU Add a b $ a + b
           c ∷ CMod SecP256Ord ← genMod
           d ∷ CMod SecP256Ord ← genMod
-          testCLU SecP256Ord Add c d $ c + d
+          testCLU Add c d $ c + d
       , testProperty "Substraction" $ property $ do
           a ∷ CMod SecP256Mod ← genMod
           b ∷ CMod SecP256Mod ← genMod
-          testCLU SecP256Mod Sub a b $ a - b
+          testCLU Sub a b $ a - b
           c ∷ CMod SecP256Ord ← genMod
           d ∷ CMod SecP256Ord ← genMod
-          testCLU SecP256Ord Sub c d $ c - d
+          testCLU Sub c d $ c - d
       , localOption (HedgehogTestLimit (Just 20))
         $ testProperty "Inverse" $ property $ do
           a ∷ CMod SecP256Mod ← genMod
           b ∷ CMod SecP256Mod ← genMod
-          testCLU SecP256Mod Inv a b $ if
+          testCLU Inv a b $ if
             | a == 0    → b
             | otherwise → invGolden a
           c ∷ CMod SecP256Ord ← genMod
           d ∷ CMod SecP256Ord ← genMod
-          testCLU SecP256Ord Inv c d $ if
+          testCLU Inv c d $ if
             | c == 0    → d
             | otherwise → invGolden c
       , testProperty "Multiplication" $ property $ do
           a ∷ CMod SecP256Mod ← genMod
           b ∷ CMod SecP256Mod ← genMod
-          testCLU SecP256Mod Mul a b $ a * b
+          testCLU Mul a b $ a * b
           c ∷ CMod SecP256Ord ← genMod
           d ∷ CMod SecP256Ord ← genMod
-          testCLU SecP256Ord Mul c d $ c * d
+          testCLU Mul c d $ c * d
       , testProperty "Test Bit" $ property $ do
           a ∷ CMod SecP256Mod ← genMod
           b ∷ CMod SecP256Mod ← genMod
-          testCLU SecP256Mod Bit a b $ if
+          testCLU Bit a b $ if
             | b < natToNum @(ModSize (CPrime SecP256Mod))
             , testBit a (fromEnum b) → 1
             | otherwise → 0
           c ∷ CMod SecP256Ord ← genMod
           d ∷ CMod SecP256Ord ← genMod
-          testCLU SecP256Ord Bit c d $ if
+          testCLU Bit c d $ if
             | d < natToNum @(ModSize (CPrime SecP256Ord))
             , testBit c (fromEnum d) → 1
             | otherwise → 0
@@ -92,13 +107,12 @@ tastyTests = testGroup "Clash.Crypto.ECDSA.CLU"
     return $ createMod @p x
 
 testCLU ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p, p ≤ CPrime SecP256Mod) ⇒
-  ECPrime →
   CluInstruction →
   Mod p →
   Mod p →
   Mod p →
   PropertyT m ()
-testCLU p op a b c
+testCLU op a b c
   = (ex c ===)
   $ fromMaybe (error "The returned list was empty.")
   $ getFirst
@@ -108,12 +122,12 @@ testCLU p op a b c
   $ newsfeed
   $ clu 4 36
   $ channel
-  $ fmap ((p, (op, (ex a, ex b))), )
+  $ fmap ((op, ((ex a, ex b), natToNum @(p - 1) + 1)), )
   $ fromList
   $ Keep : Keep : Release : List.repeat Keep
  where
-  ex ∷ Mod p → CMod SecP256Mod
-  ex = createMod . extend @_ @_ @(CPrime SecP256Mod - p) . unMod
+  ex ∷ Mod p → Unsigned (ModSize p)
+  ex = bitCoerce
 
 invGolden ∷ ∀ p. Modular.Modulus p ⇒ Mod p → Mod p
 invGolden

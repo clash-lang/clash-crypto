@@ -155,6 +155,7 @@ library hitlt-instances
     FltCtmi
     HMAC
     Karatsuba
+    KaratsubaModulo
     Modulo
     SictMi
     SHA

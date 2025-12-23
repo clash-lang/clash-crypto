@@ -116,6 +116,7 @@ shakeRules cfgs wanted = do
   hitltRules "FastGCD" "FastGCD" []
   hitltRules "FltCtmi" "FltCtmi" []
   hitltRules "Karatsuba" "Karatsuba" []
+  hitltRules "KaratsubaModulo" "KaratsubaModulo" []
   hitltRules "Modulo" "Modulo" []
   hitltRules "SictMi" "SictMi" []
   hitltRules "Stack" "Stack" []

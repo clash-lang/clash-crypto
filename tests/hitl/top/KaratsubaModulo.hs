@@ -1,17 +1,19 @@
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
-module Karatsuba (topEntity) where
+module KaratsubaModulo (topEntity) where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
 
 import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Clash.Crypto.Hitlt.Shared (Q)
 import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequential)
+import Clash.Crypto.ECDSA.Modulo (ModSize)
+import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialModulo)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -26,6 +28,10 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . karatsubaSequential @128 @128 3 36 . cachedFromMaybe . bulkRead
+  $ newsfeed
+     . karatsubaSequentialModulo @(ModSize Q) 3 40
+     . fmap (, natToNum @Q)
+     . cachedFromMaybe
+     . bulkRead
 
 makeTopEntity 'topEntity
