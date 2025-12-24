@@ -78,7 +78,6 @@ stdenv.mkDerivation {
     bison
     flex
     pkg-config
-    uv
   ];
 
   propagatedBuildInputs = [
@@ -118,12 +117,7 @@ stdenv.mkDerivation {
     echo "BOOST_PYTHON_LIB := -lboost_python${lib.versions.major python3.version}${lib.versions.minor python3.version}" >> Makefile.conf
   '';
 
-  checkTarget = "test";
   doCheck = false;
-  nativeCheckInputs = [
-    gtkwave
-    iverilog
-  ];
 
   passthru = {
     updateScript = nix-update-script { };
