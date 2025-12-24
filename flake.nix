@@ -13,9 +13,12 @@
       url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
     };
   };
-  outputs = { self, nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
+  outputs = { nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system};
+      let pkgs = nixpkgs.legacyPackages.${system}.extend (_: prev: {
+             yosys = prev.callPackage ./nix/yosys.nix {};
+          });
+
           serialportSrc = pkgs.fetchFromGitHub {
             owner = "standardsemiconductor";
             repo = "serialport";
@@ -29,7 +32,7 @@
             sha256 = "sha256-m99YICyCojOR1H6fpJIRRjWIgB1e9ZdTNDRumJAkfOg=";
           };
 
-          inherit (pkgs.haskell.lib) dontCheck doJailbreak markUnbroken;
+          inherit (pkgs.haskell.lib) dontCheck doJailbreak;
           overlay = final: prev: {
             clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
               (clashCompilerSrc + "/clash-prelude") { });
