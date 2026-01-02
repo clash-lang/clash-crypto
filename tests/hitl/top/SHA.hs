@@ -5,7 +5,7 @@
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module SHA (topEntity) where
+module SHA (topEntity, descape) where
 
 import Clash.Prelude
 import Clash.Signal.Channel (newsfeed)

@@ -80,6 +80,8 @@ library
     Clash.Crypto.Calculator.Modulo
     Clash.Crypto.Calculator.Utils
     Clash.Crypto.PubKey.ECDSA
+    Clash.Crypto.ECDSA.DeterministicNonce
+    Clash.Crypto.ECDSA.Routines
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -130,6 +132,7 @@ test-suite simulation
     Simulate.Clash.Crypto.Calculator.Karatsuba
     Simulate.Clash.Crypto.Calculator.Modulo
     Simulate.Clash.Crypto.PubKey.ECDSA
+    Simulate.Clash.Crypto.Calculator.Nonce
     Simulate.Clash.Sized.Stack
   build-depends:
     , bytestring
@@ -178,6 +181,7 @@ library hitlt-instances
     BEA
     Calculator
     CLU
+    DeterministicNonce
     ECDSASign
     FastGCD
     FltCtmi
@@ -202,6 +206,7 @@ test-suite hitlt
     , clash-crypto:test
     , clash-prelude-hedgehog
     , crypton
+    , ghc-typelits-proof-assist
     , hedgehog >= 1.0
     , memory
     , modular-arithmetic

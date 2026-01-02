@@ -10,9 +10,11 @@ A streaming implementation of HMAC according to
 -}
 
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE MagicHash #-}
 
 module Clash.Crypto.MAC.HMAC
   ( hmac
+  , hmac#
   , IPad
   , OPad
   , HmacStage(..)
@@ -76,14 +78,31 @@ data HmacStage
 -- This implementation currently does __not__ support keys that
 -- require more than 'BlockSize' @alg@ many bits.
 hmac ∷
-  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
-  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, KnownNat (MessageDigestSize alg)) ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
   -- ^ input stream
   Channel dom (Digest alg)
   -- ^ response channel
-hmac alg (mapEnd (const (0 :: Index 8)) → input)
+hmac alg input
+  | SHAFacts ← knownSHA alg
+  = result
+  where
+   (result, hashInput) = hmac# alg input digest
+   digest = delayC $ sha alg hashInput
+
+hmac# ∷
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
+  DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
+  -- ^ input stream
+  Channel dom (Digest alg) →
+  -- ^ hash output
+  (Channel dom (Digest alg), DataStream dom () (Index 8) (BitVector 8))
+  -- ^ (response channel, hash input)
+hmac# alg (mapEnd (const (0 :: Index 8)) → input) digest
   | SHAFacts ← knownSHA alg
   = let
       -- mark the input key frames via counting the received number of frames
@@ -114,7 +133,7 @@ hmac alg (mapEnd (const (0 :: Index 8)) → input)
         $ mapStart (const ()) input
 
       -- the output of the hashing function
-      digest = sha alg $ do
+      hashInput = do
         -- immediately forward key & msg during the 'InnerHash' stage
         innerHashSel ← xorpad $ natToNum @IPad
         -- buffer @key XOR opad@ until we need it during the 'OuterKey' stage
@@ -157,7 +176,7 @@ hmac alg (mapEnd (const (0 :: Index 8)) → input)
       atOuterKeyStage    = stage <&> \case { OuterKey    → True; _ → False }
       atOuterDigestStage = stage <&> \case { OuterDigest → True; _ → False }
     in
-      guardC atOuterDigestStage digest
+      (guardC atOuterDigestStage digest, hashInput)
 
 -- | Stores the last received 'Charge' and holds it until being
 -- discharged. While discharging, the stored value is streamed out in

@@ -10,6 +10,7 @@ import qualified Simulate.Clash.Crypto.PubKey.ECDSA             as ECDSA
 import qualified Simulate.Clash.Crypto.Hash.SHA                 as SHA
 import qualified Simulate.Clash.Crypto.MAC.HMAC                 as HMAC
 import qualified Simulate.Clash.Sized.Stack                     as Stack
+import qualified Simulate.Clash.Crypto.Calculator.Nonce         as Nonce
 
 main ∷ IO ()
 main = defaultMain $ testGroup "clash-crypto simulation tests"
@@ -22,4 +23,6 @@ main = defaultMain $ testGroup "clash-crypto simulation tests"
   , CLU.tastyTests
   , Calculator.tastyTests
   , ECDSA.tastyTests
+  , Stack.tastyTests
+  , Nonce.tastyTests
   ]
