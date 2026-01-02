@@ -44,8 +44,8 @@ type family Length xs
   Length '[]      = 0
   Length (x : xr) = 1 + Length xr
 
--- | A type alias for sorted list. However, there is no mechanism in
--- place, which forces the list to actually be sorted.
+-- | A type alias for sorted lists. Note that there is no mechanism in
+-- place forcing the list to actually be sorted.
 type SortedList :: Type → Type
 type SortedList a = [a]
 
@@ -65,8 +65,8 @@ type family SLInsert# ord x y yr
   SLInsert# EQ _ y yr = y : yr
   SLInsert# GT x y yr = y : SLInsert x yr
 
--- | Merges to sorted list keeping the list sorted and deduplicating
--- its elements.
+-- | Merges two sorted lists keeping the resulting list sorted and
+-- deduplicating its elements.
 type SLMerge ∷ SortedList a → SortedList a → SortedList a
 type family SLMerge xs ys
  where

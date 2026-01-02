@@ -33,7 +33,7 @@ import Clash.Crypto.Calculator.Modulo (Mod)
 -- | Calculator Instructions
 --
 -- Requires the `n`, `m` and `k` parameters to all have 'Num' instances
--- and the `a` parameter to have both 'BitPack' and 'Num' instance.
+-- and the `a` parameter to have both 'BitPack' and 'Num' instances.
 data Instruction r n m k p a
   = -- | pushes the given constant to the stack
     PUT a
