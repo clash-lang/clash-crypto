@@ -6,14 +6,14 @@ module FltCtmi where
 
 import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hitlt.Shared (Q)
-import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.ECDSA.InverseModulo (fltCtmi)
+import Clash.Crypto.Calculator.InverseModulo (fltCtmi)
+import Clash.Crypto.Calculator.ISA (SecP256ModPrime)
+
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -28,6 +28,6 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . fltCtmi @Q . cachedFromMaybe . bulkRead
+  $ newsfeed . fltCtmi @SecP256ModPrime . cachedFromMaybe . bulkRead
 
 makeTopEntity 'topEntity

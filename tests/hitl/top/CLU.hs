@@ -6,14 +6,14 @@ module CLU where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
-
-import Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
-import Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
-import Clash.Crypto.Hitlt.Uart (bulkRead, withUartRequestResponseHandler)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
-import Clash.Crypto.Calculator.CLU
-import Clash.Crypto.Hitlt.Shared
+import Clash.Crypto.Calculator.CLU (clu)
+
+import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
+import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
+import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -29,7 +29,7 @@ topEntity ∷
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ newsfeed
-      . clu 3 36
+      . clu 2 72
       . cachedFromMaybe
       . fmap (snd <$>)
       . bulkRead @CluInput

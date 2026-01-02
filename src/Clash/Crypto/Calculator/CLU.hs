@@ -12,17 +12,11 @@ module Clash.Crypto.Calculator.CLU where
 
 import Clash.Prelude hiding (Mod, Bit, unzip)
 
-import Clash.Crypto.ECDSA.InverseModulo (fltCtmiE)
-import Clash.Crypto.ECDSA.Karatsuba (karatsubaSequentialModulo)
-import Clash.Signal.Channel (Channel, delayC, guardC, unzipC, zipRecent)
+import Clash.Crypto.Calculator.ISA (CluInstruction(..))
 
-data CluInstruction
-  = Add -- ^ addition
-  | Sub -- ^ subtraction
-  | Inv -- ^ inverse modulo
-  | Mul -- ^ multiplication
-  | Bit -- ^ test bit
-  deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
+import Clash.Crypto.Calculator.InverseModulo (fltCtmiE)
+import Clash.Crypto.Calculator.Karatsuba (karatsubaSequentialModulo)
+import Clash.Signal.Channel (Channel, delayC, guardC, unzipC, zipRecent)
 
 -- | The Cryptographic Logic Unit (CLU) executing the given operation
 -- on the provided operands.

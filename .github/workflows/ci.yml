@@ -51,6 +51,7 @@ jobs:
   simulate:
     name: Simulation Tests
     runs-on: [self-hosted, compute]
+    timeout-minutes: 60
     container:
       image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
       options: --memory=11g
@@ -63,11 +64,12 @@ jobs:
           - SHA-256
           - SHA-512
           - HMAC
-          - Modulo.Modulo
-          - Karatsuba
-          - InverseModulo
-          - CLU
           - Stack
+          - Calculator.Karatsuba
+          - Calculator.Modulo
+          - Calculator.InverseModulo
+          - Calculator.CLU
+          - Calculator.Calculator
 
     steps:
       - name: "Checkout the repository"
@@ -85,6 +87,7 @@ jobs:
   hitlt:
     name: HITL Tests
     runs-on: [self-hosted, hardware-access, orangecrab]
+    timeout-minutes: 480
     container:
       image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
       options: >-
@@ -99,13 +102,15 @@ jobs:
           - SHA.SHA224
           - SHA.SHA256
           - HMACSHA256
-          - Modulo.Modulo
-          - Karatsuba
-          - BEA
-          - FastGCD
-          - FltCtmi
-          - CLU
           - Stack
+          - Calculator.Karatsuba
+          - Calculator.Modulo
+          - Calculator.InverseModulo.BEA
+          - Calculator.InverseModulo.FastGCD
+          - Calculator.InverseModulo.FltCtmi
+          - Calculator.CLU
+          - Calculator.Calculator
+
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4

@@ -71,13 +71,16 @@ library
     , ghc-typelits-proof-assist
     , template-haskell
   exposed-modules:
+    Clash.Crypto.Calculator
     Clash.Crypto.Calculator.CLU
-    Clash.Crypto.ECDSA.Fraction
-    Clash.Crypto.ECDSA.InverseModulo.Internal
-    Clash.Crypto.ECDSA.InverseModulo
-    Clash.Crypto.ECDSA.Karatsuba
-    Clash.Crypto.ECDSA.Modulo
-    Clash.Crypto.ECDSA.Utils
+    Clash.Crypto.Calculator.Fraction
+    Clash.Crypto.Calculator.InverseModulo
+    Clash.Crypto.Calculator.InverseModulo.Internal
+    Clash.Crypto.Calculator.ISA
+    Clash.Crypto.Calculator.Karatsuba
+    Clash.Crypto.Calculator.Modulo
+    Clash.Crypto.Calculator.Utils
+    Clash.Crypto.ECDSA.Routines
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -88,6 +91,8 @@ library
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
     Clash.Crypto.MAC.HMAC
+    Clash.Promoted.Integer
+    Clash.Promoted.List
     Clash.Signal.Channel
     Clash.Signal.Delayed.Extra
     Clash.Signal.DataStream
@@ -96,6 +101,18 @@ library
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
 
+library test
+  import: common-options
+  hs-source-dirs: tests/lib
+  build-depends:
+    , clash-crypto
+    , clash-lib
+    , ghc-typelits-proof-assist
+    , modular-arithmetic
+  exposed-modules:
+    Test.Clash.Crypto.Calculator
+    Test.Clash.Crypto.Calculator.InverseModulo
+
 test-suite simulation
   import: common-options
   hs-source-dirs: tests/sim
@@ -103,16 +120,18 @@ test-suite simulation
   ghc-options: -threaded
   main-is: Main.hs
   other-modules:
-    Test.Clash.Crypto.Hash.SHA
-    Test.Clash.Crypto.MAC.HMAC
-    Test.Clash.Crypto.Calculator.CLU
-    Test.Clash.Crypto.ECDSA.InverseModulo
-    Test.Clash.Crypto.ECDSA.Karatsuba
-    Test.Clash.Crypto.ECDSA.Modulo
-    Test.Clash.Sized.Stack
+    Simulate.Clash.Crypto.Hash.SHA
+    Simulate.Clash.Crypto.MAC.HMAC
+    Simulate.Clash.Crypto.Calculator
+    Simulate.Clash.Crypto.Calculator.CLU
+    Simulate.Clash.Crypto.Calculator.InverseModulo
+    Simulate.Clash.Crypto.Calculator.Karatsuba
+    Simulate.Clash.Crypto.Calculator.Modulo
+    Simulate.Clash.Sized.Stack
   build-depends:
     , bytestring
     , clash-crypto
+    , clash-crypto:test
     , clash-prelude-hedgehog
     , cryptohash
     , ghc-typelits-proof-assist
@@ -123,7 +142,7 @@ test-suite simulation
     , tasty-hunit
     , typelits-witnesses
 
-library hitlt-shared
+library hitl
   import: common-options
   hs-source-dirs: tests/hitl/lib
   build-depends:
@@ -131,25 +150,29 @@ library hitlt-shared
     , clash-lib
     , ghc-typelits-proof-assist
     , infinite-list
+    , modular-arithmetic
     , mtl
     , pretty-show
     , string-interpolate
     , text
   exposed-modules:
-    Clash.Cores.LatticeSemi.ECP5.Domain
-    Clash.Cores.LatticeSemi.ECP5.Pll
-    Clash.Cores.Uart
-    Clash.Crypto.Hitlt.Shared
-    Clash.Crypto.Hitlt.Uart
+    Hitl.Clash.Cores.LatticeSemi.ECP5.Domain
+    Hitl.Clash.Cores.LatticeSemi.ECP5.Pll
+    Hitl.Clash.Cores.Uart
+    Hitl.Clash.Cores.Uart.Extra
+    Hitl.Clash.Crypto.Calculator.CLU
+    Hitl.Clash.Sized.Stack
 
 library hitlt-instances
   import: common-options
   hs-source-dirs: tests/hitl/top
   build-depends:
     , clash-crypto
-    , clash-crypto:hitlt-shared
+    , clash-crypto:hitl
+    , clash-crypto:test
   exposed-modules:
     BEA
+    Calculator
     CLU
     FastGCD
     FltCtmi
@@ -160,6 +183,7 @@ library hitlt-instances
     SictMi
     SHA
     Stack
+    ISAPrint
 
 test-suite hitlt
   import: common-options
@@ -170,12 +194,12 @@ test-suite hitlt
   build-depends:
     , bytestring
     , clash-crypto
-    , clash-crypto:hitlt-shared
+    , clash-crypto:hitl
     , clash-crypto:shake-rules
+    , clash-crypto:test
     , clash-prelude-hedgehog
     , cryptohash
     , hedgehog >= 1.0
-    , modular-arithmetic
     , serialport >= 0.5.6
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
@@ -187,7 +211,7 @@ executable clash
   main-is: Main.hs
   build-depends:
     , clash-crypto
-    , clash-crypto:hitlt-shared
+    , clash-crypto:hitl
     , clash-ghc
 
 common shake-options

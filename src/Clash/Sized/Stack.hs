@@ -20,7 +20,7 @@ module Clash.Sized.Stack
 import Clash.Prelude
 
 import Control.Monad (guard)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 
 -- | The possible actions for manipulating the stack.
 data StackAction n a
@@ -85,15 +85,20 @@ stack stackAction = case toUNat (SNat @n) of
   UZero → pure (Nothing, 0)
 
   -- the singleton stack
-  USucc UZero → mealy (~~>) (Nothing, Just ()) stackAction
+  USucc UZero → moore (~~>) out (Nothing, False) stackAction
    where
-    (Nothing, _) ~~> Push x   = ((Just x , Just ()), (Nothing, 0))
-    (Nothing, _) ~~> _        = ((Nothing, Nothing), (Nothing, 0))
-    (r      , c) ~~> Push{}   = ((r      , Nothing), (c >> r , 1))
-    (r      , c) ~~> CopyUp{} = ((r      , Nothing), (c >> r , 1))
-    (r      , c) ~~> Pop 0    = ((r      , c      ), (c >> r , 1))
-    (r      , c) ~~> Pop _    = ((Nothing, Just ()), (c >> r , 1))
-    (r      , c) ~~> _        = ((r      , Just ()), (c >> r , 1))
+    (Nothing, _) ~~> Push x    = (Just x , True )
+    (Nothing, _) ~~> _         = (Nothing, False)
+    (r      , _) ~~> Push{}    = (r      , False)
+    (r      , _) ~~> CopyUp{}  = (r      , False)
+    (r      , _) ~~> Pop 0     = (r      , True )
+    _            ~~> Pop{}     = (Nothing, False)
+    (r      , _) ~~> _         = (r      , True )
+
+    out (r, b) =
+     ( if b then r else Nothing
+     , if isJust r then 1 else 0
+     )
 
   -- any stack of size 2 or more
   USucc un@(USucc _) → result

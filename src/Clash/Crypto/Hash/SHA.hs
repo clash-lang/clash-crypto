@@ -18,7 +18,7 @@ module Clash.Crypto.Hash.SHA
     WordSize, BlockSize, MessageDigestSize, HashValueWords
   , ScheduleCount, SHAWord, MessageBlock, HashValue, Message
     -- * Additional Evidence
-  , KnownSHA, SHAFacts(..), knownSHA
+  , KnownSHA(..), SHAFacts(..)
   ) where
 
 import Clash.Prelude
