@@ -35,7 +35,9 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 -- Reference implementation
+import qualified Crypto.Hash as Spec
 import qualified Crypto.MAC.HMAC as Spec
+import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import Data.ByteString (ByteString)
 
@@ -47,7 +49,8 @@ tastyTests =
     ]
 
 testHmacHedgehog ∷
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Spec.HashAlgorithm (CryptoToHash alg)) ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   Bool → Property
 testHmacHedgehog alg contiguous
@@ -64,8 +67,9 @@ testHmacHedgehog alg contiguous
     keySpacings ← forAll $ genSpacings testKey
     msgSpacings ← forAll $ genSpacings testMsg
     let testInput = (testKey, testMsg)
-    (===) (hmacRefImpl alg testInput)
-          (hmacImpl alg (keySpacings, msgSpacings) testInput)
+        ref = hmacRefImpl alg testInput
+        dut = hmacImpl alg (keySpacings, msgSpacings) testInput
+    ref === dut
 
 showLn ∷ ShowX a ⇒ [a] → String
 showLn = List.concatMap ((<> "\n") . showX)
@@ -78,7 +82,7 @@ hmacImpl ∷
   ByteString
 hmacImpl alg (keySpacings, msgSpacings) (keyData, msgData)
   | SHAFacts ← knownSHA alg
-  , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
+  , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       addSpacings xs
         = List.concatMap (\(j, x) → x : List.replicate j NoData)
@@ -140,9 +144,10 @@ hmacImpl alg (keySpacings, msgSpacings) (keyData, msgData)
       BS.pack $ toList $ unpack <$> output
 
 hmacRefImpl ∷
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
-  (ByteString, ByteString) →
-  ByteString
-hmacRefImpl alg (key, msg)
-  | SHAFacts ← knownSHA alg
-  = Spec.hmac (cryptoHash alg) (natToNum @(BlockSize alg `Div` 8)) key msg
+  ∀ (alg ∷ SHA) ->
+  (KnownSHA alg, CryptoHash alg, Spec.HashAlgorithm (CryptoToHash alg)) ⇒
+  (ByteString, ByteString) → ByteString
+hmacRefImpl alg
+  | SHAFacts <- knownSHA alg
+  = BS.pack . Memory.unpack . Spec.hmacGetDigest
+  . uncurry (Spec.hmac @_ @_ @(CryptoToHash alg))

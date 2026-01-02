@@ -71,6 +71,7 @@ import Shake
   , shakeOptions, shakeBuild, configLookup
   )
 
+import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
   ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate
   )
@@ -79,13 +80,8 @@ import qualified System.Timeout      as TO (timeout)
 import qualified Hedgehog.Range      as Range (linear)
 import qualified Hedgehog.Gen        as Gen
 import qualified Clash.Sized.Vector  as Vec
-import qualified Crypto.Hash.SHA1    as SHA1 (hash)
-import qualified Crypto.Hash.SHA224  as SHA224 (hash)
-import qualified Crypto.Hash.SHA256  as SHA256 (hash)
-import qualified Crypto.Hash.SHA384  as SHA384 (hash)
-import qualified Crypto.Hash.SHA512  as SHA512 (hash)
-import qualified Crypto.Hash.SHA512t as SHA512t (hash)
-import qualified Crypto.MAC.HMAC     as HMAC (hmac)
+import qualified Crypto.Hash         as Hash
+import qualified Crypto.MAC.HMAC     as HMAC
 
 main ∷ IO ()
 main = do
@@ -259,7 +255,8 @@ main = do
         runHitltKaratsubaModulo sem dev settings x y
 
   testSHA ∷
-    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
+    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
+             Hash.HashAlgorithm (CryptoToHash alg)) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
@@ -272,7 +269,8 @@ main = do
         runHitltSHA alg sem dev settings bs
 
   testHMACSHA ∷
-    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg) ⇒
+    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
+             Hash.HashAlgorithm (CryptoToHash alg)) ⇒
     QSem →
     FilePath →
     SerialPortSettings →
@@ -431,7 +429,8 @@ runHitltKaratsubaModulo sem dev settings x y =
   eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod)) $ x * y
 
 runHitltSHA ∷
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Hash.HashAlgorithm (CryptoToHash alg)) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -444,7 +443,8 @@ runHitltSHA alg sem dev settings input | SHAFacts ← knownSHA alg =
  in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
 runHitltHMACSHA ∷
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Hash.HashAlgorithm (CryptoToHash alg)) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -459,7 +459,8 @@ runHitltHMACSHA alg sem dev settings key msg
         <> escape key
         <> escape (BS.replicate (n - BS.length key) 0xFF)
         <> escapeAndTerminate msg
-      eq = HMAC.hmac (cryptoHash alg) n key msg
+      eq = BS.pack $ Memory.unpack
+         $ HMAC.hmacGetDigest $ HMAC.hmac @_ @_ @(CryptoToHash alg) key msg
     in
       runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
  where
@@ -569,18 +570,34 @@ genMod = do
   return $ createMod @p x
 
 class CryptoHash (alg ∷ SHA) where
-  cryptoHash# ∷ Proxy alg → ByteString → ByteString
+  type CryptoToHash (alg ∷ SHA)
+  cryptoHash# ∷ Proxy alg → ByteString → Hash.Digest (CryptoToHash alg)
 
-instance CryptoHash SHA1      where cryptoHash# _ = SHA1.hash
-instance CryptoHash SHA224    where cryptoHash# _ = SHA224.hash
-instance CryptoHash SHA256    where cryptoHash# _ = SHA256.hash
-instance CryptoHash SHA384    where cryptoHash# _ = SHA384.hash
-instance CryptoHash SHA512    where cryptoHash# _ = SHA512.hash
-instance CryptoHash SHA512224 where cryptoHash# _ = SHA512t.hash 224
-instance CryptoHash SHA512256 where cryptoHash# _ = SHA512t.hash 256
+instance CryptoHash SHA1 where
+  type CryptoToHash SHA1 = Hash.SHA1
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA224 where
+  type CryptoToHash SHA224  = Hash.SHA224
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA256 where
+  type CryptoToHash SHA256  = Hash.SHA256
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA384 where
+  type CryptoToHash SHA384  = Hash.SHA384
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512 where
+  type CryptoToHash SHA512 = Hash.SHA512
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512224 where
+  type CryptoToHash SHA512224  = Hash.SHA512t_224
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512256 where
+  type CryptoToHash SHA512256  = Hash.SHA512t_256
+  cryptoHash# _ = Hash.hash
 
-cryptoHash ∷ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
-cryptoHash alg = cryptoHash# (Proxy @alg)
+cryptoHash ∷
+ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
+cryptoHash alg = BS.pack . Memory.unpack . cryptoHash# (Proxy @alg)
 
 parseCS ∷ String → CommSpeed
 parseCS = \case

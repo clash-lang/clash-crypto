@@ -34,13 +34,9 @@ import Test.Tasty.Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-import qualified Crypto.Hash.SHA1    as SHA1
-import qualified Crypto.Hash.SHA224  as SHA224
-import qualified Crypto.Hash.SHA256  as SHA256
-import qualified Crypto.Hash.SHA384  as SHA384
-import qualified Crypto.Hash.SHA512  as SHA512
-import qualified Crypto.Hash.SHA512t as SHA512t
+import qualified Crypto.Hash as Hash
 
+import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.List as List
 
@@ -117,7 +113,8 @@ tastyTests = testGroup "Clash.Crypto.Hash.SHA"
 -- specification.
 testHashPure ∷
   ∀ (m ∷ Type → Type). Monad m ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Hash.HashAlgorithm (CryptoToHash alg)) ⇒
   ByteString →
   -- ^ input data
   PropertyT m ()
@@ -145,15 +142,16 @@ testHashPure alg bs
     resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
     resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
 
-    dut = toList $ unpack <$> resultDigestAsVBv8
-    ref = BS.unpack $ cryptoHash alg bs
+    dut = BS.pack $ toList $ unpack <$> resultDigestAsVBv8
+    ref = cryptoHash alg bs
 
   ref === dut
 
 -- | Tests on a contiguous data input stream.
 testHashCStream ∷
   ∀ (m ∷ Type → Type). Monad m ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Hash.HashAlgorithm (CryptoToHash alg)) ⇒
   (8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0) ⇒
   ByteString →
   -- ^ input data
@@ -166,7 +164,8 @@ testHashCStream alg
 -- | Tests on a non-contiguous data input stream.
 testHashNCStream ∷
   ∀ (m ∷ Type → Type). Monad m ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg,
+                   Hash.HashAlgorithm (CryptoToHash alg)) ⇒
   (8 ≤ BlockSize alg, BlockSize alg `Mod` 8 ~ 0) ⇒
   [(BitVector 8, Int)] →
   -- ^ input data, where each byte in the first component is followed
@@ -212,24 +211,40 @@ testHashNCStream alg xs
         a : b : _ | a /= b    → error "Repeated hashs differ."
                   | otherwise → unconcatBitVector# a
 
-      ref = BS.unpack $ cryptoHash alg $ BS.pack $ fmap (unpack . fst) xs
-      dut = toList $ unpack <$> resultDigestAsVBv8
+      ref = cryptoHash alg $ BS.pack $ fmap (unpack . fst) xs
+      dut = BS.pack $ toList $ unpack <$> resultDigestAsVBv8
     in
       ref === dut
 
 class CryptoHash (alg ∷ SHA) where
-  cryptoHash# ∷ Proxy alg → ByteString → ByteString
+  type CryptoToHash (alg ∷ SHA)
+  cryptoHash# ∷ Proxy alg → ByteString → Hash.Digest (CryptoToHash alg)
 
-instance CryptoHash SHA1      where cryptoHash# _ = SHA1.hash
-instance CryptoHash SHA224    where cryptoHash# _ = SHA224.hash
-instance CryptoHash SHA256    where cryptoHash# _ = SHA256.hash
-instance CryptoHash SHA384    where cryptoHash# _ = SHA384.hash
-instance CryptoHash SHA512    where cryptoHash# _ = SHA512.hash
-instance CryptoHash SHA512224 where cryptoHash# _ = SHA512t.hash 224
-instance CryptoHash SHA512256 where cryptoHash# _ = SHA512t.hash 256
+instance CryptoHash SHA1 where
+  type CryptoToHash SHA1 = Hash.SHA1
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA224 where
+  type CryptoToHash SHA224  = Hash.SHA224
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA256 where
+  type CryptoToHash SHA256  = Hash.SHA256
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA384 where
+  type CryptoToHash SHA384  = Hash.SHA384
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512 where
+  type CryptoToHash SHA512 = Hash.SHA512
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512224 where
+  type CryptoToHash SHA512224  = Hash.SHA512t_224
+  cryptoHash# _ = Hash.hash
+instance CryptoHash SHA512256 where
+  type CryptoToHash SHA512256  = Hash.SHA512t_256
+  cryptoHash# _ = Hash.hash
 
-cryptoHash ∷ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
-cryptoHash alg = cryptoHash# (Proxy @alg)
+cryptoHash ∷
+ ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
+cryptoHash alg = BS.pack . Memory.unpack . cryptoHash# (Proxy @alg)
 
 -- | Some example input for unit testing.
 input1 ∷ ByteString
