@@ -43,6 +43,8 @@ import qualified Data.List as List
 import Clash.Crypto.Hash.SHA
 
 import qualified Clash.Crypto.Hash.SHA.Specification as Spec
+import Data.Word (Word8)
+import Text.Printf (printf)
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Hash.SHA"
@@ -142,10 +144,12 @@ testHashPure alg bs
     resultDigestAsVBv8 ∷ Vec (MessageDigestSize alg `Div` 8) (BitVector 8)
     resultDigestAsVBv8 = unconcatBitVector# resultDigestAsBv
 
+    pr = List.concatMap (printf "%02x " ∷ Word8 → String) . BS.unpack
+
     dut = BS.pack $ toList $ unpack <$> resultDigestAsVBv8
     ref = cryptoHash alg bs
 
-  ref === dut
+  pr ref === pr dut
 
 -- | Tests on a contiguous data input stream.
 testHashCStream ∷
@@ -211,10 +215,12 @@ testHashNCStream alg xs
         a : b : _ | a /= b    → error "Repeated hashs differ."
                   | otherwise → unconcatBitVector# a
 
+      pr = List.concatMap (printf "%02x " ∷ Word8 → String) . BS.unpack
+
       ref = cryptoHash alg $ BS.pack $ fmap (unpack . fst) xs
       dut = BS.pack $ toList $ unpack <$> resultDigestAsVBv8
     in
-      ref === dut
+      pr ref === pr dut
 
 class CryptoHash (alg ∷ SHA) where
   type CryptoToHash (alg ∷ SHA)
