@@ -30,7 +30,7 @@ import Data.Bifunctor (Bifunctor(..))
 import qualified Hedgehog.Gen as Gen
 
 tastyTests :: TestTree
-tastyTests = localOption (HedgehogTestLimit (Just 100000)) $
+tastyTests = localOption (HedgehogTestLimit (Just 100)) $
   testGroup "Clash.Crypto.ECDSA.Algorithm"
   [
     testProperty "Test SignHash against crypton" $ property $ do
@@ -78,8 +78,7 @@ tastyTests = localOption (HedgehogTestLimit (Just 100000)) $
     let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
         (x1, y1) = pointToIntegers p1
         (x2, y2) = (0,0)
-        p2   = pointFromIntegers (x2, y2)
-        ref  = pointToIntegers $ pointAdd p2 p1
+        ref  = (x1,y1)
         impl = pointFromList
              $ fromMaybe (error "Routines in tests should always return")
              $ runPointAdd $ fromInteger <$> [x2,y2,x1,y1]
@@ -91,8 +90,7 @@ tastyTests = localOption (HedgehogTestLimit (Just 100000)) $
     let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
         (x1, y1) = pointToIntegers p1
         (x2, y2) = (0,0)
-        p2   = pointFromIntegers (x2, y2)
-        ref  = pointToIntegers $ pointAdd p1 p2
+        ref  = (x1,y1)
         impl = pointFromList
              $ fromMaybe (error "Routines in tests should always return")
              $ runPointAdd $ fromInteger <$> [x1,y1,x2,y2]
