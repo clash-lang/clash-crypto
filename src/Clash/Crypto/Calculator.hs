@@ -18,15 +18,14 @@ import Clash.Prelude hiding (Mod)
 
 import Clash.Crypto.Calculator.CLU
 import Clash.Crypto.Calculator.ISA
-import Clash.Crypto.Calculator.Modulo
 import Clash.Signal.Channel
 import Clash.Sized.Stack
 
 -- | Runs the instruction sequence referenced by the first required
 -- type argument.
 calculator ∷
-  ∀ {group}
-    (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ {group} (dom ∷ Domain) (n ∷ Nat).
+    (HiddenClockResetEnable dom, KnownNat n) ⇒
   ∀ (main ∷ group) → KnownRoutine main ⇒
   -- ^ the routine referring to the executed instruction sequence
   ∀ (ptr ∷ Type) → (InstructionPointer main ptr, NFDataX ptr) ⇒
@@ -35,19 +34,19 @@ calculator ∷
   -- ^ the staging depth of the Karatsuba based multiplier
   ∀ regs → KnownNat regs ⇒
   -- ^ the size of the base multiplier
-  Channel dom (Vec (ArgCount main) (Mod (CPrime (SecP256Mod)))) →
+  Channel dom (Vec (ArgCount main) (Unsigned n)) →
   -- ^ initial stack content (rightmost element at the top)
-  Channel dom (Vec (ResultCount main) (Mod (CPrime (SecP256Mod))))
+  Channel dom (Vec (ResultCount main) (Unsigned n))
   -- ^ final stack content (rightmost element at the top)
 calculator main ptr stages regs input
-  | RoutineFacts ← knownRoutine @group @main @(Mod (CPrime (SecP256Mod)))
+  | RoutineFacts ← knownRoutine @group @main @(Unsigned n)
   = let
       out = MealyOutput
         { calculatorOutput = None
         , cluAction        = None
         , dataStackAction  = Inspect 0
         , iptrStackAction  = Inspect 0
-        } ∷ MealyOutput main ptr (Mod (CPrime (SecP256Mod)))
+        } ∷ MealyOutput main ptr (Unsigned n)
 
       next ip = Execute (inc main ip) None None
 
@@ -58,14 +57,11 @@ calculator main ptr stages regs input
                    <$> getContent
                          ( delayC
                          $ clu stages regs
-                         $ g <$> Channel m.cluAction
+                         $ Channel m.cluAction
                          )
                 )
             <*> (fst <$> stack m.dataStackAction)
             <*> (fst <$> stack m.iptrStackAction)
-
-      g (SecP256Mod, (op, xy)) = (op, (bitCoerce xy, natToNum @(CPrime SecP256Mod)))
-      g (SecP256Ord, (op, xy)) = (op, (bitCoerce xy, natToNum @(CPrime SecP256Ord)))
 
       -- / wait for some input / --
 
@@ -122,7 +118,7 @@ calculator main ptr stages regs input
                     Fresh z → (next ip, out { dataStackAction = Push z })
                     _       →
                       ( Execute ip (Old x) (Old y)
-                      , out { cluAction = (p, ) . (op, ) <$> (liftA2 (,) mx my) }
+                      , out { cluAction = (op, ) . (, p) <$> (liftA2 (,) mx my) }
                       )
 
       -- / end of instruction sequence / --
@@ -186,7 +182,7 @@ data MealyOutput routine ptr a = MealyOutput
   { -- | the output of the calculator
     calculatorOutput ∷ Content (Vec (ResultCount routine) a)
   , -- | the input to the CLU
-    cluAction ∷ Content (ECPrime, (CluInstruction, (a, a)))
+    cluAction ∷ Content (CluInstruction, ((a, a), a))
   , -- | the input to the data stack
     dataStackAction ∷ StackAction (RequiredStackSize routine) a
     -- | the input to the instruction pointer stack

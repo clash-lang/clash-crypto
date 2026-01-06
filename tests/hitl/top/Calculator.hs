@@ -10,6 +10,7 @@ import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 
 import Clash.Crypto.Calculator
 import Clash.Crypto.Calculator.ISA
+import Clash.Crypto.Calculator.Modulo (ModSize)
 
 import Test.Clash.Crypto.Calculator (TestRoutines(..), TestIP)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
@@ -32,6 +33,6 @@ topEntity (orangePll12 → (clk, rst))
   $ newsfeed
       . calculator Main TestIP 2 72
       . cachedFromMaybe
-      . bulkRead @(Vec 2 ECMod)
+      . bulkRead @(Vec 2 (Unsigned (ModSize SecP256ModPrime)))
 
 makeTopEntity 'topEntity

@@ -25,7 +25,7 @@ import Test.Tasty.Hedgehog
 
 import qualified Data.List as List
 
-import Clash.Crypto.Calculator.ISA (ECMod, SecP256ModPrime)
+import Clash.Crypto.Calculator.ISA (SecP256ModPrime)
 import Clash.Crypto.Calculator.InverseModulo
   (bea, fastGcdSequential, fltCtmi, sictMiSequential, deriveSictPrecomp)
 import Clash.Crypto.Calculator.Modulo
@@ -55,8 +55,8 @@ tastyTests = testGroup "Clash.Crypto.Calculator.InverseModulo"
 
 invModuloProperty ∷
   ( HiddenClockResetEnable System ⇒
-    Channel System ECMod →
-    Channel System ECMod
+    Channel System (Mod SecP256ModPrime) →
+    Channel System (Mod SecP256ModPrime)
   ) → Property
 invModuloProperty invModComp = property $ do
   f0 <- forAll $ genIndex $ Range.constantFrom 1 1 (maxBound - 1)
