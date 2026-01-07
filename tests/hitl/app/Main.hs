@@ -55,7 +55,7 @@ import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
   )
 import Clash.Crypto.Calculator.ISA
-  ( CluInstruction(..), ECPrime(..), CPrime, CMod, ECMod, SecP256ModPrime
+  ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime
   )
 import Clash.Crypto.Calculator.Modulo (Mod, ModSize, createMod)
 
@@ -154,13 +154,13 @@ main = do
   testCLU name sem dev settings
     = test sem dev settings name $ do
         opMod ← forAll Gen.enumBounded
-        a ∷ CMod SecP256Mod ← genMod
-        b ∷ CMod SecP256Mod ← genMod
+        a ∷ Mod SecP256ModPrime ← genMod
+        b ∷ Mod SecP256ModPrime ← genMod
         runHitltCLU sem dev settings (opMod, (a, b))
 
         opOrd ← forAll Gen.enumBounded
-        c ∷ CMod SecP256Ord ← genMod
-        d ∷ CMod SecP256Ord ← genMod
+        c ∷ Mod SecP256OrdPrime ← genMod
+        d ∷ Mod SecP256OrdPrime ← genMod
         runHitltCLU sem dev settings (opOrd, (c, d))
 
   testCalculator ∷
@@ -171,8 +171,8 @@ main = do
     TestTree
   testCalculator name sem dev settings
     = test sem dev settings name $ do
-        a ∷ CMod SecP256Mod ← genMod
-        b ∷ CMod SecP256Mod ← genMod
+        a ∷ Mod SecP256ModPrime ← genMod
+        b ∷ Mod SecP256ModPrime ← genMod
         runHitltCalculator sem dev settings a b
 
   genStackAction ∷
@@ -215,7 +215,7 @@ main = do
     TestTree
   testInverseModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ ECMod ← genMod
+        x ∷ Mod SecP256ModPrime ← genMod
         unless (x == 0)
           $ runHitltInverseModulo sem dev settings x
 
@@ -250,8 +250,8 @@ main = do
     TestTree
   testKaratsubaModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ ECMod ← genMod
-        y ∷ ECMod ← genMod
+        x ∷ Mod SecP256ModPrime ← genMod
+        y ∷ Mod SecP256ModPrime ← genMod
         runHitltKaratsubaModulo sem dev settings x y
 
   testSHA ∷
@@ -306,7 +306,7 @@ main = do
   shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
 
 runHitltCLU ∷
-  ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize (CPrime SecP256Mod)) ⇒
+  ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize SecP256ModPrime) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -320,7 +320,7 @@ runHitltCLU sem dev settings (op, (x, y)) =
          ((0, (op, ((bitCoerce x, bitCoerce y), pV))) ∷ CluInput)
 
   eq = pack $ toList
-    $ bitCoerce @_ @(ByteVec (ByteSize ECMod))
+    $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
     $ case op of
         Add → x + y
         Sub → x - y
@@ -336,14 +336,14 @@ runHitltCalculator ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  ECMod → ECMod →
+  Mod SecP256ModPrime → Mod SecP256ModPrime →
   PropertyT IO ()
 runHitltCalculator sem dev settings a b =
-  runHitlt (ByteSize ECMod) sem dev settings bs eq
+  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(ByteVec (ByteSize (ECMod, ECMod))) (a, b)
-  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod))
+     $ bitCoerce @_ @(ByteVec (2 * ByteSize (Mod SecP256ModPrime))) (a, b)
+  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
      $ goldenRoutine a b
 
 runStack ∷
@@ -377,13 +377,13 @@ runHitltInverseModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  ECMod →
+  Mod SecP256ModPrime →
   PropertyT IO ()
 runHitltInverseModulo sem dev settings x = do
-  runHitlt (ByteSize ECMod) sem dev settings (toBS x)
+  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings (toBS x)
     $ toBS $ invMod @SecP256ModPrime x
  where
-  toBS = pack . toList . bitCoerce @_ @(ByteVec (ByteSize ECMod))
+  toBS = pack . toList . bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
 
 runHitltModulo ∷
   QSem →
@@ -419,14 +419,17 @@ runHitltKaratsubaModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  ECMod →
-  ECMod →
+  Mod SecP256ModPrime →
+  Mod SecP256ModPrime →
   PropertyT IO ()
 runHitltKaratsubaModulo sem dev settings x y =
-  runHitlt (ByteSize ECMod) sem dev settings bs eq
+  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings bs eq
  where
-  bs = pack $ toList $ bitCoerce @_ @(ByteVec (2 * (ByteSize ECMod))) (x, y)
-  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod)) $ x * y
+  bs = pack $ toList
+     $ bitCoerce @_ @(ByteVec (2 * (ByteSize (Mod SecP256ModPrime)))) (x, y)
+
+  eq = pack $ toList
+     $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime))) $ x * y
 
 runHitltSHA ∷
   ∀ (alg ∷ SHA) →

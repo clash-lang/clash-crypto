@@ -33,9 +33,10 @@ import Test.Clash.Crypto.Calculator
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Calculator"
   [ testProperty "Calculator" $ property $ do
-      a ∷ CMod SecP256Mod ← genMod
-      b ∷ CMod SecP256Mod ← genMod
-      testCalculator Main TestIP a b $ goldenRoutine a b
+      a ∷ Mod SecP256ModPrime ← genMod
+      b ∷ Mod SecP256ModPrime ← genMod
+      testCalculator Main TestIP (bitCoerce a) (bitCoerce b)
+        $ bitCoerce $ goldenRoutine a b
   ]
  where
   genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
@@ -49,9 +50,9 @@ testCalculator ∷
   ∀ (main ∷ group) → KnownRoutine main ⇒
   ∀ (ptr ∷ Type) → (InstructionPointer main ptr, NFDataX ptr) ⇒
   (ArgCount main ~ 2, ResultCount main ~ 1) ⇒
-  CMod SecP256Mod →
-  CMod SecP256Mod →
-  CMod SecP256Mod →
+  Unsigned (ModSize SecP256ModPrime) →
+  Unsigned (ModSize SecP256ModPrime) →
+  Unsigned (ModSize SecP256ModPrime) →
   PropertyT m ()
 testCalculator main ip a b c
   = (c ===)

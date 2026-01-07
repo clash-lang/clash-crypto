@@ -4,14 +4,15 @@ module Hitl.Clash.Crypto.Calculator.CLU
 
 import Clash.Prelude
 
-import Clash.Crypto.Calculator.ISA (CluInstruction, ECMod)
+import Clash.Crypto.Calculator.ISA (CluInstruction, SecP256ModPrime)
+import Clash.Crypto.Calculator.Modulo (ModSize)
 import Hitl.Clash.Cores.Uart.Extra (Byte)
 
 type CluInput =
   ( Unsigned (BitSize Byte - BitSize CluInstruction)
   , ( CluInstruction
-    , ( (Unsigned (BitSize ECMod), Unsigned (BitSize ECMod))
-      , Unsigned (BitSize ECMod)
+    , ( (Unsigned (ModSize SecP256ModPrime), Unsigned (ModSize SecP256ModPrime))
+      , Unsigned (ModSize SecP256ModPrime)
       )
     )
   )

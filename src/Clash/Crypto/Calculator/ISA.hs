@@ -26,8 +26,6 @@ import Data.Kind (Type)
 import Clash.Promoted.Integer
 import Clash.Promoted.List
 
-import Clash.Crypto.Calculator.Modulo (Mod)
-
 --------------------------------------------------------------------------------
 
 -- | Calculator Instructions
@@ -118,21 +116,6 @@ type SecP256ModPrime
 type SecP256OrdPrime
   = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
 
--- | A finite space to distinguish between the supported elliptic
--- curve primes.
-data ECPrime
-  = SecP256Mod
-  | SecP256Ord
-  deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
-
--- | Maps the 'ECPrime' reference to the actual prime.
-type family CPrime (p :: ECPrime) ∷ Nat where
-  CPrime SecP256Mod = SecP256ModPrime
-  CPrime SecP256Ord = SecP256OrdPrime
-
-type CMod p = Mod (CPrime p)
-type ECMod = CMod SecP256Mod
-
 --------------------------------------------------------------------------------
 
 -- | Reified type of an 'Instruction' at the term-level.
@@ -142,7 +125,7 @@ type Instr group (rbound ∷ Nat) (stackSize ∷ Nat) (a ∷ Type) =
     (Index (stackSize + 1))
     (Index stackSize)
     (Index rbound)
-    ECPrime
+    a
     a
 
 -- | Identifies all instruction sequences that can be reified.
@@ -192,16 +175,10 @@ instance
   instructionVec _ = RUN (natToNum @n) (routine k) :> instructionVec is
 
 instance
-  (KnownCluInstruction ins, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (CLU SecP256ModPrime ins : is)
+  (KnownCluInstruction ins, KnownInstructions b s a is, Num a, KnownNat p) ⇒
+  KnownInstructions b s a (CLU p ins : is)
  where
-  instructionVec _ = CLU SecP256Mod (cluInstruction ins) :> instructionVec is
-
-instance
-  (KnownCluInstruction ins, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (CLU SecP256OrdPrime ins : is)
- where
-  instructionVec _ = CLU SecP256Ord (cluInstruction ins) :> instructionVec is
+  instructionVec _ = CLU (natToNum @p) (cluInstruction ins) :> instructionVec is
 
 -- | The reified instruction vector of a routine.
 instructions ∷
