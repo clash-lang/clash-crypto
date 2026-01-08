@@ -178,6 +178,7 @@ library hitlt-instances
     , clash-crypto:hitl
     , clash-crypto:test
   exposed-modules:
+    Algorithm
     BEA
     Calculator
     CLU

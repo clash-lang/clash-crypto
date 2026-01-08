@@ -136,7 +136,7 @@ runSignHash :: [Mod Q'] -> Maybe [Mod Q']
 runSignHash = run (SignHash :: Routine Nat Nat SECP256R1)
 
 runPointAdd :: [Mod Q'] -> Maybe [Mod Q']
-runPointAdd = run (PointAdd :: Routine Nat Nat SECP256R1)
+runPointAdd = run (PointAddMain :: Routine Nat Nat SECP256R1)
 
 runPointMul :: [Mod Q'] -> Maybe [Mod Q']
 runPointMul = run (PointScalarMul :: Routine Nat Nat SECP256R1)
