@@ -70,6 +70,7 @@ library
     , clash-lib
     , ghc-typelits-proof-assist
     , template-haskell
+    , deepseq
   exposed-modules:
     Clash.Crypto.Calculator
     Clash.Crypto.Calculator.CLU
@@ -80,7 +81,10 @@ library
     Clash.Crypto.Calculator.Karatsuba
     Clash.Crypto.Calculator.Modulo
     Clash.Crypto.Calculator.Utils
+    Clash.Crypto.Calculator.Simulate
+    Clash.Crypto.ECDSA.Algorithm
     Clash.Crypto.ECDSA.Routines
+    Clash.Crypto.ECDSA.Simulate
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types

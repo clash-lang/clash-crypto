@@ -13,6 +13,7 @@ Instruction Set Architecture for the calculator.
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeAbstractions #-}
 
 module Clash.Crypto.Calculator.ISA where
 
@@ -22,6 +23,7 @@ import Clash.Class.Counter (Counter(..))
 import Language.Haskell.Unicode (type (≤))
 
 import Data.Kind (Type)
+import Data.Proxy (Proxy(..))
 
 import Clash.Promoted.Integer
 import Clash.Promoted.List
@@ -137,7 +139,7 @@ class KnownInstructions
  where
   instructionVec ∷
     ∀ x → x ~ instructions ⇒
-    Vec (Length instructions) (Instr group rbound stackSize a)
+    Vec (Length instructions) (Instr (SomeRoutine group) rbound stackSize a)
 
 instance
   KnownInstructions b s a '[]
@@ -145,40 +147,66 @@ instance
   instructionVec _ = Nil
 
 instance
-  (KnownNat c, KnownInstructions b s a is, Num a, BitPack a) ⇒
-  KnownInstructions b s a (PUT c : is)
+  (KnownInstruction b s a i, KnownInstructions b s a is) ⇒
+  KnownInstructions b s a (i : is)
  where
-  instructionVec _ = PUT (natToNum @c) :> instructionVec is
+  instructionVec _ = instruction i :> instructionVec is
+
+data SomeRoutine group where
+  SomeRoutine ::
+    ∀ {group} r .
+    KnownRoutine (r ∷ group) ⇒
+    Proxy r →
+    SomeRoutine group
+
+instance Show group => Show (SomeRoutine group) where
+  show (SomeRoutine @r _) = show (routine r)
+
+class KnownInstruction
+  (rbound ∷ Nat)
+  (stackSize ∷ Nat)
+  (a ∷ Type)
+  (instruction ∷ Instruction group Nat Nat Nat Nat Nat)
+ where
+  instruction ::
+    ∀ x → x ~ instruction ⇒
+    Instr (SomeRoutine group) rbound stackSize a
 
 instance
-  (KnownNat n, KnownNat s, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (POP n : is)
+  (KnownNat c, Num a, BitPack a) ⇒
+  KnownInstruction b s a (PUT c)
  where
-  instructionVec _ = POP (natToNum @n) :> instructionVec is
+  instruction _ = PUT (natToNum @c)
 
 instance
-  (KnownNat n, KnownNat s, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (SWP n : is)
+  (KnownNat n, KnownNat s) ⇒
+  KnownInstruction b s a (POP n)
  where
-  instructionVec _ = SWP (natToNum @n) :> instructionVec is
+  instruction _ = POP (natToNum @n)
 
 instance
-  (KnownNat n, KnownNat s, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (CUP n : is)
+  (KnownNat n, KnownNat s) ⇒
+  KnownInstruction b s a (SWP n)
  where
-  instructionVec _ = CUP (natToNum @n) :> instructionVec is
+  instruction _ = SWP (natToNum @n)
 
 instance
-  (KnownRoutine k, KnownNat n, KnownNat b, KnownInstructions b s a is) ⇒
-  KnownInstructions b s a (RUN n k : is)
+  (KnownNat n, KnownNat s) ⇒
+  KnownInstruction b s a (CUP n)
  where
-  instructionVec _ = RUN (natToNum @n) (routine k) :> instructionVec is
+  instruction _ = CUP (natToNum @n)
 
 instance
   (KnownCluInstruction ins, KnownInstructions b s a is, Num a, KnownNat p) ⇒
   KnownInstructions b s a (CLU p ins : is)
  where
   instructionVec _ = CLU (natToNum @p) (cluInstruction ins) :> instructionVec is
+
+instance
+  (KnownRoutine k, KnownNat n, KnownNat b) ⇒
+  KnownInstruction b s a (RUN n k)
+ where
+  instruction _ = RUN (natToNum @n) (SomeRoutine (Proxy @k))
 
 -- | The reified instruction vector of a routine.
 instructions ∷
@@ -187,7 +215,7 @@ instructions ∷
   ∀ (routine ∷ group) →
   KnownInstructions (RepetitionBound main) stackSize a (Instructions routine) ⇒
   Vec (InstructionCount routine)
-    (Instr group (RepetitionBound main) stackSize a)
+    (Instr (SomeRoutine group) (RepetitionBound main) stackSize a)
 instructions _ r = instructionVec (Instructions r)
 
 --------------------------------------------------------------------------------
