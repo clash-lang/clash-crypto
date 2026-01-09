@@ -1,3 +1,4 @@
+
 {-|
 Module      : Clash.Crypto.MAC.HMAC
 Copyright   : Copyright © 2025 QBayLogic B.V.

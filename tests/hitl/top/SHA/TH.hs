@@ -20,7 +20,7 @@ shaEntities :: Q [(String, Exp)]
 shaEntities = mapM entity shaAlgorithms
  where
   entity algorithm = do
-    e <- [|sha $(pure algorithm)|]
+    e <- [|sha $(pure $ ConE algorithm)|]
     let name = reverse . takeWhile (/= '.') . reverse $ show algorithm
     return (name, e)
 
@@ -28,7 +28,7 @@ hmacEntities :: Q [(String, Type, Exp)]
 hmacEntities = mapM entity shaAlgorithms
  where
   entity algorithm = do
-    let t = algorithm
-    e <- [|hmac $(pure t)|]
+    let t = PromotedT algorithm
+    e <- [|hmac $(pure $ ConE algorithm)|]
     let name = reverse . takeWhile (/= '.') . reverse $ show algorithm
     return (name, t, e)

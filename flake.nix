@@ -1,12 +1,12 @@
 {
   description = "A flake enabling tooling for clash-crypto";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs?rev=3a7affa77a5a539afa1c7859e2c31abdb1aeadf3";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
     clash-compiler = {
-      url = "github:clash-lang/clash-compiler?ref=nix-ghc-minor-update";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:clash-lang/clash-compiler?ref=12169a7255319811505810a84315b9b64771a02d";
+      flake = false;
     };
     serialportSrc = { url = "github:standardsemiconductor/serialport"; flake = false; };
     ghc-typelits-proof-assist.url =
@@ -38,7 +38,7 @@
           yosysOverlay = _: prev: {
             yosys = prev.callPackage ./nix/yosys.nix {};
           };
-          extensions = [ ecpprogOverlay yosysOverlay clash-compiler.overlays.${compiler-version} ];
+          extensions = [ ecpprogOverlay yosysOverlay ];
           pkgs0 = nixpkgs.legacyPackages.${system};
           pkgs = pkgs0.extend (pkgs0.lib.composeManyExtensions extensions);
 
@@ -46,8 +46,16 @@
           clashLib = import ./nix/clash.nix { inherit pkgs lib; };
           inherit (pkgs.haskell.lib) dontCheck doJailbreak overrideCabal;
 
-          hsPkgs0 = pkgs."clashPackages-${compiler-version}";
+          hsPkgs0 = pkgs.haskell.packages.${compiler-version};
           overlay = final: prev: {
+            clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
+              (clash-compiler + "/clash-prelude") { });
+            clash-prelude-hedgehog = dontCheck (prev.callCabal2nix "clash-prelude-hedgehog"
+              (clash-compiler + "/clash-prelude-hedgehog") { });
+            clash-lib = dontCheck (prev.callCabal2nix "clash-lib"
+              (clash-compiler + "/clash-lib") { });
+            clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
+              (clash-compiler + "/clash-ghc") { });
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
             ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghc-tcplugin-api { });

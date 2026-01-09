@@ -3,7 +3,7 @@ hsPkgs: {
     hsPkgs = hsPkgs;
     clashArgs = {
       extraExposedComponents = [
-        { package = "clash-crypto"; component = "hitlt-shared"; }
+        { package = "clash-crypto"; component = "hitl"; }
       ];
       extraFlags = [
         "-fclash-clear"
