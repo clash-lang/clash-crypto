@@ -41,7 +41,8 @@ trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDS
 ' > /etc/nix/nix.conf
 
 # Burn in the requested targets from this repository
-COPY flake.nix flake.lock nix /burn-in-env/
+COPY flake.nix flake.lock /burn-in-env/
+COPY nix /burn-in-env/nix
 RUN \
   cd /burn-in-env && \
   nix build ${NIX_BURN_IN_TARGETS} && \
