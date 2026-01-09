@@ -202,7 +202,6 @@ test-suite hitlt
     , bytestring
     , clash-crypto
     , clash-crypto:hitl
-    , clash-crypto:shake-rules
     , clash-crypto:test
     , clash-prelude-hedgehog
     , crypton
