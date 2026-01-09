@@ -2,6 +2,7 @@ FROM ubuntu:22.04
 
 # What version of Attic to install
 ARG ATTIC_VERSION="687dd7d607824edf11bf33e3d91038467e7fad43"
+ARG NIX_BURN_IN_TARGETS=".#packages.x86_64-linux.ciEnv"
 
 RUN \
   apt-get update && \
@@ -33,11 +34,19 @@ build-users-group = nixbld \n\
 sandbox = false \n\
 cores = 0 \n\
 max-jobs = auto \n\
-experimental-features = nix-command flakes \n\
+experimental-features = nix-command flakes ca-derivations \n\
 substituters = https://cache.nixos.org/ http://192.168.102.136:9200/public/ \n\
 trusted-substituters = http://192.168.102.136:9200/public/ \n\
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= public:PGGlJMx1gGmU069blMqve8tS1ndzBuriUAwGBHGOo4g= \n\
 ' > /etc/nix/nix.conf
+
+# Burn in the requested targets from this repository
+COPY flake.nix flake.lock nix /burn-in-env/
+RUN \
+  cd /burn-in-env && \
+  nix build ${NIX_BURN_IN_TARGETS} && \
+  cd / && \
+  rm -rf /burn-in-env
 
 # fix the known github.com host keys
 RUN mkdir ~/.ssh && echo '\
@@ -47,7 +56,7 @@ github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+V
 ' > ~/.ssh/known_hosts
 
 # Install the deploykey script
-COPY deploykey /usr/bin/deploykey
+COPY .github/setup/deploykey /usr/bin/deploykey
 RUN chmod 711 /usr/bin/deploykey
 
 # Install attic (Nix binary cache)

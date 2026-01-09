@@ -5,9 +5,14 @@
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module SHA (topEntity) where
+module SHA where
 
 import Clash.Prelude
+
+import Control.Monad (forM)
+import qualified Data.Foldable as F
+import Language.Haskell.TH
+
 import Clash.Signal.Channel (newsfeed)
 import Clash.Signal.DataStream (DataStream, Frame(..))
 import Clash.Annotations.TH (makeTopEntity)
@@ -18,12 +23,7 @@ import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Hitl.Clash.Cores.Uart.Extra (Byte, withUartRequestResponseHandler)
 
--- allows to select an SHA variant via a CPP define
-#ifndef HITLT_SHA
-type SHAX = SHA256
-#else
-type SHAX = HITLT_SHA
-#endif
+import SHA.TH
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD
@@ -32,13 +32,26 @@ type BAUD = 9600
 type BAUD = HITLT_BAUD
 #endif
 
-topEntity ∷
-  "CLK" ::: Clock Dom48 →
-  "PMOD1_6" ::: Signal Dom24 Bit →
-  "PMOD1_5" ::: Signal Dom24 Bit
-topEntity (orangePll24 → (clk, rst))
-  = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed . sha SHAX . descape
+$(
+  do
+    es <- shaEntities
+    trees <- forM es $ \(name, e) -> do
+      decls0 <- [d|
+        topEntity ∷
+          "CLK" ::: Clock Dom48 →
+          "PMOD1_6" ::: Signal Dom24 Bit →
+          "PMOD1_5" ::: Signal Dom24 Bit
+        topEntity (orangePll24 → (clk, rst))
+          = withUartRequestResponseHandler clk rst (SNat @BAUD)
+          $ newsfeed . $(pure e) . descape |]
+      let topName = mkName $ "topEntity" <> name
+          decls = fmap rename decls0
+          rename (SigD _ t)  = SigD topName t
+          rename (FunD _ cs) = FunD topName cs
+          rename _           = error "wrong declaration"
+      return decls
+    return (F.concat trees)
+ )
 
 -- | We use `0x00` as an escape symbol to mark the end of the input
 --
@@ -90,4 +103,8 @@ descape = mealy (~~>) (False, S ∷ NextExpectedDataFrame)
 data NextExpectedDataFrame = S | M | E (Index (BitSize Byte))
   deriving (Generic, NFDataX)
 
-makeTopEntity 'topEntity
+$(do
+  es <- shaEntities
+  anns <- forM es $ \(name, _) -> makeTopEntity $ mkName $ "topEntity" <> name
+  return (F.concat anns)
+ )

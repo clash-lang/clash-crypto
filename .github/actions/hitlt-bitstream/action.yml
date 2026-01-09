@@ -1,0 +1,24 @@
+name: "HITLT Bitstream"
+description: "Run Synthesis and P&R for hardware-in-the-loop tests"
+
+inputs:
+  cache:
+    description: "cache argument to attic push"
+    required: true
+  testcase:
+    description: "pattern selecting the tests to be executed"
+    required: true
+    default: "none"
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Run Synthesis and P&R"
+      shell: bash
+      run: nix build .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}
+    - name: "Push any changes to the cache"
+      shell: bash
+      run: |
+        attic push \
+          "${{ inputs.cache }}" \
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }})"

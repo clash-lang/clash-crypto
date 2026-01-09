@@ -40,12 +40,13 @@ import GHC.IO.Handle (Handle)
 import Hedgehog (PropertyT, (===), property, forAll, MonadGen)
 import Language.Haskell.Unicode (type (≤))
 import System.Exit (ExitCode, exitWith)
-import System.Environment (setEnv, withArgs)
+import System.Environment (setEnv)
 import System.Hardware.Serialport
   ( SerialPortSettings(..), CommSpeed(..)
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
+import System.Process (callProcess, readProcess)
 import Test.Tasty
   ( TestTree, DependencyType(..)
   , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
@@ -92,11 +93,9 @@ import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
 
 main ∷ IO ()
 main = do
-  lkup ← configLookup
-
-  let serialDev = lkup "HITLT_SERIAL_DEV"
-      serialSpeed = lkup "SERIAL_SPEED"
-      settings = defaultSerialSettings { commSpeed = parseCS serialSpeed }
+  serialDev   <- nixConfig "hitlt-serial-dev"
+  serialSpeed <- nixConfig "serial-speed"
+  let settings = defaultSerialSettings { commSpeed = parseCS serialSpeed }
 
   -- using only a single serial forces us to use single threaded test
   -- executation at this points
@@ -320,15 +319,18 @@ main = do
     = sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
-            $ liftIO $ shake [name <> ":bitstream"]
+            $ liftIO $ nixBuild (".#hitlt." <> name)
         , withResource
-            (upload shake sem dev settings name)
+            (upload nixRun sem dev settings name)
             (const $ return ())
             $ const
             $ testProperty "run HITLT" $ property p
         ]
 
-  shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
+  nixBuild  attr = callProcess "nix" ["build", "--no-link", attr]
+  nixRun    attr = callProcess "nix" ["run", attr]
+  nixConfig key  =
+    readProcess "nix" ["eval", "--raw", "--file", "build-config.nix", key] ""
 
 runHitltCLU ∷
   ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize SecP256ModPrime) ⇒
@@ -529,18 +531,18 @@ runHitltHMACSHA alg sem dev settings key msg
     | otherwise            = error $ "Invalid key size: " <> show n
 
 upload ∷
-  ([String] → IO ()) →
+  (String → IO ()) →
   QSem →
   FilePath →
   SerialPortSettings →
   String →
   IO()
-upload shake sem dev settings name
+upload nixRun sem dev settings name
   = bracket_ (waitQSem sem) (signalQSem sem)
   $ hWithSerial dev settings $ \serial → do
       hSetBuffering serial NoBuffering
       -- upload the bitstream
-      shake [name <> ":upload"]
+      nixRun (".#hitlt." <> name <> ".upload")
       -- wait for the device ready indicator byte once
       TO.timeout hitltTimeoutTime (waitForReadyByte serial)
         >>= maybe (throw $ hitltTimeoutErr 1 BS.empty) return
