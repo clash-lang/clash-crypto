@@ -1,5 +1,10 @@
 {
   description = "A flake enabling tooling for clash-crypto";
+  nixConfig = {
+    extra-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-public-keys = [ "clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=" ];
+  };
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
