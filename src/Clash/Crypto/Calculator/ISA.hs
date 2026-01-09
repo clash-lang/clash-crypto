@@ -197,10 +197,10 @@ instance
   instruction _ = CUP (natToNum @n)
 
 instance
-  (KnownCluInstruction ins, KnownInstructions b s a is, Num a, KnownNat p) ⇒
-  KnownInstructions b s a (CLU p ins : is)
+  (KnownCluInstruction ins, Num a, KnownNat p) ⇒
+  KnownInstruction b s a (CLU p ins)
  where
-  instructionVec _ = CLU (natToNum @p) (cluInstruction ins) :> instructionVec is
+  instruction _ = CLU (natToNum @p) (cluInstruction ins)
 
 instance
   (KnownRoutine k, KnownNat n, KnownNat b) ⇒

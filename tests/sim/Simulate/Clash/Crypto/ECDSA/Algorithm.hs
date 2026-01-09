@@ -25,7 +25,6 @@ import qualified Data.ByteString as BS
 import qualified Crypto.Hash as Hash
 import Crypto.Error (throwCryptoError)
 import Crypto.PubKey.ECC.P256
-import Clash.Crypto.Calculator.ISA (ECPrime(..))
 import Data.Bifunctor (Bifunctor(..))
 import qualified Hedgehog.Gen as Gen
 
@@ -122,38 +121,31 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
     lsb res === bitCoerce (x == 0)
   ]
 
-pointFromList :: [Mod Q'] -> (Integer, Integer)
+type CurveNum = Unsigned 256
+
+pointFromList :: [CurveNum] -> (Integer, Integer)
 pointFromList (x:y:_) = (toInteger x, toInteger y)
 pointFromList _ =
  error "Calculator should always return a list with at least two elements."
 
-resultFromList :: [Mod Q'] -> Mod Q'
+resultFromList :: [CurveNum] -> CurveNum
 resultFromList (x:_) = x
 resultFromList _ =
  error "Calculator should always return a list with at least two elements."
 
-runSignHash :: [Mod Q'] -> Maybe [Mod Q']
+runSignHash :: [CurveNum] -> Maybe [CurveNum]
 runSignHash = run (SignHash :: Routine Nat Nat SECP256R1)
 
-runPointAdd :: [Mod Q'] -> Maybe [Mod Q']
+runPointAdd :: [CurveNum] -> Maybe [CurveNum]
 runPointAdd = run (PointAddMain :: Routine Nat Nat SECP256R1)
 
-runPointMul :: [Mod Q'] -> Maybe [Mod Q']
+runPointMul :: [CurveNum] -> Maybe [CurveNum]
 runPointMul = run (PointScalarMul :: Routine Nat Nat SECP256R1)
 
-runIsZero :: [Mod Q'] -> Maybe [Mod Q']
+runIsZero :: [CurveNum] -> Maybe [CurveNum]
 runIsZero = run (IsZero :: Routine Nat Nat SECP256R1)
 
-invMod :: forall a -> (KnownNat a, 1 <= a) => Mod a -> Mod a
-invMod a
-  = fromInteger
-  . Modular.unMod
-  . fromMaybe (error "The inverse always exists in a prime field.")
-  . Modular.inv @a
-  . Modular.toMod
-  . toInteger
-
-instance NFData (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff)
+-- instance NFData (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff)
 
 makeOp :: forall a . (KnownNat a, 1 <= a) =>
  forall b -> (KnownNat b, 1 <= b, ModSize a ~ ModSize b) =>
@@ -161,19 +153,37 @@ makeOp :: forall a . (KnownNat a, 1 <= a) =>
   Mod a -> Mod a -> Mod a
 makeOp b op = curry $ bitCoerce . uncurry (op @b) . bimap bitCoerce bitCoerce
 
-instance CalculatorNum (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff) where
-  add p = case p of
-    SecP256Mod -> (+)
-    SecP256Ord -> makeOp N' (+)
-  sub p = case p of
-    SecP256Mod -> (-)
-    SecP256Ord -> makeOp N' (-)
-  mul p = case p of
-    SecP256Mod -> (*)
-    SecP256Ord -> makeOp N' (*)
+instance CalculatorNum (Unsigned 256) where
+  add p x y
+   | p - x > y = x + y
+   | otherwise = y - (p - x)
+  sub p x y
+   | x >= y    = x - y
+   | otherwise = p - (y - x)
+  mul p x y = truncateB $ bigR `mod` extend p
+   where
+    bigR :: Unsigned 512
+    bigR = extend x * extend y
   inv p a b =
-   if a == 0 then b else
-    (case p of
-     SecP256Mod -> invMod Q'
-     SecP256Ord -> bitCoerce . invMod N' . bitCoerce) a
-  bit a = bitCoerce . extend . bitCoerce @_ @(Unsigned 1) . testBit a . fromEnum
+   if a == 0 then b
+   else moduloPower p (p - 2) a 1
+  bit a j
+   | j < 256, testBit a (fromEnum j) = 1
+   | otherwise = 0
+
+moduloPower :: forall p. KnownNat p =>
+ Unsigned p -> Unsigned p -> Unsigned p -> Unsigned p -> Unsigned p
+moduloPower p 0 _   tmp = 1
+moduloPower p 1 val tmp = truncateB $ r `mod` extend p
+ where
+  r :: Unsigned (p * 2)
+  r = extend val * extend tmp
+moduloPower p n val tmp =
+ if even n then
+  moduloPower p (n `div` 2) (truncateB $ r1 `mod` extend p) (tmp `mod` p)
+ else
+  moduloPower p (n - 1) val (truncateB $ r2 `mod` extend p)
+ where
+  r1, r2 :: Unsigned (p * 2)
+  r1 = extend val * extend val
+  r2 = extend tmp * extend val

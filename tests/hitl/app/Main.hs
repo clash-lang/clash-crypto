@@ -194,10 +194,11 @@ main = do
     TestTree
   testAlgorithm name sem dev settings
     = test sem dev settings name $ do
-        h ∷ CMod SecP256Mod ← genMod
-        k ∷ CMod SecP256Mod ← genModBounded 1 maxBound
-        d ∷ CMod SecP256Mod ← genModBounded 1 maxBound
-        runHitltAlgorithm sem dev settings h k d
+        h ∷ Mod SecP256ModPrime ← genMod
+        k ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
+        d ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
+        runHitltAlgorithm sem dev settings
+         (bitCoerce h) (bitCoerce k) (bitCoerce d)
 
   genStackAction ∷
     ∀ n size m.
@@ -374,14 +375,13 @@ runHitltAlgorithm ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  ECMod → ECMod → ECMod →
+  Unsigned 256 → Unsigned 256 → Unsigned 256 →
   PropertyT IO ()
 runHitltAlgorithm sem dev settings h k d =
-  runHitlt (type (ByteSize ECMod * 2)) sem dev settings bs eq
+  runHitlt (type (ByteSize (Unsigned 256) * 2)) sem dev settings bs eq
  where
   bs      = pack $ toList
-          $ bitCoerce @_ @(ByteVec (ByteSize (ECMod, ECMod, ECMod)))
-            (d, k, h)
+          $ bitCoerce @_ @(ByteVec (3 *  ByteSize (Unsigned 256))) (d, k, h)
   toBS    = pack . toList . fmap BV.unpack . Vec.unconcatBitVector# @_ @8
           . bitCoerce
   hDigest = fromMaybe
@@ -392,9 +392,9 @@ runHitltAlgorithm sem dev settings h k d =
   ref     = fromMaybe (error "Crypton actions shouldn't fail")
           $ signatureToIntegers Proxy
         <$> signDigestWith @Curve_P256R1 Proxy scalarK scalarD hDigest
-  eq      = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize ECMod * 2))
+  eq      = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * 2))
           $ bimap
-            (fromInteger @ECMod) (fromInteger @ECMod)
+            (fromInteger @(Unsigned 256)) (fromInteger @(Unsigned 256))
           $ swap ref
 
 runStack ∷

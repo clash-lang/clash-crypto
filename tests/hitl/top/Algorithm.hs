@@ -32,6 +32,6 @@ topEntity (orangePll12 → (clk, rst))
   $ newsfeed
       . calculator (SignHash :: Routine Nat Nat SECP256R1) EcdsaIP 2 72
       . cachedFromMaybe
-      . bulkRead @(Vec 3 ECMod)
+      . bulkRead @(Vec 3 (Unsigned (CLog 2 SecP256ModPrime)))
 
 makeTopEntity 'topEntity

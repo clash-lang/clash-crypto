@@ -23,7 +23,6 @@ import Clash.Crypto.Calculator.ISA
   , Instruction(..)
   , RequiredStackSize
   , CluInstruction
-  , ECPrime
   )
 import qualified Clash.Crypto.Calculator.ISA as Calc
 
@@ -38,7 +37,7 @@ run r as
 
 runInstructions ∷
   (Foldable f, Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
-  f (Instruction (SomeRoutine r) n m k ECPrime a) →
+  f (Instruction (SomeRoutine r) n m k a a) →
   [a] → Maybe [a]
 runInstructions is as0 = foldl' step (Just as0) is
  where
@@ -65,7 +64,7 @@ traceInstructionsM ∷
   ) ⇒
   (String → t ()) →
   (a → a) →
-  f (Instruction (SomeRoutine r) n m k ECPrime a) →
+  f (Instruction (SomeRoutine r) n m k a a) →
   [a] → t (Maybe [a])
 traceInstructionsM write simplify is (fmap simplify → as0) = do
   write (showStack $ Just as0)
@@ -92,7 +91,7 @@ showStack (Just as) = intercalate " " $ map (($ "") . showsPrec 11) as
 
 runInstruction ∷
   (Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
-  Instruction (SomeRoutine r) n m k ECPrime a →
+  Instruction (SomeRoutine r) n m k a a →
   [a] → Maybe [a]
 runInstruction i as = runIdentity $ traceInstructionM (const $ pure ()) id i as
 
@@ -100,7 +99,7 @@ traceInstructionM ∷
   (Monad t, Integral n, Integral m, Num k, Enum k, CalculatorNum a, Show r) ⇒
   (String → t ()) →
   (a → a) →
-  Instruction (SomeRoutine r) n m k ECPrime a →
+  Instruction (SomeRoutine r) n m k a a →
   [a] → t (Maybe [a])
 traceInstructionM write simplify = go
  where
@@ -131,13 +130,13 @@ traceInstructionM write simplify = go
     = pure $ runOp p i as
 
 class (Num a, BitPack a, Show a, NFData a) ⇒ CalculatorNum a where
-  add ∷ ECPrime → a → a → a
-  sub ∷ ECPrime → a → a → a
-  mul ∷ ECPrime → a → a → a
-  inv ∷ ECPrime → a → a → a
-  bit ∷           a → a → a
+  add ∷ a → a → a → a
+  sub ∷ a → a → a → a
+  mul ∷ a → a → a → a
+  inv ∷ a → a → a → a
+  bit ∷     a → a → a
 
-runOp ∷ forall a. CalculatorNum a ⇒  ECPrime → CluInstruction → [a] → Maybe [a]
+runOp ∷ forall a. CalculatorNum a ⇒  a → CluInstruction → [a] → Maybe [a]
 runOp p Calc.Add (a:b:as) = Just $ (add p b a):as
 runOp p Calc.Sub (a:b:as) = Just $ (sub p b a):as
 runOp p Calc.Inv (a:b:as) = Just $ (inv p b a):as
@@ -244,7 +243,7 @@ instance (Show l, Num l, Eq l, NFData l) ⇒
   sub _ x y = Fix $ x `Sub` y
   mul _ x y = Fix $ x `Mul` y
   inv _ x z = Fix $ Inv x z
-  bit x b   = Fix $ Bit x b
+  bit   x b = Fix $ Bit x b
 
 instance (Show l, Num l, Eq l, NFData l, forall r . Show r ⇒ Show (f r),
  forall r . NFData r => NFData (f r)) ⇒
@@ -253,4 +252,4 @@ instance (Show l, Num l, Eq l, NFData l, forall r . Show r ⇒ Show (f r),
   sub _ x y = FixLeft $ x `Sub` y
   mul _ x y = FixLeft $ x `Mul` y
   inv _ x z = FixLeft $ Inv x z
-  bit x b   = FixLeft $ Bit x b
+  bit   x b = FixLeft $ Bit x b
