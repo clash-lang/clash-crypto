@@ -40,15 +40,15 @@ jobs:
             --set-default "${{ env.PROJECT }}" \
             "${{ env.ATTIC_CACHE }}" \
             "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
-      - name: "Build the Nix devShell"
-        run: nix build .#devShells.x86_64-linux.allFeatures
-      - name: "Build clash-crypto untested"
-        run: nix build .#packages.x86_64-linux.hitltHsPkgs.clash-crypto
-      - name: "Push any changes to the cache"
+      - name: "Build and cache the Nix devShell"
         run: |
+          nix build .#devShells.x86_64-linux.allFeatures
           attic push \
             "${{ env.PROJECT }}" \
             "$(nix path-info .#devShells.x86_64-linux.allFeatures)"
+      - name: "Build and cache clash-crypto untested"
+        run: |
+          nix build .#packages.x86_64-linux.hitltHsPkgs.clash-crypto
           attic push \
             "${{ env.PROJECT }}" \
             "$(nix path-info .#packages.x86_64-linux.hitltHsPkgs.clash-crypto)"
