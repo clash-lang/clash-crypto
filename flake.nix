@@ -9,9 +9,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
-    ghc-typelits-proof-assist = {
-      url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist?ref=main";
-    };
+    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist";
   };
   outputs = { nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -28,8 +26,32 @@
           clashCompilerSrc = pkgs.fetchFromGitHub {
             owner = "clash-lang";
             repo = "clash-compiler";
-            rev = "12169a7255319811505810a84315b9b64771a02d";
-            sha256 = "sha256-m99YICyCojOR1H6fpJIRRjWIgB1e9ZdTNDRumJAkfOg=";
+            rev = "d0f65c47fe946699cb7818d24ae16dd8e7aff286";
+            sha256 = "sha256-Dt8EkrmRCpLAbrTwdyAqpmM7NaU1Suh9WFAhg5vZx/c=";
+          };
+          ghcTcpluginApiSrc = pkgs.fetchFromGitHub {
+            owner = "sheaf";
+            repo = "ghc-tcplugin-api";
+            rev = "c583750b5899846cb455f3fe2d58b3ba9bc910d0";
+            sha256 = "sha256-3RriTela4iwbvHhF3UigmBOfxJv0+YQGAlXQbnXsX74=";
+          };
+          ghcTypelitsNatnormaliseSrc = pkgs.fetchFromGitHub {
+            owner = "clash-lang";
+            repo = "ghc-typelits-natnormalise";
+            rev = "a4fdc5bf17f678e74a47bf3b8924c6a35e214fb2";
+            sha256 = "sha256-igR4OILxX+WmQapDSTMnEJ/8qVLA9Npf3PmZlcnSIdM=";
+          };
+          ghcTypelitsKnownnatSrc = pkgs.fetchFromGitHub {
+            owner = "clash-lang";
+            repo = "ghc-typelits-knownnat";
+            rev = "47ed62f90218ecf74246caabbbeaeb22e8be8246";
+            sha256 = "sha256-l1rQk8hQ7ywYGkfT9TtRuP4E1SH4n1LioxquHgzf+rY=";
+          };
+          ghcTypelitsExtraSrc = pkgs.fetchFromGitHub {
+            owner = "clash-lang";
+            repo = "ghc-typelits-extra";
+            rev = "db8cfbd17a8c8984d28c8af254cc81860d8430a9";
+            sha256 = "sha256-ynlFGRhTcXwG/fgpIk/GAy+mpvo8eBCptTuRWGl/YC4=";
           };
 
           inherit (pkgs.haskell.lib) dontCheck doJailbreak;
@@ -43,7 +65,11 @@
             clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
               (clashCompilerSrc + "/clash-ghc") { });
             serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
-            network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
+            ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghcTcpluginApiSrc { });
+            ghc-typelits-natnormalise = dontCheck (prev.callCabal2nix "ghc-typelits-natnormalise" ghcTypelitsNatnormaliseSrc { });
+            ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghcTypelitsKnownnatSrc { });
+            ghc-typelits-extra = dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghcTypelitsExtraSrc { });
+            network = dontCheck (prev.callHackage "network" "3.2.7.0" {});
             clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
           };

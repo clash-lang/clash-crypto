@@ -34,7 +34,7 @@ instance (KnownNat a, KnownNat m, KnownNat pow) ⇒
   {-# INLINE natSing3 #-}
 
 class SictPrecompKnownNat (m ∷ Nat) where
- getSictPrecomp ∷ Unsigned (ModSize m)
+ getSictPrecomp ∷ SNat m → Unsigned (ModSize m)
 
 deriveSictPrecomp ∷
   ∀ (m ∷ Nat) → KnownNat m ⇒
@@ -45,4 +45,4 @@ deriveSictPrecomp m =
      mt = pure $ TH.LitT $ TH.NumTyLit $ natToNum @m
  in
  [d| instance SictPrecompKnownNat $mt where
-        getSictPrecomp = $precompVal |]
+        getSictPrecomp SNat = $precompVal |]

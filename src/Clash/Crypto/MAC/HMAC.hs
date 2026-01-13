@@ -176,27 +176,31 @@ serialize ∷
   -- ^ input action
   DataStream dom () (Index n) (BitVector n)
   -- ^ output stream
-serialize
-  | Rewrite ← using @(KeepsPositiveIfMultiple (BitSize a) n)
-  , Rewrite ← using @(CancelMultiple (BitSize a) n)
-  = leToPlusKN @1 @(BitSize a `Div` n)
-  $ mealy (~~>)
-      ( repeat neval ∷ Vec (BitSize a `Div` n) (BitVector n)
-      , 0 ∷ Index ((BitSize a `Div` n) + 1)
-      )
+serialize = mealy (~~>) istate
  where
-  (buf, n) ~~> Discharge | n > 0 =
-    ((buf <<+ neval, satPred SatBound n), frame $ head buf)
-   where
-    frame | n == maxBound = Start ()
-          | n > 1         = Middle
-          | otherwise     = End 0
+  istate =
+    ( repeat neval ∷ Vec (BitSize a `Div` n) (BitVector n)
+    , 0 ∷ Index ((BitSize a `Div` n) + 1)
+    )
 
-  _ ~~> Charge x =
-    ((bitCoerce x, maxBound), Idle)
+  (buf, n) ~~> Discharge | n > 0
+    = ((buf <<+ neval, satPred SatBound n), frame n $ bufHead buf)
+
+  _ ~~> Charge x
+    | Rewrite ← using @(CancelMultiple (BitSize a) n)
+    = ((bitCoerce x, maxBound), Idle)
 
   (buf, n) ~~> _ =
     ((buf, n), if n > 0 then NoData else Idle)
+
+  bufHead
+    | Rewrite ← using @(KeepsPositiveIfMultiple (BitSize a) n)
+    = leToPlusKN @1 @(BitSize a `Div` n) $ head @(BitSize a `Div` n - 1)
+
+  frame n
+    | n == maxBound = Start ()
+    | n > 1         = Middle
+    | otherwise     = End 0
 
   -- a value that should never be evaluated
   neval = error "Clash.Crypto.MAC.HMAC.serializeEn: Mealy"
