@@ -139,7 +139,7 @@ class KnownInstructions
  where
   instructionVec ∷
     ∀ x → x ~ instructions ⇒
-    Vec (Length instructions) (Instr (SomeRoutine group) rbound stackSize a)
+    Vec (Length instructions) (Instr group rbound stackSize a)
 
 instance
   KnownInstructions b s a '[]
@@ -152,16 +152,6 @@ instance
  where
   instructionVec _ = instruction i :> instructionVec is
 
-data SomeRoutine group where
-  SomeRoutine ::
-    ∀ {group} r .
-    KnownRoutine (r ∷ group) ⇒
-    Proxy r →
-    SomeRoutine group
-
-instance Show group => Show (SomeRoutine group) where
-  show (SomeRoutine @r _) = show (routine r)
-
 class KnownInstruction
   (rbound ∷ Nat)
   (stackSize ∷ Nat)
@@ -170,7 +160,7 @@ class KnownInstruction
  where
   instruction ::
     ∀ x → x ~ instruction ⇒
-    Instr (SomeRoutine group) rbound stackSize a
+    Instr group rbound stackSize a
 
 instance
   (KnownNat c, Num a, BitPack a) ⇒
@@ -206,7 +196,7 @@ instance
   (KnownRoutine k, KnownNat n, KnownNat b) ⇒
   KnownInstruction b s a (RUN n k)
  where
-  instruction _ = RUN (natToNum @n) (SomeRoutine (Proxy @k))
+  instruction _ = RUN (natToNum @n) (routine k)
 
 -- | The reified instruction vector of a routine.
 instructions ∷
@@ -215,20 +205,8 @@ instructions ∷
   ∀ (routine ∷ group) →
   KnownInstructions (RepetitionBound main) stackSize a (Instructions routine) ⇒
   Vec (InstructionCount routine)
-    (Instr (SomeRoutine group) (RepetitionBound main) stackSize a)
-instructions _ r = instructionVec (Instructions r)
-
-instructions' ∷
-  ∀ {group} (stackSize ∷ Nat) (a ∷ Type).
-  ∀ (main ∷ group) →
-  ∀ (routine ∷ group) →
-  KnownInstructions
-    (RepetitionBound main) stackSize a (Instructions routine) ⇒
-  Vec (InstructionCount routine)
     (Instr group (RepetitionBound main) stackSize a)
-instructions' m r = mapInstructionR f <$> instructions m r
- where
-  f (SomeRoutine @r' _) = routine r'
+instructions _ r = instructionVec (Instructions r)
 
 --------------------------------------------------------------------------------
 
@@ -269,15 +247,6 @@ class InstructionPointer (main ∷ group) ptr where
         (RequiredStackSize main)
         a
       )
-
-mapInstructionR ∷ (r → r') → Instruction r n m k p a → Instruction r' n m k p a
-mapInstructionR f = \case
-  PUT a → PUT a
-  POP n → POP n
-  SWP m → SWP m
-  CUP m → CUP m
-  RUN k r → RUN k (f r)
-  CLU p i → CLU p i
 
 -- | A convenience type for defining instruction pointers.
 data RIndex (main ∷ group) (subroutine ∷ group) = RIndex

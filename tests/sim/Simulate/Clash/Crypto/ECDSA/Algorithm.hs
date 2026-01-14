@@ -8,12 +8,15 @@ import Clash.Crypto.ECDSA.Algorithm
 
 import Test.Tasty
 import Test.Tasty.Hedgehog
+import Test.Tasty.HUnit
 import Clash.Prelude hiding (Mod)
 import Clash.Crypto.Calculator.Simulate
+import Clash.Crypto.ECDSA.Simulate hiding (IsZero)
 
 import qualified Data.Modular as Modular
 import Clash.Crypto.Calculator.Modulo (Mod, ModSize)
 import Data.Maybe (fromMaybe)
+import Data.Functor.Identity (Identity(..))
 import Hedgehog
 import Control.DeepSeq (NFData)
 import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
@@ -31,7 +34,15 @@ import qualified Hedgehog.Gen as Gen
 tastyTests :: TestTree
 tastyTests = localOption (HedgehogTestLimit (Just 100)) $
   testGroup "Clash.Crypto.ECDSA.Algorithm"
-  [
+  [ testCase "Test SignHash Symbolically" $
+      runIdentity
+        (traceM
+          (SignHash ∷ Routine Nat Nat SECP256R1)
+          (const $ pure ())
+          (simplifyFixChoice simp)
+          [Hash, Nonce, PrivKey])
+      @?= Just [R, S]
+    ,
     testProperty "Test SignHash against crypton" $ property $ do
     uHash <- forAll $ genUnsigned $ Range.linear 0 (maxBound :: Unsigned 256)
     k     <- forAll $ genUnsigned

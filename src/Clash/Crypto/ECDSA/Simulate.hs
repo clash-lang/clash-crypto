@@ -1,3 +1,8 @@
+-- | Types and a simplification procedure to facilitate symbolic execution of
+-- the ECDSA signing algorithm. 'EcdsaSymbol' contains constructors that
+-- represent intermediate values in the calculation of point addition, scalar
+-- multiplication and signing. 'simp' detects the structure of the intermediate
+-- values and translates them to instances of 'EcdsaSymbol'.
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 module Clash.Crypto.ECDSA.Simulate where
@@ -9,6 +14,7 @@ import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 import GHC.TypeNats (Nat)
 
+-- | Choice fixpoint of 'SymbolicNum' and 'EcdsaSymbol'.
 type Sym = FixChoice (SymbolicNum Nat) EcdsaSymbol
 
 var ∷ String → Sym
@@ -87,6 +93,9 @@ pattern GY = FixRight GY_
 pattern R = FixRight R_
 pattern S = FixRight S_
 
+-- | Detect structures that represent an intermediate value in the computation
+-- of point addition, scalar multiplication and ecdsa signing, and compress them
+-- into an 'EcdsaSymbol'.
 simp ∷ Sym → Sym
 simp (Lit x `Add` Lit y) = Lit (x + y)
 simp (1 `Sub` x) = Not x

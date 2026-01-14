@@ -98,14 +98,14 @@ instance InstructionPointer (Main ∷ EcdsaRoutines) EcdsaInstructionPointer whe
   instr @a _ = \case
     RIPMain RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Main @a
-      → pure $ instructions' Main Main !! iptr
+      → pure $ instructions Main Main !! iptr
 
     RIPIncrement RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Increment @a
-      → pure $ instructions' Main Increment !! iptr
+      → pure $ instructions Main Increment !! iptr
 
     RIPInc3 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Inc3 @a
-      → pure $ instructions' Main Inc3 !! iptr
+      → pure $ instructions Main Inc3 !! iptr
 
     _ → Nothing

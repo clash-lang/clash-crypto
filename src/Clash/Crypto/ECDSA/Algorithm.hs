@@ -85,7 +85,7 @@ data Routine p a (c ∷ Curve p a)
   = SignHash
   -- | Given a scalar and a curve point @{r} s@, compute the scalar multiplication
   -- @{sr}@. The result is computed by repeatedly doubling @r@, and adding the
-  -- value when the corresponding bit in @s@ is set.
+  -- value to an accumulator when the corresponding bit in @s@ is set.
   | PointScalarMul
   | PointScalarMulStep
   -- | Given two curve points @{r₁} {r₂}@: compute their addition @{r}@.
@@ -99,13 +99,14 @@ data Routine p a (c ∷ Curve p a)
   -- where no such third point can be found for two non-infinite points:
   --
   -- * When the interescting line is vertical. In this case we also return O,
-  --   making such an opposing point the additive inverse.
+  --   making the opposing point the additive inverse.
   -- * When @r₁ = r₂@ the intersecting line is that defined by the limit of r₁
-  --   and r₂ approaching each other, i.e. the tangent to the curve at that
-  --   point.
+  --   approaching r₂, i.e. the tangent to the curve at that point.
   -- * When one of the points is an inflection point, say r₁, we find the third
   --   point by approaching r₁ in the limit. The third point becomes arbitrarily
   --   close to r₁, making the result -r₁.
+  --   TODO I don't buy that this is accurate - inflection points do not
+  --   characterize points at which there is no third intersecting point.
   --
   -- The algorithm is:
   -- * Determine whether @r₁ = r₂@
@@ -132,9 +133,6 @@ data Routine p a (c ∷ Curve p a)
   | IsZero
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Show)
 
-type RoutineIndex :: Routine p a c -> Nat
--- type family RoutineIndex (r :: Routine p a c) = n | n -> r
---  where
 type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
   RoutineIndex SignHash           = 0
   RoutineIndex PointScalarMul     = 1
@@ -428,23 +426,18 @@ instance KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
     -- r s
     ]
 
+type SignHashRIndex (r ∷ Routine Nat Nat SECP256R1) =
+  RIndex (SignHash ∷ Routine Nat Nat SECP256R1) r
+
 data EcdsaIP
-  = IPSignHash           (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (SignHash :: Routine Nat Nat SECP256R1))
-  | IPPointScalarMul     (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointScalarMul :: Routine Nat Nat SECP256R1))
-  | IPPointScalarMulStep (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointScalarMulStep :: Routine Nat Nat SECP256R1))
-  | IPPointAddMain       (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointAddMain :: Routine Nat Nat SECP256R1))
-  | IPPointAddI1         (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointAddI1 :: Routine Nat Nat SECP256R1))
-  | IPPointAddI2         (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointAddI2 :: Routine Nat Nat SECP256R1))
-  | IPPointAddI3         (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (PointAddI3 :: Routine Nat Nat SECP256R1))
-  | IPIsZero             (RIndex (SignHash :: Routine Nat Nat SECP256R1)
-                                 (IsZero :: Routine Nat Nat SECP256R1))
+  = IPSignHash           (SignHashRIndex SignHash)
+  | IPPointScalarMul     (SignHashRIndex PointScalarMul)
+  | IPPointScalarMulStep (SignHashRIndex PointScalarMulStep)
+  | IPPointAddMain       (SignHashRIndex PointAddMain)
+  | IPPointAddI1         (SignHashRIndex PointAddI1)
+  | IPPointAddI2         (SignHashRIndex PointAddI2)
+  | IPPointAddI3         (SignHashRIndex PointAddI3)
+  | IPIsZero             (SignHashRIndex IsZero)
   | EndOfSequence
   deriving (Generic, NFDataX, Show)
 
@@ -489,26 +482,26 @@ instance InstructionPointer (SignHash :: Routine Nat Nat SECP256R1) EcdsaIP wher
   instr @a _ = \case
     IPSignHash RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(SignHash :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash SignHash !! iptr
+      → pure $ instructions SignHash SignHash !! iptr
     IPPointScalarMul RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointScalarMul :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointScalarMul !! iptr
+      → pure $ instructions SignHash PointScalarMul !! iptr
     IPPointScalarMulStep RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointScalarMulStep :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointScalarMulStep !! iptr
+      → pure $ instructions SignHash PointScalarMulStep !! iptr
     IPPointAddMain RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointAddMain :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointAddMain !! iptr
+      → pure $ instructions SignHash PointAddMain !! iptr
     IPPointAddI1 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointAddI1 :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointAddI1 !! iptr
+      → pure $ instructions SignHash PointAddI1 !! iptr
     IPPointAddI2 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointAddI2 :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointAddI2 !! iptr
+      → pure $ instructions SignHash PointAddI2 !! iptr
     IPPointAddI3 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(PointAddI3 :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash PointAddI3 !! iptr
+      → pure $ instructions SignHash PointAddI3 !! iptr
     IPIsZero RIndex{..}
       | RoutineFacts ← knownRoutine @_ @(IsZero :: Routine Nat Nat SECP256R1) @a
-      → pure $ instructions' SignHash IsZero !! iptr
+      → pure $ instructions SignHash IsZero !! iptr
     _ → Nothing

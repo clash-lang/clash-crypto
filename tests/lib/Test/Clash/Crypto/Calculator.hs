@@ -142,14 +142,14 @@ instance InstructionPointer Main TestIP where
   instr @a _ = \case
     IPMain RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Main @a
-      → pure $ instructions' Main Main !! iptr
+      → pure $ instructions Main Main !! iptr
     IPRoutine0 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Routine0 @a
-      → pure $ instructions' Main Routine0 !! iptr
+      → pure $ instructions Main Routine0 !! iptr
     IPRoutine1 RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Routine1 @a
-      → pure $ instructions' Main Routine1 !! iptr
+      → pure $ instructions Main Routine1 !! iptr
     IPArithmetic RIndex{..}
       | RoutineFacts ← knownRoutine @_ @Arithmetic @a
-      → pure $ instructions' Main Arithmetic !! iptr
+      → pure $ instructions Main Arithmetic !! iptr
     _ → Nothing

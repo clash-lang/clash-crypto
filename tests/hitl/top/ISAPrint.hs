@@ -105,7 +105,7 @@ topEntity (orangePll24 → (clk, rst)) rx = withClockResetEnable clk rst enableG
       step = isRising False ack
 
       txReq = isaPrint 11 Main $ bundle
-        ( (instructions' Main Main !!) <$> n
+        ( (instructions Main Main !!) <$> n
         , reset
         , step
         )
