@@ -53,7 +53,6 @@ import Test.Tasty
   )
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
-import Text.Read (readMaybe)
 
 import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
@@ -70,11 +69,6 @@ import Test.Clash.Crypto.Calculator.InverseModulo
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
 import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
-
-import Shake
-  ( ShakeOptions(..), Verbosity(..)
-  , shakeOptions, shakeBuild, configLookup
-  )
 
 import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
@@ -678,9 +672,7 @@ parseCS = \case
   "38400"  → CS38400
   "57600"  → CS57600
   "115200" → CS115200
-  str      → case readMaybe str of
-    Nothing → error $ "Invalid baud: " <> str
-    Just cs → CS cs
+  str      → error $ "Invalid baud: " <> str
 
 newtype HitltTimeout = HitltTimeout String
 instance Show HitltTimeout where show (HitltTimeout msg) = msg
