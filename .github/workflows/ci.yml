@@ -103,11 +103,15 @@ jobs:
           - SHA224
           - SHA256
           - HMACSHA256
-          - Modulo
+          - Stack
           - Karatsuba
+          - Modulo
           - BEA
           - FastGCD
           - FltCtmi
+          - CLU
+          - Calculator
+
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4

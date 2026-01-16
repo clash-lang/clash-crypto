@@ -21,11 +21,14 @@ hsPkgs: {
   };
   hitltTopEntities = {
     BEA = { module = "BEA"; };
+    Calculator = { module = "Calculator"; };
+    CLU = { module = "CLU"; };
     FastGCD = { module = "FastGCD"; };
     FltCtmi = { module = "FltCtmi"; };
     Karatsuba = { module = "Karatsuba"; };
     Modulo = { module = "Modulo"; };
     SictMi = { module = "SictMi"; };
+    Stack = { module = "Stack"; };
     SHA1 = { module = "SHA"; binding = "topEntitySHA1"; };
     SHA224 = { module = "SHA"; binding = "topEntitySHA224"; };
     SHA256 = { module = "SHA"; binding = "topEntitySHA256"; };
