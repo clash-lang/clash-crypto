@@ -241,14 +241,11 @@ data RIndex (main ∷ group) (subroutine ∷ group) = RIndex
   }
   deriving (Generic, NFDataX, Show)
 
--- TODO[investigate]: deriving BitPack currently causes a
---   "solveWanteds: too many iterations" error
---
---deriving instance
---  ( KnownNat (InstructionCount subroutine)
---  , KnownNat (RepetitionBound main)
---  , 1 ≤ InstructionCount subroutine
---  ) ⇒ BitPack (RIndex main subroutine)
+deriving instance
+  ( KnownNat (InstructionCount subroutine)
+  , KnownNat (RepetitionBound# 0 (Instructions main))
+  , 1 ≤ InstructionCount subroutine
+  ) ⇒ BitPack (RIndex main subroutine)
 
 instance
   ( KnownNat (RepetitionBound main), KnownNat (InstructionCount subroutine)
