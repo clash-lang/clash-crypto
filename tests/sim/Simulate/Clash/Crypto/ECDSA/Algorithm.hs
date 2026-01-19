@@ -65,16 +65,10 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
         impl = pointFromList <$> runSignHash (bitCoerce <$> [uHash, k, pKey])
     ref === impl
     ,
-    -- This test sometimes fails because of a bug in `crypton`. It tends to fail
-    -- when one of the points is O.
-    testProperty "Test point addition" $ property $ do
-    coeff1 <- forAll $ Gen.integral
-     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
-    coeff2 <- forAll $ Gen.integral
-     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
-    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff1)
-        p2   = toPoint (throwCryptoError $ scalarFromInteger coeff2)
-        (x1, y1) = pointToIntegers p1
+    testProperty "Test point addition against crypton" $ property $ do
+    p1 <- genPoint
+    p2 <- genPoint
+    let (x1, y1) = pointToIntegers p1
         (x2, y2) = pointToIntegers p2
         ref  = pointToIntegers $ pointAdd p1 p2
         impl = pointFromList
@@ -83,10 +77,8 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
     ref === impl
     ,
     testProperty "Test point addition (first is infinity)" $ property $ do
-    coeff <- forAll $ Gen.integral
-     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
-    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
-        (x1, y1) = pointToIntegers p1
+    p1 <- genPoint
+    let (x1, y1) = pointToIntegers p1
         (x2, y2) = (0,0)
         ref  = (x1,y1)
         impl = pointFromList
@@ -95,10 +87,8 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
     ref === impl
     ,
     testProperty "Test point addition (second is infinity)" $ property $ do
-    coeff <- forAll $ Gen.integral
-     $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
-    let p1   = toPoint (throwCryptoError $ scalarFromInteger coeff)
-        (x1, y1) = pointToIntegers p1
+    p1 <- genPoint
+    let (x1, y1) = pointToIntegers p1
         (x2, y2) = (0,0)
         ref  = (x1,y1)
         impl = pointFromList
@@ -106,21 +96,16 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
              $ runPointAdd $ fromInteger <$> [x1,y1,x2,y2]
     ref === impl
     ,
-    testProperty "Test point multiplication" $ property $ do
-    x <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    y <- forAll $ genUnsigned
-     $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
+    testProperty "Test point multiplication against crypton" $ property $ do
+    p1 <- genPoint
     s <- forAll $ genUnsigned
      $ Range.linear 0 (bitCoerce $ (maxBound :: Mod Q') :: Unsigned 256)
-    let xI   = toInteger x
-        yI   = toInteger y
-        p1   = pointFromIntegers (xI, yI)
+    let (x, y) = pointToIntegers p1
         scal = throwCryptoError $ scalarFromInteger $ toInteger s
         ref  = pointToIntegers $ pointMul scal p1
         impl = pointFromList
              $ fromMaybe (error "Routines in tests should always return")
-             $ runPointMul $ bitCoerce <$> [x,y,s]
+             $ runPointMul $ bitCoerce <$> [fromInteger x, fromInteger y,s]
     ref === impl
     ,
     testProperty "Test IsZero" $ property $ do
@@ -133,6 +118,12 @@ tastyTests = localOption (HedgehogTestLimit (Just 100)) $
   ]
 
 type CurveNum = Unsigned 256
+
+genPoint :: Monad m => PropertyT m Crypto.PubKey.ECC.P256.Point
+genPoint = do
+  coeff <- forAll $ Gen.integral
+   $ Range.linear 1 (1 + (toInteger $ (maxBound :: Mod Q') :: Integer))
+  return $ toPoint $ throwCryptoError $ scalarFromInteger coeff
 
 pointFromList :: [CurveNum] -> (Integer, Integer)
 pointFromList (x:y:_) = (toInteger x, toInteger y)
@@ -155,8 +146,6 @@ runPointMul = run (PointScalarMul :: Routine Nat Nat SECP256R1)
 
 runIsZero :: [CurveNum] -> Maybe [CurveNum]
 runIsZero = run (IsZero :: Routine Nat Nat SECP256R1)
-
--- instance NFData (Mod 0xffffffff_00000001_00000000_00000000_00000000_ffffffff_ffffffff_ffffffff)
 
 makeOp :: forall a . (KnownNat a, 1 <= a) =>
  forall b -> (KnownNat b, 1 <= b, ModSize a ~ ModSize b) =>
