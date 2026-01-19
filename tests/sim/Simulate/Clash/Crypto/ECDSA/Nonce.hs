@@ -1,4 +1,4 @@
-module Simulate.Clash.Crypto.Calculator.Nonce (tastyTests) where
+module Simulate.Clash.Crypto.ECDSA.Nonce (tastyTests) where
 
 import Clash.Prelude
 
@@ -23,12 +23,10 @@ import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import qualified Clash.Crypto.Calculator.Modulo as M
 import Language.Haskell.Unicode (type (≤))
+import Clash.Crypto.Calculator.ISA (SecP256ModPrime, SecP256OrdPrime)
 
 
 -- | The prime used by the @SECP256@ curve of the FIDO protocol.
-type Q =
-  115792089210356248762697446949407573530086143415290314195533631308867097853951
-type N = 0xffffffff_00000000_ffffffff_ffffffff_bce6faad_a7179e84_f3b9cac2_fc632551
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce" $
@@ -37,7 +35,8 @@ tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce" $
     $ localOption (HedgehogTestLimit (Just 10))
     $ testProperty "Nonce generation" $ property $ do
       message <- forAll $ Gen.bytes (Range.linear 100 1000)
-      pK      <- forAll $ Gen.integral (Range.linear 1 (natToNum @Q - 1))
+      pK      <- forAll
+       $ Gen.integral (Range.linear 1 (natToNum @SecP256ModPrime - 1))
       let refDig = Spec.hash @_ @Spec.SHA256 message
           pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pK
           ref = Spec.deterministicNonce Spec.SHA256 pKref refDig
@@ -150,10 +149,10 @@ runChunker typ len message
  $ fst $ chunkContent SHA256 message (pure typ)
 
 runNonce ∷ DataStream System () (Index 8) (BitVector 8) →
- Channel System (BitVector 256) → M.Mod N
+ Channel System (BitVector 256) → M.Mod SecP256OrdPrime
 runNonce message pk
  = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ deriveNonce N SHA256 message pk
+ $ sample @System $ newsfeed $ deriveNonce SecP256OrdPrime SHA256 message pk
 
 runFirstNoSeed ∷ Channel System (BitVector 256) →
  Channel System (BitVector 256) → BitVector 256

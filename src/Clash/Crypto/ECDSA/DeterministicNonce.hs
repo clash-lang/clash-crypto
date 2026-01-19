@@ -75,18 +75,22 @@ deriveNonce p alg message pk
     InitFirst → Middle 0
     InitThird → Middle 1
     _         → End () 0
-  bfActiveC s = s == InitFirst || s == InitThird || s == NonceLoopKey
+  bfActiveC = \case
+    InitFirst    → True
+    InitThird    → True
+    NonceLoopKey → True
+    _            → False
   lastChunk = stage <&> \case
     InitFirst    → SeedLast
     InitThird    → SeedLast
     NonceLoopKey → ByteSend
     _            → VSend
   -- Initial values
-  firstV, firstKey ∷ Digest alg
-  firstV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
-  firstKey = 0
+  initialV, initialKey ∷ Digest alg
+  initialV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
+  initialKey = 0
   -- TODO: Find a way to nicely rewrite these muxes
-  v   = muxC ((== InitFirst) <$> stage) (pure firstV)
+  v   = muxC ((== InitFirst) <$> stage) (pure initialV)
       $ muxC ((\s → s == InitSecond || s == InitFourth || s == NonceLoopLen ||
                     s == NonceLoopV) <$> stage .&&. lastResult.hasUpdates)
         lastResult
@@ -94,9 +98,9 @@ deriveNonce p alg message pk
   key = muxC ((\s → s == InitFirst || s == InitThird ||
                     s == NonceLoopKey) <$> stage .&&. lastResult.hasUpdates)
         lastResult
-      $ muxC ((== InitFirst) <$> stage) (pure firstKey)
+      $ muxC ((== InitFirst) <$> stage) (pure initialKey)
       $ delayC key
-  (lastResult, hmacOutput) = hmac# alg roundOutput
+  (lastResult, hmacOutput) = hmacE alg roundOutput
    $ muxC ((== NonceWait) <$> stage) (Channel $ pure None) shaOutput
   roundOutput =
    genericRound alg bfActive byte lastChunk roundReset key v pk messageHash
@@ -235,10 +239,10 @@ chunkContent alg contC chunkType
  | SHAFacts ← knownSHA alg
  , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8) =
  let
-  _ ~~> (True, _   ) = 0 ∷ Index (MessageDigestSize alg `Div` 8 + 1)
-  i ~~> (_   , True) = satSucc SatBound i
-  i ~~> _            = i
-  stage = moore (~~>) id maxBound $ bundle (contC.hasUpdates, contC.isNonEmpty)
+  stage :: Signal dom (Index (MessageDigestSize alg `Div` 8 + 1))
+  stage = register maxBound
+        $ mux contC.hasUpdates (pure 0)
+        $ mux contC.isNonEmpty (satSucc SatBound <$> stage) stage
   opFirst curStage =
    case curStage of
     0 → Start $ natToNum @(MessageDigestSize alg `Div` 8)

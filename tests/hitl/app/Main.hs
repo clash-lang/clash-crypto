@@ -132,7 +132,7 @@ main = do
         , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
             ]
-        , testGroup "Clash.Crypto.Calculator.Nonce"
+        , testGroup "Clash.Crypto.ECDSA.Nonce"
             [ testDeterministicNonce SHA256 "DeterministicNonce" sem dev
                                      settings
             ]

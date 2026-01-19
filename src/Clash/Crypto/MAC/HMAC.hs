@@ -14,7 +14,7 @@ A streaming implementation of HMAC according to
 
 module Clash.Crypto.MAC.HMAC
   ( hmac
-  , hmac#
+  , hmacE
   , IPad
   , OPad
   , HmacStage(..)
@@ -79,7 +79,7 @@ data HmacStage
 -- require more than 'BlockSize' @alg@ many bits.
 hmac ∷
   ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, KnownNat (MessageDigestSize alg)) ⇒
+  ∀ (alg ∷ SHA) → (KnownSHA alg) ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
   -- ^ input stream
@@ -87,12 +87,12 @@ hmac ∷
   -- ^ response channel
 hmac alg input
   | SHAFacts ← knownSHA alg
-  = result
-  where
-   (result, hashInput) = hmac# alg input digest
-   digest = delayC $ sha alg hashInput
+  = let
+   (result, hashInput) = hmacE alg input digest
+   digest = sha alg hashInput
+  in result
 
-hmac# ∷
+hmacE ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
@@ -102,7 +102,7 @@ hmac# ∷
   -- ^ hash output
   (Channel dom (Digest alg), DataStream dom () (Index 8) (BitVector 8))
   -- ^ (response channel, hash input)
-hmac# alg (mapEnd (const (0 :: Index 8)) → input) digest
+hmacE alg (mapEnd (const (0 :: Index 8)) → input) digest
   | SHAFacts ← knownSHA alg
   = let
       -- mark the input key frames via counting the received number of frames

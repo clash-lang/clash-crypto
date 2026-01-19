@@ -11,12 +11,11 @@ import Clash.Annotations.TH (makeTopEntity)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hash.SHA (SHA(..), MessageDigestSize)
-import SHA (descape)
+import Hitl.Clash.Crypto.Hash.Escape (descape)
 import Hitl.Clash.Cores.Uart.Extra (Byte, withUartRequestResponseHandler)
 import Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce)
 import Clash.Signal.Channel
-
-type N = 0xffffffff_00000000_ffffffff_ffffffff_bce6faad_a7179e84_f3b9cac2_fc632551
+import Clash.Crypto.Calculator.ISA (SecP256OrdPrime)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
@@ -51,7 +50,7 @@ topEntity (orangePll24 → (clk, rst))
         if i /= maxBound then (pk <<+ byte, Nothing)
                          else (pk         , Just byte))
     i ~~> (pk, Nothing, _) = (i, (pk, Nothing))
-    res = deriveNonce N SHAX (descape frames)
+    res = deriveNonce SecP256OrdPrime SHAX (descape frames)
         $ Channel $ Old . bitCoerce <$> privateKey
    in
     newsfeed res
