@@ -21,4 +21,17 @@ runs:
       run: |
         attic push \
           "${{ inputs.cache }}" \
-          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }})"
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase
+          }})"
+    - name: "Fetch Logs"
+      shell: bash
+      run: |
+        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src > clash.log
+        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }} > synth.log
+    - name: "Upload Logs"
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ${{ inputs.testcase }}-logs
+        path: "*.log"
+        retention-days: 14
