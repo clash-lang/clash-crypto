@@ -105,6 +105,7 @@ jobs:
           - HMACSHA256
           - Stack
           - Karatsuba
+          - KaratsubaModulo
           - Modulo
           - BEA
           - FastGCD

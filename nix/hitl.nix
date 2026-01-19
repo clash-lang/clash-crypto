@@ -26,6 +26,7 @@ hsPkgs: {
     FastGCD = { module = "FastGCD"; };
     FltCtmi = { module = "FltCtmi"; };
     Karatsuba = { module = "Karatsuba"; };
+    KaratsubaModulo = {  module = "KaratsubaModulo"; };
     Modulo = { module = "Modulo"; };
     SictMi = { module = "SictMi"; };
     Stack = { module = "Stack"; };
