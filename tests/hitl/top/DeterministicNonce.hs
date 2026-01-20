@@ -13,7 +13,7 @@ import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hash.SHA (SHA(..), MessageDigestSize)
 import Hitl.Clash.Crypto.Hash.Escape (descape)
 import Hitl.Clash.Cores.Uart.Extra (Byte, withUartRequestResponseHandler)
-import Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce)
+import Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce')
 import Clash.Signal.Channel
 import Clash.Crypto.Calculator.ISA (SecP256OrdPrime)
 
@@ -50,7 +50,7 @@ topEntity (orangePll24 → (clk, rst))
         if i /= maxBound then (pk <<+ byte, Nothing)
                          else (pk         , Just byte))
     i ~~> (pk, Nothing, _) = (i, (pk, Nothing))
-    res = deriveNonce SecP256OrdPrime SHAX (descape frames)
+    res = deriveNonce' SecP256OrdPrime SHAX (descape frames)
         $ Channel $ Old . bitCoerce <$> privateKey
    in
     newsfeed res

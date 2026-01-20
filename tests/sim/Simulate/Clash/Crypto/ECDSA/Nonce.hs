@@ -152,7 +152,7 @@ runNonce ∷ DataStream System () (Index 8) (BitVector 8) →
  Channel System (BitVector 256) → M.Mod SecP256OrdPrime
 runNonce message pk
  = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ deriveNonce SecP256OrdPrime SHA256 message pk
+ $ sample @System $ newsfeed $ deriveNonce' SecP256OrdPrime SHA256 message pk
 
 runFirstNoSeed ∷ Channel System (BitVector 256) →
  Channel System (BitVector 256) → BitVector 256

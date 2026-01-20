@@ -9,9 +9,12 @@ A streaming implementation generating a nonce for deterministic ECDSA.
 -}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Clash.Crypto.ECDSA.DeterministicNonce
   ( deriveNonce
+  , deriveNonce'
   , genericRound
   , chunkContent
   , ChunkPosition (..)
@@ -33,6 +36,162 @@ import qualified Clash.Crypto.Calculator.Modulo as M
 import Clash.Crypto.MAC.HMAC
 import Data.Functor ((<&>))
 
+-- | The different stages of the deterministic nonce generation algorithm.
+data NonceStage
+ = InitFirst | InitSecond | InitThird | InitFourth
+ | NonceLoopLen | NonceLoopKey | NonceLoopV | NonceWait
+ deriving (Eq, Show, Enum, Generic, NFDataX)
+
+data NonceInput alg = NonceInput
+ { inputLast    :: Content (Digest alg)
+ , inputSha     :: Content (Digest alg)
+ , inputMessage :: Frame () (Index 8) (BitVector 8)
+ , inputHash    :: Frame () (Index 8) (BitVector 8)
+ }
+
+data NonceOutput alg = NonceOutput
+ { bfActive   :: Bool
+ , roundReset :: Bool
+ , isResult   :: Bool
+ , byteFrame  :: Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+ , lastChunk  :: SendStateI
+ , outputKey  :: Content (Digest alg)
+ , outputV    :: Content (Digest alg)
+ , mHash      :: Content (Digest alg)
+ , shaOutput  :: Content (Digest alg)
+ , shaInput   :: Frame () (Index 8) (BitVector 8)
+ }
+
+data NonceState alg = NonceState
+ { nonceStage :: NonceStage
+ , currentKey :: Digest alg
+ , currentV   :: Digest alg
+ , curHash    :: Content (Digest alg)
+ } deriving Generic
+
+instance KnownNat (MessageDigestSize alg) ⇒ NFDataX (NonceState alg)
+
+baseNonceOutput :: NonceState alg → NonceOutput alg
+baseNonceOutput s = NonceOutput
+ { bfActive   = False
+ , byteFrame  = undefined
+ , lastChunk  = undefined
+ , outputKey  = Old s.currentKey
+ , outputV    = Old s.currentV
+ , shaInput   = undefined
+ , mHash      = s.curHash
+ , roundReset = False
+ , isResult   = False
+ , shaOutput  = None
+ }
+
+deriveNonce' ∷
+  ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
+  ∀ (p ∷ Nat)  → (KnownNat p, 1 ≤ p) ⇒
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CLog 2 p ~ MessageDigestSize alg,
+   1 ≤ MessageDigestSize alg `Div` 8) ⇒
+  (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
+  DataStream dom () (Index 8) (BitVector 8) →
+  -- ^ message
+  Channel dom (Digest alg) →
+  -- ^ private key
+  Channel dom (M.Mod p)
+  -- ^ k, the nonce to be multiplied afterwards (→ k ^ 16)
+deriveNonce' p alg message pk
+ | SHAFacts ← knownSHA alg
+ , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
+ = let
+  nonceWaitOut, firstStageOut, secondStageOut, thirdStageOut
+   :: NonceState alg → NonceInput alg → NonceOutput alg
+  nonceWaitOut s i = (baseNonceOutput s)
+   { shaInput = i.inputMessage
+   , mHash    = None
+   }
+  firstStageOut s i = (baseNonceOutput s)
+   { bfActive   = True
+   , byteFrame  = Middle 0
+   , lastChunk  = SeedLast
+   , shaInput   = i.inputHash
+   , shaOutput  = None
+   , roundReset = True
+   }
+  secondStageOut s i = (baseNonceOutput s)
+   { bfActive   = False
+   , lastChunk  = VSend
+   , shaInput   = i.inputHash
+   , shaOutput  = i.inputSha
+   , roundReset = True
+   }
+  thirdStageOut s i = (firstStageOut s i)
+   { byteFrame = Middle 1
+   , shaOutput  = i.inputSha
+   }
+  nonceLoopKeyOut s i = (firstStageOut s i)
+   { byteFrame  = End () 0
+   , shaOutput  = i.inputSha
+   , lastChunk  = ByteSend
+   }
+  nextStage NonceLoopV   = NonceLoopLen
+  nextStage s            = succ s
+
+  stageFun  NonceWait    = nonceWaitOut
+  stageFun  InitFirst    = firstStageOut
+  stageFun  InitSecond   = secondStageOut
+  stageFun  InitThird    = thirdStageOut
+  stageFun  InitFourth   = secondStageOut
+  stageFun  NonceLoopLen = secondStageOut
+  stageFun  NonceLoopKey = nonceLoopKeyOut
+  stageFun  NonceLoopV   = secondStageOut
+
+  stageV    InitSecond   = True
+  stageV    InitFourth   = True
+  stageV    NonceLoopV   = True
+  stageV    _            = False
+
+  s@(nonceStage → NonceWait)    ~~> i@(inputSha → Fresh h) =
+   (newS, firstStageOut newS i)
+   where newS = s { nonceStage = InitFirst, curHash = Old h }
+    
+  s@(nonceStage → NonceLoopLen) ~~> i@(inputLast → Fresh v) =
+   let
+    newS = s { nonceStage = NonceLoopKey, currentV = v }
+    r = bitCoerce @_ @(Unsigned (CLog 2 p)) v
+   in if r /= 0 && r < natToNum @p
+   then (initialState, (nonceWaitOut initialState i) { isResult = True } )
+   else (newS, nonceLoopKeyOut newS i)
+
+  s ~~> i@(inputLast → Fresh val)
+   = (newS, stageFun next newS i)
+   where
+    next = nextStage s.nonceStage
+    nS   = s { nonceStage = next } :: NonceState alg
+    newS = if stageV s.nonceStage
+         then nS { currentV   = val }
+         else nS { currentKey = val }
+
+  s ~~> i = (s, (stageFun s.nonceStage s i) { roundReset = False, shaOutput = i.inputSha } )
+
+  initialState = NonceState
+   { nonceStage = NonceWait
+   , currentV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
+   , currentKey = 0
+   , curHash    = None
+   }
+
+  output = mealy (~~>) initialState
+         $ NonceInput
+       <$> getContent lastRes <*> getContent shaOutput
+       <*> message            <*> hmacOutput
+
+  (lastRes, hmacOutput)
+   = hmacE alg roundOutput $ delayC $ Channel output.shaOutput
+  roundOutput = register NoData $
+   genericRound alg output.bfActive output.byteFrame output.lastChunk
+                    output.roundReset (Channel output.outputKey)
+                    (Channel output.outputV) pk (Channel output.mHash)
+  shaOutput = sha alg output.shaInput
+ in bitCoerce <$> guardC output.isResult lastRes
 
 -- | An implementation of the deterministic nonce generation for ECDSA found
 -- in Appendix A.3.3 of FIPS 186-5. The outputted number is returned *before*
@@ -176,12 +335,6 @@ genericRound alg bfActive byteFrame lastChunk rst keyC vC seed1 seed2
   (chunker, chunkerDone) = chunkContent alg dataToChunk chunkType
  in mux ((== RoundIdle)           <$> stage)               (pure Idle)
   $ mux ((== Processing ByteSend) <$> stage .&&. bfActive) byteFrame chunker
-
--- | The different stages of the deterministic nonce generation algorithm.
-data NonceStage
- = InitFirst | InitSecond | InitThird | InitFourth
- | NonceLoopLen | NonceLoopKey | NonceLoopV | NonceWait
- deriving (Eq, Generic, NFDataX)
 
 -- | Internal state of a round.
 data SendStateI
