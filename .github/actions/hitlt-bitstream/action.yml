@@ -26,8 +26,10 @@ runs:
     - name: "Fetch Logs"
       shell: bash
       run: |
-        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src > clash.log
-        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }} > synth.log
+        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src \
+          > clash.log || true
+        nix log .#packages.x86_64-linux.hitlt.${{ inputs.testcase }} \
+          > synth.log || true
     - name: "Upload Logs"
       uses: actions/upload-artifact@v4
       if: always()
