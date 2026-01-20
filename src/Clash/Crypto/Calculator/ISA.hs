@@ -23,7 +23,6 @@ import Clash.Class.Counter (Counter(..))
 import Language.Haskell.Unicode (type (≤))
 
 import Data.Kind (Type)
-import Data.Proxy (Proxy(..))
 
 import Clash.Promoted.Integer
 import Clash.Promoted.List

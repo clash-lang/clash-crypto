@@ -2,7 +2,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
 
-module Algorithm where
+module ECDSASign where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Annotations.TH (makeTopEntity)
@@ -14,7 +14,7 @@ import Clash.Crypto.Calculator.ISA
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom12)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll12)
 import Hitl.Clash.Cores.Uart.Extra (bulkRead, withUartRequestResponseHandler)
-import Clash.Crypto.ECDSA.Algorithm
+import Clash.Crypto.PubKey.ECDSA
 
 -- allows to select the UART baud via a CPP define
 #ifndef HITLT_BAUD

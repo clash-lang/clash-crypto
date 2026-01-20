@@ -151,8 +151,8 @@ main = do
             [ testCalculator "Calculator" sem dev settings
             ]
         , localOption (HedgehogTestLimit (Just 5))
-        $ testGroup "Clash.Crypto.ECDSA.Algorithm"
-            [ testAlgorithm "Algorithm" sem dev settings
+        $ testGroup "Clash.Crypto.PubKey"
+            [ testPubKeyAlgorithm "ECDSASign" sem dev settings
             ]
         ]
 
@@ -186,18 +186,18 @@ main = do
         b ∷ Mod SecP256ModPrime ← genMod
         runHitltCalculator sem dev settings a b
 
-  testAlgorithm ∷
+  testPubKeyAlgorithm ∷
     String →
     QSem →
     FilePath →
     SerialPortSettings →
     TestTree
-  testAlgorithm name sem dev settings
+  testPubKeyAlgorithm name sem dev settings
     = test sem dev settings name $ do
         h ∷ Mod SecP256ModPrime ← genMod
         k ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
         d ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
-        runHitltAlgorithm sem dev settings
+        runHitltPubKeyAlgorithm sem dev settings
          (bitCoerce h) (bitCoerce k) (bitCoerce d)
 
   genStackAction ∷
@@ -371,31 +371,37 @@ runHitltCalculator sem dev settings a b =
   eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
      $ goldenRoutine a b
 
-runHitltAlgorithm ∷
+runHitltPubKeyAlgorithm ∷
   QSem →
   FilePath →
   SerialPortSettings →
   Unsigned 256 → Unsigned 256 → Unsigned 256 →
   PropertyT IO ()
-runHitltAlgorithm sem dev settings h k d =
+runHitltPubKeyAlgorithm sem dev settings h k d =
   runHitlt (type (ByteSize (Unsigned 256) * 2)) sem dev settings bs eq
  where
-  bs      = pack $ toList
-          $ bitCoerce @_ @(ByteVec (3 *  ByteSize (Unsigned 256))) (d, k, h)
-  toBS    = pack . toList . fmap BV.unpack . Vec.unconcatBitVector# @_ @8
-          . bitCoerce
-  hDigest = fromMaybe
-          (error "The Digest should be always computable from the ByteString")
-          $ Hash.digestFromByteString @Hash.SHA256 $ toBS h
+  bs = pack $ toList
+     $ bitCoerce @_ @(ByteVec (3 * ByteSize (Unsigned 256)))
+       (d, k, h)
+
+  toBS = pack . toList . fmap BV.unpack . Vec.unconcatBitVector# @_ @8
+       . bitCoerce
+
+  hDigest = case Hash.digestFromByteString @Hash.SHA256 $ toBS h of
+    Nothing → error "The Digest should be always computable from the ByteString"
+    Just x  → x
+
   scalarK = throwCryptoError $ decodeScalar  @Curve_P256R1 Proxy $ toBS k
   scalarD = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy $ toBS d
-  ref     = fromMaybe (error "Crypton actions shouldn't fail")
-          $ signatureToIntegers Proxy
-        <$> signDigestWith @Curve_P256R1 Proxy scalarK scalarD hDigest
-  eq      = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * 2))
-          $ bimap
-            (fromInteger @(Unsigned 256)) (fromInteger @(Unsigned 256))
-          $ swap ref
+
+  eq = pack
+     $ toList
+     $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * 2))
+     $ bimap (fromInteger @(Unsigned 256)) (fromInteger @(Unsigned 256))
+     $ swap
+     $ fromMaybe (error "Crypton actions should not fail")
+     $ fmap (signatureToIntegers Proxy)
+     $ signDigestWith @Curve_P256R1 Proxy scalarK scalarD hDigest
 
 runStack ∷
   ∀ messageSize → KnownNat messageSize ⇒
