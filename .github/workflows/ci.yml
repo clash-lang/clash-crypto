@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, compute]
     container:
       image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
-      options: --memory=11g
+      options: --memory=30g
     needs: []
     steps:
       - name: "Checkout the repository"
@@ -54,7 +54,7 @@ jobs:
     timeout-minutes: 60
     container:
       image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
-      options: --memory=11g
+      options: --memory=30g
     needs: [nix-build]
     strategy:
       matrix:
@@ -65,11 +65,11 @@ jobs:
           - SHA-512
           - HMAC
           - Stack
-          - Calculator.Karatsuba
-          - Calculator.Modulo
-          - Calculator.InverseModulo
-          - Calculator.CLU
-          - Calculator.Calculator
+          - Karatsuba
+          - Modulo.Eq
+          - InverseModulo
+          - CLU
+          - ECDSA
 
     steps:
       - name: "Checkout the repository"
@@ -87,7 +87,6 @@ jobs:
   hitlt:
     name: HITL Tests
     runs-on: [self-hosted, hardware-access, orangecrab]
-    timeout-minutes: 480
     container:
       image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
       options: >-
@@ -103,13 +102,41 @@ jobs:
           - SHA.SHA256
           - HMACSHA256
           - Stack
-          - Calculator.Karatsuba
-          - Calculator.Modulo
-          - Calculator.InverseModulo.BEA
-          - Calculator.InverseModulo.FastGCD
-          - Calculator.InverseModulo.FltCtmi
-          - Calculator.CLU
+          - Karatsuba
+          - Modulo.Modulo
+          - BEA
+          - FastGCD
+          - FltCtmi
+          - CLU
           - Calculator.Calculator
+
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Run HITLT"
+        uses: "./.github/actions/hitlt"
+        with:
+          testcase: ${{ matrix.test }}
+
+  hitlt-bigmem:
+    name: HITL Tests that use lots of RAM
+    runs-on: [self-hosted, hardware-access, orangecrab]
+    container:
+      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      options: >-
+        --memory=30g
+        --device /dev/bus/usb
+        --device /dev/ttyPmodUSB0
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - ECDSASign
 
     steps:
       - name: "Checkout the repository"

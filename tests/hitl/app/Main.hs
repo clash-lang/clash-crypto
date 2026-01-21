@@ -13,6 +13,8 @@ import Clash.Prelude
   , sampleN, withClockResetEnable, clockGen, resetGen, enableGen
   )
 
+import qualified Clash.Prelude as BV (unpack)
+
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Clash.XException (hasUndefined)
@@ -24,12 +26,14 @@ import Control.Exception
   )
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
+import Data.Bifunctor (bimap)
 import Data.ByteString
   ( ByteString
   , append, hGet, hGetNonBlocking, hPut, pack, unpack, singleton
   )
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
+import Data.Tuple (swap)
 import Data.Typeable (Typeable, typeRep)
 import Data.Word (Word8)
 import GHC.IO.Handle (Handle)
@@ -82,6 +86,9 @@ import qualified Hedgehog.Gen        as Gen
 import qualified Clash.Sized.Vector  as Vec
 import qualified Crypto.Hash         as Hash
 import qualified Crypto.MAC.HMAC     as HMAC
+import Crypto.ECC (Curve_P256R1, EllipticCurve (..))
+import Crypto.Error (throwCryptoError)
+import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
 
 main ∷ IO ()
 main = do
@@ -143,6 +150,10 @@ main = do
         , testGroup "Clash.Crypto.Calculator"
             [ testCalculator "Calculator" sem dev settings
             ]
+        , localOption (HedgehogTestLimit (Just 5))
+        $ testGroup "Clash.Crypto.PubKey"
+            [ testPubKeyAlgorithm "ECDSASign" sem dev settings
+            ]
         ]
 
   testCLU ∷
@@ -174,6 +185,20 @@ main = do
         a ∷ Mod SecP256ModPrime ← genMod
         b ∷ Mod SecP256ModPrime ← genMod
         runHitltCalculator sem dev settings a b
+
+  testPubKeyAlgorithm ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testPubKeyAlgorithm name sem dev settings
+    = test sem dev settings name $ do
+        h ∷ Mod SecP256ModPrime ← genMod
+        k ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
+        d ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
+        runHitltPubKeyAlgorithm sem dev settings
+         (bitCoerce h) (bitCoerce k) (bitCoerce d)
 
   genStackAction ∷
     ∀ n size m.
@@ -345,6 +370,38 @@ runHitltCalculator sem dev settings a b =
      $ bitCoerce @_ @(ByteVec (2 * ByteSize (Mod SecP256ModPrime))) (a, b)
   eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
      $ goldenRoutine a b
+
+runHitltPubKeyAlgorithm ∷
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 256 → Unsigned 256 → Unsigned 256 →
+  PropertyT IO ()
+runHitltPubKeyAlgorithm sem dev settings h k d =
+  runHitlt (type (ByteSize (Unsigned 256) * 2)) sem dev settings bs eq
+ where
+  bs = pack $ toList
+     $ bitCoerce @_ @(ByteVec (3 * ByteSize (Unsigned 256)))
+       (d, k, h)
+
+  toBS = pack . toList . fmap BV.unpack . Vec.unconcatBitVector# @_ @8
+       . bitCoerce
+
+  hDigest = case Hash.digestFromByteString @Hash.SHA256 $ toBS h of
+    Nothing → error "The Digest should be always computable from the ByteString"
+    Just x  → x
+
+  scalarK = throwCryptoError $ decodeScalar  @Curve_P256R1 Proxy $ toBS k
+  scalarD = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy $ toBS d
+
+  eq = pack
+     $ toList
+     $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * 2))
+     $ bimap (fromInteger @(Unsigned 256)) (fromInteger @(Unsigned 256))
+     $ swap
+     $ fromMaybe (error "Crypton actions should not fail")
+     $ fmap (signatureToIntegers Proxy)
+     $ signDigestWith @Curve_P256R1 Proxy scalarK scalarD hDigest
 
 runStack ∷
   ∀ messageSize → KnownNat messageSize ⇒
@@ -541,7 +598,7 @@ emptyBuffer messageSize serial = do
 
 -- | Serial timeout in microseconds
 hitltTimeoutTime ∷ Int
-hitltTimeoutTime = 1_000_000
+hitltTimeoutTime = 10_000_000
 
 -- | Serial timeout error
 hitltTimeoutErr ∷ Int → ByteString → HitltTimeout
@@ -568,8 +625,12 @@ escape = BS.concatMap $ \case
   byte → singleton byte
 
 genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
-genMod = do
-  x ← forAll $ genIndex @p $ Range.linear minBound maxBound
+genMod = genModBounded minBound maxBound
+
+genModBounded ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒
+  Index p → Index p → PropertyT m (Mod p)
+genModBounded minB maxB = do
+  x ← forAll $ genIndex @p $ Range.linear minB maxB
   return $ createMod @p x
 
 class CryptoHash (alg ∷ SHA) where

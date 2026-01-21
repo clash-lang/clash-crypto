@@ -80,7 +80,7 @@ library
     Clash.Crypto.Calculator.Karatsuba
     Clash.Crypto.Calculator.Modulo
     Clash.Crypto.Calculator.Utils
-    Clash.Crypto.ECDSA.Routines
+    Clash.Crypto.PubKey.ECDSA
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -107,11 +107,14 @@ library test
   build-depends:
     , clash-crypto
     , clash-lib
+    , deepseq
     , ghc-typelits-proof-assist
     , modular-arithmetic
   exposed-modules:
     Test.Clash.Crypto.Calculator
     Test.Clash.Crypto.Calculator.InverseModulo
+    Test.Clash.Crypto.Calculator.Simulate
+    Test.Clash.Crypto.PubKey.ECDSA.Simulate
 
 test-suite simulation
   import: common-options
@@ -127,6 +130,7 @@ test-suite simulation
     Simulate.Clash.Crypto.Calculator.InverseModulo
     Simulate.Clash.Crypto.Calculator.Karatsuba
     Simulate.Clash.Crypto.Calculator.Modulo
+    Simulate.Clash.Crypto.PubKey.ECDSA
     Simulate.Clash.Sized.Stack
   build-depends:
     , bytestring
@@ -134,7 +138,6 @@ test-suite simulation
     , clash-crypto:test
     , clash-prelude-hedgehog
     , crypton
-    , deepseq
     , ghc-typelits-proof-assist
     , hedgehog >= 1.0
     , memory
@@ -176,6 +179,7 @@ library hitlt-instances
     BEA
     Calculator
     CLU
+    ECDSASign
     FastGCD
     FltCtmi
     HMAC
@@ -185,7 +189,6 @@ library hitlt-instances
     SictMi
     SHA
     Stack
-    ISAPrint
 
 test-suite hitlt
   import: common-options
