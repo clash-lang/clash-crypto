@@ -68,11 +68,13 @@
             ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghc-typelits-knownnat { });
             ghc-typelits-extra = dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghc-typelits-extra { });
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
-            clash-crypto = overrideCabal (final.callCabal2nix "clash-crypto" ./. {}) {
+            clash-crypto = (overrideCabal (final.callCabal2nix "clash-crypto" ./. {}) {
               configureFlags = [
                 "--ghc-option=-DHITLT_BAUD=${config.serial-speed}"
               ];
-            };
+            }).overrideAttrs (_: _: {
+              checkFlags = [ "simulation" ];
+            });
           };
           hsPkgs = hsPkgs0.extend overlay;
 
@@ -126,7 +128,8 @@
 
           hitltHsPkgs = hsPkgs.extend (_: prev: { clash-crypto = dontCheck prev.clash-crypto; });
           inherit (import ./nix/hitl.nix hitltHsPkgs) hitltBaseArgs hitltTopEntities;
-          hitlt = builtins.mapAttrs (_: v: clashLib.ecp5.clash (hitltBaseArgs // v)) hitltTopEntities;
+          clashHitlt = k: v: clashLib.ecp5.clash (hitltBaseArgs // v // { name = k; });
+          hitlt = builtins.mapAttrs clashHitlt hitltTopEntities;
           hitltUpload = builtins.mapAttrs (n: _:
             { upload = { type = "app"; program = "${hitlt.${n}}/bin/upload"; }; }
           ) hitltTopEntities;
