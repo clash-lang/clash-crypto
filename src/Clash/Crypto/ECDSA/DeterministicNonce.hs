@@ -14,17 +14,14 @@ A streaming implementation generating a nonce for deterministic ECDSA.
 
 module Clash.Crypto.ECDSA.DeterministicNonce
   ( deriveNonce
-  , deriveNonce'
-  , genericRound
   , chunkContent
   , ChunkPosition (..)
-  , SendStateI (..)
+  , SendState (..)
   ) where
 
 import Clash.Prelude
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
-import Clash.Signal.Extra (apWhen)
 
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)
@@ -34,7 +31,6 @@ import Clash.Crypto.Hash.SHA
 import qualified Clash.Crypto.Calculator.Modulo as M
 
 import Clash.Crypto.MAC.HMAC
-import Data.Functor ((<&>))
 
 -- | The different stages of the deterministic nonce generation algorithm.
 data NonceStage
@@ -45,47 +41,79 @@ data NonceStage
 data NonceInput alg = NonceInput
  { inputLast    :: Content (Digest alg)
  , inputSha     :: Content (Digest alg)
+ , inputPk      :: Digest alg
  , inputMessage :: Frame () (Index 8) (BitVector 8)
  , inputHash    :: Frame () (Index 8) (BitVector 8)
+ , inputChunk   :: Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+ , chunkerDone  :: Bool
  }
 
 data NonceOutput alg = NonceOutput
- { bfActive   :: Bool
- , roundReset :: Bool
- , isResult   :: Bool
- , byteFrame  :: Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
- , lastChunk  :: SendStateI
- , outputKey  :: Content (Digest alg)
- , outputV    :: Content (Digest alg)
- , mHash      :: Content (Digest alg)
- , shaOutput  :: Content (Digest alg)
- , shaInput   :: Frame () (Index 8) (BitVector 8)
+ { isResult  :: Bool
+ , toChunk   :: Maybe (Digest alg)
+ , shaInput  :: Frame () (Index 8) (BitVector 8)
+ , shaOutput :: Content (Digest alg)
+ , hmacInput :: Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+ , chunkPos  :: ChunkPosition
  }
 
 data NonceState alg = NonceState
  { nonceStage :: NonceStage
+ , chunkStage :: SendState
  , currentKey :: Digest alg
  , currentV   :: Digest alg
- , curHash    :: Content (Digest alg)
+ , curHash    :: Maybe (Digest alg)
  } deriving Generic
 
 instance KnownNat (MessageDigestSize alg) ⇒ NFDataX (NonceState alg)
 
-baseNonceOutput :: NonceState alg → NonceOutput alg
-baseNonceOutput s = NonceOutput
- { bfActive   = False
- , byteFrame  = undefined
- , lastChunk  = undefined
- , outputKey  = Old s.currentKey
- , outputV    = Old s.currentV
- , shaInput   = undefined
- , mHash      = s.curHash
- , roundReset = False
- , isResult   = False
- , shaOutput  = None
+lastChunk :: NonceStage -> SendState
+lastChunk = \case
+ InitFirst -> SeedLast
+ InitSecond -> VSend
+ InitThird -> SeedLast
+ InitFourth -> VSend
+ NonceLoopLen -> VSend
+ NonceLoopKey -> ByteSend
+ NonceLoopV -> VSend
+ NonceWait -> undefined
+
+byteFrame :: forall alg -> NonceStage ->
+ Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+byteFrame _ = \case
+ InitFirst    -> Middle 0
+ InitThird    -> Middle 1
+ NonceLoopKey -> End () 0
+ _            -> undefined
+
+-- Output for most of the states
+outputFromState :: NonceInput alg -> NonceOutput alg
+outputFromState i = NonceOutput
+ { isResult  = False
+ , toChunk   = Nothing
+ , shaInput  = i.inputHash
+ , shaOutput = i.inputSha
+ , hmacInput = i.inputChunk
+ , chunkPos  = FirstChunk
  }
 
-deriveNonce' ∷
+nextStage :: NonceStage -> NonceStage
+nextStage NonceLoopV   = NonceLoopLen
+nextStage s            = succ s
+
+stageV :: NonceStage -> Bool
+stageV    InitSecond   = True
+stageV    InitFourth   = True
+stageV    NonceLoopLen = True
+stageV    NonceLoopV   = True
+stageV    _            = False
+
+-- | An implementation of the deterministic nonce generation for ECDSA found
+-- in Appendix A.3.3 of FIPS 186-5. The outputted number is returned *before*
+-- computing its power since it makes sharing resources easier in the context
+-- of a circuit.
+
+deriveNonce ∷
   ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
   ∀ (p ∷ Nat)  → (KnownNat p, 1 ≤ p) ⇒
   ∀ (alg ∷ SHA) →
@@ -94,250 +122,100 @@ deriveNonce' ∷
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   DataStream dom () (Index 8) (BitVector 8) →
   -- ^ message
-  Channel dom (Digest alg) →
-  -- ^ private key
-  Channel dom (M.Mod p)
-  -- ^ k, the nonce to be multiplied afterwards (→ k ^ 16)
-deriveNonce' p alg message pk
- | SHAFacts ← knownSHA alg
- , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
- = let
-  nonceWaitOut, firstStageOut, secondStageOut, thirdStageOut
-   :: NonceState alg → NonceInput alg → NonceOutput alg
-  nonceWaitOut s i = (baseNonceOutput s)
-   { shaInput = i.inputMessage
-   , mHash    = None
-   }
-  firstStageOut s i = (baseNonceOutput s)
-   { bfActive   = True
-   , byteFrame  = Middle 0
-   , lastChunk  = SeedLast
-   , shaInput   = i.inputHash
-   , shaOutput  = None
-   , roundReset = True
-   }
-  secondStageOut s i = (baseNonceOutput s)
-   { bfActive   = False
-   , lastChunk  = VSend
-   , shaInput   = i.inputHash
-   , shaOutput  = i.inputSha
-   , roundReset = True
-   }
-  thirdStageOut s i = (firstStageOut s i)
-   { byteFrame = Middle 1
-   , shaOutput  = i.inputSha
-   }
-  nonceLoopKeyOut s i = (firstStageOut s i)
-   { byteFrame  = End () 0
-   , shaOutput  = i.inputSha
-   , lastChunk  = ByteSend
-   }
-  nextStage NonceLoopV   = NonceLoopLen
-  nextStage s            = succ s
-
-  stageFun  NonceWait    = nonceWaitOut
-  stageFun  InitFirst    = firstStageOut
-  stageFun  InitSecond   = secondStageOut
-  stageFun  InitThird    = thirdStageOut
-  stageFun  InitFourth   = secondStageOut
-  stageFun  NonceLoopLen = secondStageOut
-  stageFun  NonceLoopKey = nonceLoopKeyOut
-  stageFun  NonceLoopV   = secondStageOut
-
-  stageV    InitSecond   = True
-  stageV    InitFourth   = True
-  stageV    NonceLoopV   = True
-  stageV    _            = False
-
-  s@(nonceStage → NonceWait)    ~~> i@(inputSha → Fresh h) =
-   (newS, firstStageOut newS i)
-   where newS = s { nonceStage = InitFirst, curHash = Old h }
-    
-  s@(nonceStage → NonceLoopLen) ~~> i@(inputLast → Fresh v) =
-   let
-    newS = s { nonceStage = NonceLoopKey, currentV = v }
-    r = bitCoerce @_ @(Unsigned (CLog 2 p)) v
-   in if r /= 0 && r < natToNum @p
-   then (initialState, (nonceWaitOut initialState i) { isResult = True } )
-   else (newS, nonceLoopKeyOut newS i)
-
-  s ~~> i@(inputLast → Fresh val)
-   = (newS, stageFun next newS i)
-   where
-    next = nextStage s.nonceStage
-    nS   = s { nonceStage = next } :: NonceState alg
-    newS = if stageV s.nonceStage
-         then nS { currentV   = val }
-         else nS { currentKey = val }
-
-  s ~~> i = (s, (stageFun s.nonceStage s i) { roundReset = False, shaOutput = i.inputSha } )
-
-  initialState = NonceState
-   { nonceStage = NonceWait
-   , currentV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
-   , currentKey = 0
-   , curHash    = None
-   }
-
-  output = mealy (~~>) initialState
-         $ NonceInput
-       <$> getContent lastRes <*> getContent shaOutput
-       <*> message            <*> hmacOutput
-
-  (lastRes, hmacOutput)
-   = hmacE alg roundOutput $ delayC $ Channel output.shaOutput
-  roundOutput = register NoData $
-   genericRound alg output.bfActive output.byteFrame output.lastChunk
-                    output.roundReset (Channel output.outputKey)
-                    (Channel output.outputV) pk (Channel output.mHash)
-  shaOutput = sha alg output.shaInput
- in bitCoerce <$> guardC output.isResult lastRes
-
--- | An implementation of the deterministic nonce generation for ECDSA found
--- in Appendix A.3.3 of FIPS 186-5. The outputted number is returned *before*
--- computing its power since it makes sharing resources easier in the context
--- of a circuit.
-deriveNonce ∷
-  ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
-  ∀ (p ∷ Nat)  → (KnownNat p, 1 ≤ p) ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, KnownNat (MessageDigestSize alg),
-    CLog 2 p ~ MessageDigestSize alg, 1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
-  DataStream dom () (Index 8) (BitVector 8) →
-  -- ^ message
-  Channel dom (Digest alg) →
+  Signal dom (Digest alg) →
   -- ^ private key
   Channel dom (M.Mod p)
   -- ^ k, the nonce to be multiplied afterwards (→ k ^ 16)
 deriveNonce p alg message pk
  | SHAFacts ← knownSHA alg
  , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
- = bitCoerce <$> let
-  roundReset = (/=) <$> stage <*> register NonceWait stage
-  (stage, byte, bfActive)
-   = unbundle $ moore (~~>) compute NonceWait
-   $ bundle (lastResult.hasUpdates, shaOutput.hasUpdates, isResult)
-  NonceWait    ~~> (_   , True, _    ) = InitFirst
-  InitFirst    ~~> (True, _   , _    ) = InitSecond
-  InitSecond   ~~> (True, _   , _    ) = InitThird
-  InitThird    ~~> (True, _   , _    ) = InitFourth
-  InitFourth   ~~> (True, _   , _    ) = NonceLoopLen
-  NonceLoopLen ~~> (True, _   , False) = NonceLoopKey
-  NonceLoopLen ~~> (True, _   , True ) = NonceWait
-  NonceLoopKey ~~> (True, _   , _    ) = NonceLoopV
-  NonceLoopV   ~~> (True, _   , _    ) = NonceLoopLen
-  s            ~~> _                   = s
-  -- We pack only three values here because packing one more makes the circuit
-  -- take more space on the board.
-  compute s = (s, byteC s, bfActiveC s)
-  byteC = \case
-    InitFirst → Middle 0
-    InitThird → Middle 1
-    _         → End () 0
-  bfActiveC = \case
-    InitFirst    → True
-    InitThird    → True
-    NonceLoopKey → True
-    _            → False
-  lastChunk = stage <&> \case
-    InitFirst    → SeedLast
-    InitThird    → SeedLast
-    NonceLoopKey → ByteSend
-    _            → VSend
-  -- Initial values
-  initialV, initialKey ∷ Digest alg
-  initialV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
-  initialKey = 0
-  -- TODO: Find a way to nicely rewrite these muxes
-  v   = muxC ((== InitFirst) <$> stage) (pure initialV)
-      $ muxC ((\s → s == InitSecond || s == InitFourth || s == NonceLoopLen ||
-                    s == NonceLoopV) <$> stage .&&. lastResult.hasUpdates)
-        lastResult
-      $ delayC v
-  key = muxC ((\s → s == InitFirst || s == InitThird ||
-                    s == NonceLoopKey) <$> stage .&&. lastResult.hasUpdates)
-        lastResult
-      $ muxC ((== InitFirst) <$> stage) (pure initialKey)
-      $ delayC key
-  (lastResult, hmacOutput) = hmacE alg roundOutput
-   $ muxC ((== NonceWait) <$> stage) (Channel $ pure None) shaOutput
-  roundOutput =
-   genericRound alg bfActive byte lastChunk roundReset key v pk messageHash
-  shaOutput = delayC
-            $ sha alg
-            $ mux ((== NonceWait) <$> stage) message hmacOutput
-  messageHash = muxC ((== NonceWait) <$> stage .&&. shaOutput.hasUpdates)
-                     shaOutput $ delayC messageHash
-  modResult = bitCoerce @_ @(Unsigned (CLog 2 p)) <$> lastResult
-  isResult  = maybe False (\m → m /= 0 || m < natToNum @p)
-          <$> content modResult
- in guardC
-  ((== NonceLoopLen) <$> register NonceWait stage .&&. isResult) modResult
+ = let
+  initialState :: NonceState alg
+  initialState = NonceState
+   { nonceStage = NonceWait
+   , chunkStage = KeySend
+   , currentV   = bitCoerce $ repeat (0x01 ∷ BitVector 8)
+   , currentKey = 0
+   , curHash    = Nothing
+   }
 
--- | An implementation of a generic round for deterministic nonce generation.
--- The three different types of rounds are parametrized over three specific
--- values, which are enough to represent all rounds in the algorithm:
--- * An additional byte frame
--- * A toggle for this byte frame
--- * The type of data to be sent last
-genericRound ∷ forall dom.
-  forall alg → (KnownSHA alg, HiddenClockResetEnable dom,
-   BlockSize alg `Mod` 8 ~ 0, 8 ≤ BlockSize alg,
-   1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  Signal dom Bool →
-  -- ^ is there a single-byte frame?
-  Signal dom (Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)) →
-  -- ^ the single-byte frame
-  Signal dom SendStateI →
-  -- ^ the state of the last chunk
-  Signal dom Bool →
-  -- ^ reset signal
-  Channel dom (Digest alg) →
-  -- ^ the HMAC key
-  Channel dom (Digest alg) →
-  -- ^ the V value
-  Channel dom (Digest alg) →
-  -- ^ first part of the seed (private key)
-  Channel dom (Digest alg) →
-  -- ^ last part of the seed (message hash)
-  DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
-  -- ^ the resulting stream to be fed to HMAC
-genericRound alg bfActive byteFrame lastChunk rst keyC vC seed1 seed2
- | SHAFacts ← knownSHA alg
- , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8) =
- let
-  stage = moore (~~>) id RoundIdle $ bundle (rst, chunkerDone, lastChunk)
-  _                     ~~> (True, _   , _ ) = WaitNext KeySend
-  Processing s          ~~> (_   , True, lc) | s == lc = RoundIdle
-  Processing KeySend    ~~> (_   , True, _ ) = WaitNext FillerSend
-  Processing FillerSend ~~> (_   , True, _ ) = WaitNext VSend
-  Processing VSend      ~~> (_   , True, _ ) = Processing ByteSend
-  Processing ByteSend   ~~> (_   , True, _ ) = WaitNext SeedFirst
-  Processing SeedFirst  ~~> (_   , True, _ ) = WaitNext SeedLast
-  Processing SeedLast   ~~> (_   , True, _ ) = RoundIdle
-  WaitNext s            ~~> (_   , True, _ ) = WaitNext s
-  WaitNext s            ~~> _                = Processing s
-  s                     ~~> _                = s
-  chunkType = do
-     curStage ← stage
-     chunk    ← lastChunk
-     pure $ case curStage of
-       (isState KeySend → True) → FirstChunk
-       (isState chunk   → True) → LastChunk
-       _                        → MiddleChunk
-  dataToChunk
-   = muxCFresh (isState KeySend    <$> stage) keyC
-   $ muxCFresh (isState FillerSend <$> stage) (pure undefined)
-   $ muxCFresh (isState VSend      <$> stage) vC
-   $ muxCFresh (isState SeedFirst  <$> stage) seed1
-   $ muxCFresh (isState SeedLast   <$> stage) seed2
-   $ Channel $ pure None
-  (chunker, chunkerDone) = chunkContent alg dataToChunk chunkType
- in mux ((== RoundIdle)           <$> stage)               (pure Idle)
-  $ mux ((== Processing ByteSend) <$> stage .&&. bfActive) byteFrame chunker
+  (~~>) :: NonceState alg -> NonceInput alg -> (NonceState alg, NonceOutput alg)
+  s@(nonceStage -> NonceWait) ~~> i =
+   case i.inputSha of
+    Fresh h -> (nS, outS)
+     where nS = s { nonceStage = InitFirst
+                  , chunkStage = KeySend
+                  , curHash    = Just h
+                  }
+           outS = (outputFromState i)
+                  { toChunk   = Just nS.currentKey
+                  , shaOutput = None
+                  }
+    _ -> (s, (outputFromState i)
+             { shaInput  = i.inputMessage
+             , shaOutput = None
+             }
+         )
+
+  s ~~> i@(inputLast -> Fresh val) =
+   let nS = s { nonceStage = nextStage s.nonceStage
+              , chunkStage = KeySend } :: NonceState alg
+       outS = if stageV s.nonceStage
+              then nS { currentV   = val }
+              else nS { currentKey = val }
+       r = bitCoerce @_ @(Unsigned (CLog 2 p)) val
+   in if r /= 0 && r < natToNum @p && s.nonceStage == NonceLoopLen
+   then (initialState,
+         (outputFromState i)
+         { shaInput = i.inputMessage
+         , isResult = True
+         }
+        )
+   else (outS, (outputFromState i) { toChunk = Just outS.currentKey } )
+
+  s ~~> i | s.chunkStage == ByteSend
+         || (i.chunkerDone && lastChunk s.nonceStage /= s.chunkStage) =
+   let cP = if nS.chunkStage == lastChunk nS.nonceStage
+            then LastChunk else MiddleChunk
+       nS = s { chunkStage = succ s.chunkStage }
+       out = (outputFromState i) { chunkPos = cP } :: NonceOutput alg
+       outFinal =
+        case chunkStage nS of
+         VSend      -> out { toChunk   = Just nS.currentV }
+         FillerSend -> out { toChunk   = Just undefined } -- Filler
+         ByteSend   -> out { hmacInput = byteFrame alg nS.nonceStage }
+         SeedFirst  -> out { toChunk   = Just i.inputPk }
+         SeedLast   -> out { toChunk   = nS.curHash }
+         _          -> error "Should never be reached" -- TODO: Prove it with LH.
+   in (nS, outFinal)
+
+  s ~~> i = (s, (outputFromState i) { chunkPos = cP })
+   where
+    cP | s.chunkStage == lastChunk s.nonceStage = LastChunk
+       | s.chunkStage == KeySend                = FirstChunk
+       | otherwise                              = MiddleChunk
+    
+
+  output = mealy (~~>) initialState
+         $ NonceInput
+       <$> getContent lastRes <*> getContent shaOutput <*> pk
+       <*> message            <*> hmacOutput
+       <*> chunked            <*> cDone
+
+  (chunked, cDone)
+   = chunkContent alg (cachedFromMaybe $ register Nothing output.toChunk)
+   $ register FirstChunk output.chunkPos
+
+  (lastRes, hmacOutput)
+   = hmacE alg (register Idle output.hmacInput)
+   $ delayC $ Channel output.shaOutput
+   
+  shaOutput = sha alg $ register Idle output.shaInput
+
+ in bitCoerce <$> guardC output.isResult lastRes
 
 -- | Internal state of a round.
-data SendStateI
+data SendState
  = KeySend
  | FillerSend
  | VSend
@@ -345,30 +223,6 @@ data SendStateI
  | SeedFirst
  | SeedLast
  deriving (Eq, Show, Generic, NFDataX, Enum)
-
--- | Actual state of a round.
-data SendStateE
- = WaitNext SendStateI
- | Processing SendStateI
- | RoundIdle
- deriving (Eq, Show, Generic, NFDataX)
-
--- | A handy comparison operator.
-isState ∷ SendStateI → SendStateE → Bool
-isState s (Processing t) = s == t
-isState s (WaitNext   t) = s == t
-isState _ _              = False
-
--- | A small helper function that makes a mux Fresh when the condition updates.
-muxCFresh ∷ ∀ a dom. (HiddenClockResetEnable dom, KnownDomain dom) ⇒
- Signal dom Bool → Channel dom a → Channel dom a → Channel dom a
-muxCFresh b x y = muxC b (freshen $ oldify x) (freshen y)
- where
-  changed = xor <$> b <*> register False b
-  freshen = Channel . apWhen changed (Fresh id <*>) . getContent
-  oldify  = Channel . fmap (\case
-                            Fresh x' → Old x'
-                            s        → s     ) . getContent
 
 -- | The position of the chunk in the stream.
 data ChunkPosition = FirstChunk | MiddleChunk | LastChunk
@@ -411,5 +265,6 @@ chunkContent alg contC chunkType
   makeVec = fmap bitCoerce
   frame (cont, typ, curStage)
    = maybe NoData (op curStage typ) ((!! curStage) <$> makeVec cont)
+  done = ((==maxBound) <$> stage) .&&. register True ((/=maxBound) <$> stage)
  in
-  (frame <$> bundle (content contC, chunkType, stage), (== maxBound) <$> stage)
+  (frame <$> bundle (content contC, chunkType, stage), done)

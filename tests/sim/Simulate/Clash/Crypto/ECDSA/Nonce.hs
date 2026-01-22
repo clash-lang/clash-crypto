@@ -74,71 +74,6 @@ tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce" $
           vec = List.concatMap
            (toList . (Middle <$>) . bitCoerce @_ @(Vec 32 (BitVector 8))) message
       res === vec
-      ,
-      testProperty "First round no seed" $ property $ do
-        key ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        v   ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        let stream = concatMap bitCoerce $ key :> v :> v :> Nil
-            keyC   = withClockResetEnable clockGen resetGen enableGen
-                   $ cachedChannel @_ @System
-                   $ fromList
-                   $ (undefined, Clear)
-                   : (undefined, Clear)
-                   : (key, Release)
-                   : List.repeat (key, Keep)
-            vC     = pure v
-            res    = runFirstNoSeed keyC vC
-            refStr = listFromBV 32 () $ toList stream <> [0]
-            ref    = runHmac $ fromList
-                   $ Idle : Idle : refStr <> List.repeat NoData
-
-        res === ref
-      ,
-      testProperty "First round seeded" $ property $ do
-        key ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        v   ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        pk  ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        h   ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        byte <- bitCoerce <$> (forAll $ genUnsigned (Range.linear 0 1))
-
-        let stream  = concatMap bitCoerce $ key :> v :> v :> Nil
-            stream' = concatMap bitCoerce $ pk :> h :> Nil
-            keyC    = withClockResetEnable clockGen resetGen enableGen
-                    $ cachedChannel @_ @System
-                    $ fromList
-                    $ (undefined, Clear)
-                    : (undefined, Clear)
-                    : (key, Release)
-                    : List.repeat (key, Keep)
-            vC      = pure v
-            pkC     = pure pk
-            hC      = pure h
-            res     = runFirst (pure byte) keyC vC pkC hC
-            refStr  = listFromBV 32 ()
-                    $ toList stream <> [byte] <> toList stream'
-            ref     = runHmac $ fromList
-                    $ Idle : Idle : refStr <> List.repeat NoData
-
-        res === ref
-      ,
-      testProperty "Second round" $ property $ do
-        key ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        v   ∷ BitVector 256 <- forAll $ genDefinedBitVector
-        let stream = concatMap bitCoerce $ key :> v :> v :> Nil
-            keyC   = withClockResetEnable clockGen resetGen enableGen
-                   $ cachedChannel @_ @System
-                   $ fromList
-                   $ (undefined, Clear)
-                   : (undefined, Clear)
-                   : (key, Release)
-                   : List.repeat (key, Keep)
-            vC     = pure v
-            res    = runSecond keyC vC
-            refStr = listFromBV 32 () $ toList stream
-            ref    = runHmac $ fromList
-                   $ Idle : Idle : refStr <> List.repeat NoData
-
-        res === ref
   ]
 
 runChunker ∷ ChunkPosition → Int → Channel System (BitVector 256) →
@@ -149,30 +84,10 @@ runChunker typ len message
  $ fst $ chunkContent SHA256 message (pure typ)
 
 runNonce ∷ DataStream System () (Index 8) (BitVector 8) →
- Channel System (BitVector 256) → M.Mod SecP256OrdPrime
+ Signal System (BitVector 256) → M.Mod SecP256OrdPrime
 runNonce message pk
  = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ deriveNonce' SecP256OrdPrime SHA256 message pk
-
-runFirstNoSeed ∷ Channel System (BitVector 256) →
- Channel System (BitVector 256) → BitVector 256
-runFirstNoSeed key v
- = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ firstRoundNoSeed SHA256 key.hasUpdates key v
-
-runFirst ∷ Signal System (BitVector 8) → Channel System (BitVector 256) →
- Channel System (BitVector 256) → Channel System (BitVector 256) →
- Channel System (BitVector 256) → BitVector 256
-runFirst byte key v pk hash
- = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed
- $ firstRound SHA256 byte key.hasUpdates key v pk hash
-
-runSecond ∷ Channel System (BitVector 256) → Channel System (BitVector 256) →
- BitVector 256
-runSecond key v
- = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ secondRound SHA256 key.hasUpdates key v
+ $ sample @System $ newsfeed $ deriveNonce SecP256OrdPrime SHA256 message pk
 
 runHmac ∷ DataStream System (Index 65) () (BitVector 8) → BitVector 256
 runHmac stream
@@ -195,48 +110,3 @@ listFromBV start end bvs
         Just (z, zs) → [Start start z]
                     <> List.concatMap (\x → [Middle x]) zs
                     <> [End end y]
-
--- Showcase
--- This round adds an octet before the seed.
-firstRound ∷ forall dom.
-  forall alg → (KnownSHA alg, HiddenClockResetEnable dom,
-   BlockSize alg `Mod` 8 ~ 0, 8 ≤ BlockSize alg,
-   1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  Signal dom (BitVector 8) →
-  Signal dom Bool →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg)
-firstRound alg byte rst keyC vC pkC hashC
- | SHAFacts ← knownSHA alg =
- hmac alg $ genericRound alg (pure True) (Middle <$> byte) (pure SeedLast)
-                 rst keyC vC pkC hashC
-
-firstRoundNoSeed ∷ forall dom.
-  forall alg → (KnownSHA alg, HiddenClockResetEnable dom,
-   BlockSize alg `Mod` 8 ~ 0, 8 ≤ BlockSize alg,
-   1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  Signal dom Bool →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg)
-firstRoundNoSeed alg rst keyC vC
- | SHAFacts ← knownSHA alg =
- hmac alg $ genericRound alg (pure True) (pure $ End () 0) (pure ByteSend)
-                 rst keyC vC (pure undefined) (pure undefined)
-
-secondRound ∷ forall dom.
-  forall alg → (KnownSHA alg, HiddenClockResetEnable dom,
-   BlockSize alg `Mod` 8 ~ 0, 8 ≤ BlockSize alg,
-   1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  Signal dom Bool →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg) →
-  Channel dom (Digest alg)
-secondRound alg rst keyC vC
- | SHAFacts ← knownSHA alg =
- hmac alg $ genericRound alg (pure False) (pure undefined) (pure VSend)
-                 rst keyC vC (pure undefined) (pure undefined)
-
