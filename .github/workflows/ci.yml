@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 60
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
-      options: --memory=30g
+      options: --memory=11g
     needs: [nix-build]
     strategy:
       matrix:
@@ -138,7 +138,7 @@ jobs:
     runs-on: [self-hosted, compute]
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
-      options: --memory=30g
+      options: --memory=20g
     needs: [nix-build]
     strategy:
       matrix:
