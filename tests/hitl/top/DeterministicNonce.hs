@@ -41,7 +41,10 @@ topEntity (orangePll24 → (clk, rst))
     privateKey ∷ Signal Dom24 (Vec (MessageDigestSize SHAX `Div` 8) Byte)
     (privateKey, frames)
      = unbundle $ receiveBytes
-     $ bundle (register undefined privateKey, b, res.hasUpdates)
+     $ bundle (register undefined privateKey, b, result.hasUpdates)
+    pkC = head <$> pk2
+    pk2 = mux rstpk privateKey
+        $ (flip rotateLeftS) d1 <$> register undefined pk2
     receiveBytes
      = mealy (~~>) (minBound ∷ Index (MessageDigestSize SHAX `Div` 8 + 1))
     _ ~~> (_, _, True) = (minBound, (undefined, Nothing))
@@ -50,9 +53,9 @@ topEntity (orangePll24 → (clk, rst))
         if i /= maxBound then (pk <<+ byte, Nothing)
                          else (pk         , Just byte))
     i ~~> (pk, Nothing, _) = (i, (pk, Nothing))
-    res = deriveNonce SecP256OrdPrime SHAX (descape frames)
-        $ bitCoerce <$> privateKey
+    (result, rstpk) = deriveNonce SecP256OrdPrime SHAX (descape frames)
+        $ pkC
    in
-    newsfeed res
+    newsfeed result
 
 makeTopEntity 'topEntity

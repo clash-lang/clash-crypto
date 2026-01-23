@@ -41,7 +41,8 @@ tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce" $
           pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pK
           ref = Spec.deterministicNonce Spec.SHA256 pKref refDig
               $ Just . fromInteger
-          impl = runNonce (datastreamFromBS message) (pure $ fromInteger pK)
+          impl = withClockResetEnable clockGen resetGen enableGen
+               $ runNonce (datastreamFromBS message) (fromInteger pK)
       ref === impl
     ,
     testProperty "Chunker (single element)" $ property $ do
@@ -83,16 +84,18 @@ runChunker typ len message
  $ filter (/= NoData) $ sample @System
  $ fst $ chunkContent SHA256 message (pure typ)
 
-runNonce ∷ DataStream System () (Index 8) (BitVector 8) →
- Signal System (BitVector 256) → M.Mod SecP256OrdPrime
+runNonce ∷ HiddenClockResetEnable System =>
+ DataStream System () (Index 8) (BitVector 8) →
+ BitVector 256 →
+ M.Mod SecP256OrdPrime
 runNonce message pk
- = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ deriveNonce SecP256OrdPrime SHA256 message pk
-
-runHmac ∷ DataStream System (Index 65) () (BitVector 8) → BitVector 256
-runHmac stream
- = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
- $ sample @System $ newsfeed $ hmac SHA256 stream
+  = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
+  $ sample @System $ newsfeed result
+ where
+  (result, rst) = deriveNonce SecP256OrdPrime SHA256 message pkC
+  pkC = head <$> pk2
+  pk2 = mux rst (pure $ bitCoerce pk)
+      $ (flip rotateLeftS) d1 <$> register (bitCoerce pk) pk2
 
 datastreamFromBS ∷ BS.ByteString → DataStream dom () (Index 8) (BitVector 8)
 datastreamFromBS = datastreamFromBV . fmap bitCoerce . BS.unpack
