@@ -9,8 +9,6 @@ Some useful Unicode symbol bindings, which are not already supported
 by the @UnicodeSyntax@ extension yet.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Language.Haskell.Unicode

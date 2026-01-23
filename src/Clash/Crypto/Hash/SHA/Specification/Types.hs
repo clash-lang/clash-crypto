@@ -8,8 +8,6 @@ Portability : POSIX
 Basic types covering the fundamentals of FIPS 180-4.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Crypto.Hash.SHA.Specification.Types where

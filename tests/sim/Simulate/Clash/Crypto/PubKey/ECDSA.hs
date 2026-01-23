@@ -1,19 +1,31 @@
+{-|
+Module      : Simulate.Clash.Crypto.PubKey.ECDSA
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Simulation tests for 'Clash.Crypto.PubKey.ECDSA'.
+-}
+
 {-# LANGUAGE MagicHash #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Simulate.Clash.Crypto.PubKey.ECDSA (tastyTests) where
 
+import Prelude (even)
+import Clash.Prelude.Safe
+
 import Clash.Crypto.PubKey.ECDSA
 
 import Test.Tasty
 import Test.Tasty.Hedgehog
 import Test.Tasty.HUnit
-import Clash.Prelude hiding (Mod)
 import Test.Clash.Crypto.Calculator.Simulate
 import Test.Clash.Crypto.PubKey.ECDSA.Simulate hiding (IsZero)
 
-import Clash.Crypto.Calculator.Modulo (Mod)
+import Clash.Crypto.Calculator.Modulo (PrimeField)
 import Data.Maybe (fromMaybe)
 import Data.Functor.Identity (Identity(..))
 import Hedgehog
@@ -42,9 +54,9 @@ tastyTests = localOption (HedgehogTestLimit (Just 100))
       uHash ← forAll $ genUnsigned $ Range.linear 0
         $ maxBound @(Unsigned 256)
       k ← forAll $ genUnsigned $ Range.linear 1
-        $ bitCoerce @(Mod (N SECP256R1)) @CurveNum maxBound
+        $ bitCoerce @(PrimeField (N SECP256R1)) @CurveNum maxBound
       pKey ← forAll $ genUnsigned $ Range.linear 1
-        $ bitCoerce @(Mod (Q SECP256R1)) @CurveNum maxBound
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
       let bsHash = BS.pack $ toList
                  $ unpack <$> unconcatBitVector# @_ @8 (bitCoerce uHash)
           bsDigest = fromMaybe
@@ -92,7 +104,7 @@ tastyTests = localOption (HedgehogTestLimit (Just 100))
   , testProperty "Point Multiplication (against crypton)" $ property $ do
       p1 ← genPoint
       s ← forAll $ genUnsigned $ Range.linear 0
-        $ bitCoerce @(Mod (Q SECP256R1)) @CurveNum maxBound
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
       let (x, y) = pointToIntegers p1
           scal = throwCryptoError $ scalarFromInteger $ toInteger s
           ref  = pointToIntegers $ pointMul scal p1
@@ -102,7 +114,7 @@ tastyTests = localOption (HedgehogTestLimit (Just 100))
       ref === impl
   , testProperty "IsZero" $ property $ do
       x ← forAll $ genUnsigned $ Range.linear 0
-        $ bitCoerce @(Mod (Q SECP256R1)) @CurveNum maxBound
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
       let res = resultFromList
               $ fromMaybe (error "Routines in tests should always return")
               $ runIsZero [bitCoerce x]
@@ -114,7 +126,7 @@ type CurveNum = Unsigned 256
 genPoint ∷ Monad m ⇒ PropertyT m Crypto.PubKey.ECC.P256.Point
 genPoint = do
   coeff ← forAll $ Gen.integral $ Range.linear 1
-        $ 1 + toInteger @(Mod (Q SECP256R1)) maxBound
+        $ 1 + toInteger @(PrimeField (Q SECP256R1)) maxBound
   return $ toPoint $ throwCryptoError $ scalarFromInteger coeff
 
 pointFromList ∷ [CurveNum] → (Integer, Integer)

@@ -14,8 +14,6 @@ track of the temporal changes.
 -}
 
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Signal.Channel

@@ -1,6 +1,6 @@
 {-|
 Module      : Clash.Crypto.Calculator.ISA
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -9,7 +9,6 @@ Instruction Set Architecture for the calculator.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -17,12 +16,11 @@ Instruction Set Architecture for the calculator.
 
 module Clash.Crypto.Calculator.ISA where
 
-import Clash.Prelude.Safe hiding (Bit, Mod)
+import Clash.Prelude.Safe hiding (Bit)
 import Clash.Class.Counter (Counter(..))
 
-import Language.Haskell.Unicode (type (≤))
-
 import Data.Kind (Type)
+import Language.Haskell.Unicode (type (≤))
 
 import Clash.Promoted.Integer
 import Clash.Promoted.List
@@ -157,7 +155,7 @@ class KnownInstruction
   (a ∷ Type)
   (instruction ∷ Instruction group Nat Nat Nat Nat Nat)
  where
-  instruction ::
+  instruction ∷
     ∀ x → x ~ instruction ⇒
     Instr group rbound stackSize a
 

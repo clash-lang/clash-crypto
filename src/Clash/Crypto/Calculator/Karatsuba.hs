@@ -17,7 +17,8 @@ module Clash.Crypto.Calculator.Karatsuba
   , karatsubaSequentialModulo
   ) where
 
-import Clash.Prelude.Safe hiding (Mod)
+import Clash.Prelude.Safe
+
 import Clash.Signal.Channel
 import Clash.Signal.Extra (apWhen)
 
@@ -26,7 +27,7 @@ import Data.Constraint.Nat.Extra
   )
 import GHC.TypeNats.Proof (Rewrite(..), using)
 
-import Clash.Crypto.Calculator.Modulo
+import Clash.Crypto.Calculator.Modulo (computeUnsignedModuloUnsigned)
 
 -- * Combinatorial implementations
 

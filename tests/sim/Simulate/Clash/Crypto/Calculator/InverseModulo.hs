@@ -1,6 +1,6 @@
 {-|
 Module      : Simulate.Clash.Crypto.Calculator.InverseModulo
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -12,7 +12,7 @@ Simulation tests for 'Clash.Crypto.Calculator.InverseModulo'.
 
 module Simulate.Clash.Crypto.Calculator.InverseModulo (tastyTests) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
@@ -53,11 +53,11 @@ tastyTests = testGroup "Clash.Crypto.Calculator.InverseModulo"
 
 invModuloProperty ∷
   ( HiddenClockResetEnable System ⇒
-    Channel System (Mod SecP256ModPrime) →
-    Channel System (Mod SecP256ModPrime)
+    Channel System (PrimeField SecP256ModPrime) →
+    Channel System (PrimeField SecP256ModPrime)
   ) → Property
 invModuloProperty invModComp = property $ do
-  f0 <- forAll $ genIndex $ Range.constantFrom 1 1 (maxBound - 1)
+  f0 ← forAll $ genIndex $ Range.constantFrom 1 1 (maxBound - 1)
   let f1 = createMod @SecP256ModPrime f0
   -- We can't use `Index` directly because the `inv` implementation makes it
   -- go out of bounds.

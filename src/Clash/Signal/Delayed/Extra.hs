@@ -9,8 +9,6 @@ Some extra utility functions that extend the functionality of
 'Clash.Signal.Delayed'.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Signal.Delayed.Extra

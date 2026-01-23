@@ -10,7 +10,7 @@ The Cryptographic Logic Unit (CLU).
 
 module Clash.Crypto.Calculator.CLU where
 
-import Clash.Prelude hiding (Mod, Bit, unzip)
+import Clash.Prelude.Safe
 
 import Clash.Crypto.Calculator.ISA (CluInstruction(..))
 

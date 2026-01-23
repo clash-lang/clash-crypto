@@ -1,3 +1,14 @@
+{-|
+Copyright   : Copyright © 2024-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Hardware-in-the-loop host controller loading the FPGA bitstreams on
+the device under test and generating property test based inputs for
+the different test cases.
+-}
+
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE TypeAbstractions #-}
 
@@ -5,7 +16,7 @@
 
 import Prelude
 
-import Clash.Prelude
+import Clash.Prelude.Safe
   ( type Div, type (*), type (-), type (+)
   , SNat(..), Nat, KnownNat, Unsigned, Vec
   , BitPack(BitSize), Bit, Index, System
@@ -13,7 +24,7 @@ import Clash.Prelude
   , sampleN, withClockResetEnable, clockGen, resetGen, enableGen
   )
 
-import qualified Clash.Prelude as BV (unpack)
+import qualified Clash.Prelude.Safe as BV (unpack)
 
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
@@ -64,10 +75,11 @@ import Clash.Crypto.Hash.SHA
 import Clash.Crypto.Calculator.ISA
   ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime
   )
-import Clash.Crypto.Calculator.Modulo (Mod, ModSize, createMod)
+import Clash.Crypto.Calculator.Modulo (ℤₘ, PrimeField, ModSize, createMod)
 
 import Test.Clash.Crypto.Calculator
 import Test.Clash.Crypto.Calculator.InverseModulo
+import Test.Clash.Crypto.Hash.SHA
 
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
@@ -93,10 +105,16 @@ import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
 import qualified Crypto.PubKey.ECC.ECDSA as Spec
 import qualified Crypto.PubKey.ECC.Types as Spec
 
+type HitlTestTree = String → QSem → FilePath → SerialPortSettings → TestTree
+
+-- | Serial timeout in microseconds
+hitltTimeoutTime ∷ Int
+hitltTimeoutTime = 10_000_000
+
 main ∷ IO ()
 main = do
-  serialDev   <- nixConfig "hitlt-serial-dev"
-  serialSpeed <- nixConfig "serial-speed"
+  serialDev   ← nixConfig "hitlt-serial-dev"
+  serialSpeed ← nixConfig "serial-speed"
   let settings = defaultSerialSettings { commSpeed = parseCS serialSpeed }
 
   -- using only a single serial forces us to use single threaded test
@@ -129,10 +147,6 @@ main = do
         , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
             ]
-        , testGroup "Clash.Crypto.ECDSA.DeterministicNonce"
-            [ testDeterministicNonce SHA256 "DeterministicNonce" sem dev
-                                     settings
-            ]
         , testGroup "Clash.Crypto.Calculator.Karatsuba"
             [ testKaratsuba "Karatsuba" sem dev settings
             , testKaratsubaModulo "KaratsubaModulo" sem dev settings
@@ -144,10 +158,9 @@ main = do
             [ testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
             , testInverseModulo "FltCtmi" sem dev settings
-            -- We don't enable the SictMi test because yosys can't synthesize it.
-            -- It might be related to the following issue:
-            -- https://github.com/YosysHQ/nextpnr/issues/208
-            -- , testInverseModulo "SictMi" sem dev settings
+            -- The SictMi test has been disabled due to a bug in nextpnr
+            -- cf. https://github.com/clash-lang/clash-crypto/issues/65
+            --, testInverseModulo "SictMi" sem dev settings
             ]
         , testGroup "Clash.Crypto.Calculator.CLU"
             [ testCLU "CLU" sem dev settings
@@ -155,8 +168,12 @@ main = do
         , testGroup "Clash.Crypto.Calculator"
             [ testCalculator "Calculator" sem dev settings
             ]
+        , testGroup "Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic"
+            [ testDeterministicNonce SHA256 "DeterministicNonce" sem dev
+                                     settings
+            ]
         , localOption (HedgehogTestLimit (Just 5))
-        $ testGroup "Clash.Crypto.PubKey"
+        $ testGroup "Clash.Crypto.PubKey.ECDSA"
             [ testPubKeyAlgorithm "ECDSASign" sem dev settings
             ]
         ]
@@ -170,13 +187,13 @@ main = do
   testCLU name sem dev settings
     = test sem dev settings name $ do
         opMod ← forAll Gen.enumBounded
-        a ∷ Mod SecP256ModPrime ← genMod
-        b ∷ Mod SecP256ModPrime ← genMod
+        a ∷ PrimeField SecP256ModPrime ← genMod
+        b ∷ PrimeField SecP256ModPrime ← genMod
         runHitltCLU sem dev settings (opMod, (a, b))
 
         opOrd ← forAll Gen.enumBounded
-        c ∷ Mod SecP256OrdPrime ← genMod
-        d ∷ Mod SecP256OrdPrime ← genMod
+        c ∷ PrimeField SecP256OrdPrime ← genMod
+        d ∷ PrimeField SecP256OrdPrime ← genMod
         runHitltCLU sem dev settings (opOrd, (c, d))
 
   testCalculator ∷
@@ -187,8 +204,8 @@ main = do
     TestTree
   testCalculator name sem dev settings
     = test sem dev settings name $ do
-        a ∷ Mod SecP256ModPrime ← genMod
-        b ∷ Mod SecP256ModPrime ← genMod
+        a ∷ PrimeField SecP256ModPrime ← genMod
+        b ∷ PrimeField SecP256ModPrime ← genMod
         runHitltCalculator sem dev settings a b
 
   testPubKeyAlgorithm ∷
@@ -199,9 +216,9 @@ main = do
     TestTree
   testPubKeyAlgorithm name sem dev settings
     = test sem dev settings name $ do
-        h ∷ Mod SecP256ModPrime ← genMod
-        k ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
-        d ∷ Mod SecP256ModPrime ← genModBounded 1 maxBound
+        h ∷ PrimeField SecP256ModPrime ← genMod
+        k ∷ PrimeField SecP256ModPrime ← genModBounded 1 maxBound
+        d ∷ PrimeField SecP256ModPrime ← genModBounded 1 maxBound
         runHitltPubKeyAlgorithm sem dev settings
          (bitCoerce h) (bitCoerce k) (bitCoerce d)
 
@@ -210,20 +227,14 @@ main = do
     (KnownNat n, KnownNat size, MonadGen m) ⇒
     m (StackAction n (Unsigned size))
   genStackAction = Gen.choice
-    [
-      Push    <$> genUnsigned (Range.linear minBound maxBound)
+    [ Push    <$> genUnsigned (Range.linear minBound maxBound)
     , Pop     <$> genIndex    (Range.linear minBound maxBound)
     , Inspect <$> genIndex    (Range.linear minBound maxBound)
     , CopyUp  <$> genIndex    (Range.linear minBound maxBound)
     , Swap    <$> genIndex    (Range.linear minBound maxBound)
     ]
 
-  testStack ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  testStack ∷ HitlTestTree
   testStack name sem dev settings
     | SNat @s ← SNat @( BitSize
                           ( Unsigned StackPadding
@@ -233,55 +244,35 @@ main = do
                           ) `Div` 8
                       )
     = test sem dev settings name $ do
-        actions <- forAll $ Gen.list (Range.linear 20 1000) $
-                   genStackAction @StackSize @StackValueSize
+        actions ← forAll $ Gen.list (Range.linear 20 1000) $
+                  genStackAction @StackSize @StackValueSize
         runStack s sem dev settings actions
 
-  testInverseModulo ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  testInverseModulo ∷ HitlTestTree
   testInverseModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ Mod SecP256ModPrime ← genMod
+        x ∷ PrimeField SecP256ModPrime ← genMod
         unless (x == 0)
           $ runHitltInverseModulo sem dev settings x
 
-  testModulo ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  testModulo ∷ HitlTestTree
   testModulo name sem dev settings
     = test sem dev settings name $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltModulo sem dev settings x
 
-  testKaratsuba ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  testKaratsuba ∷ HitlTestTree
   testKaratsuba name sem dev settings
     = test sem dev settings name $ do
         x ← forAll $ genUnsigned $ Range.linear minBound maxBound
         y ← forAll $ genUnsigned $ Range.linear minBound maxBound
         runHitltKaratsuba sem dev settings x y
 
-  testKaratsubaModulo ∷
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+  testKaratsubaModulo ∷ HitlTestTree
   testKaratsubaModulo name sem dev settings
     = test sem dev settings name $ do
-        x ∷ Mod SecP256ModPrime ← genMod
-        y ∷ Mod SecP256ModPrime ← genMod
+        x ∷ PrimeField SecP256ModPrime ← genMod
+        y ∷ PrimeField SecP256ModPrime ← genMod
         runHitltKaratsubaModulo sem dev settings x y
 
   testSHA ∷
@@ -317,16 +308,12 @@ main = do
   testDeterministicNonce ∷
     ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
              Hash.HashAlgorithm (CryptoToHash alg)) ⇒
-    String →
-    QSem →
-    FilePath →
-    SerialPortSettings →
-    TestTree
+    HitlTestTree
   testDeterministicNonce alg name sem dev settings
     = test sem dev settings name $ do
+        let m = natToNum @(SecP256OrdPrime - 1)
         bs ← forAll $ Gen.bytes $ Range.linear 1 1000
-        pk ← forAll
-         $ Gen.integral (Range.linear 1 (natToNum @SecP256OrdPrime - 1))
+        pk ← forAll $ Gen.integral $ Range.linear 1 m
         runHitltDeterministicNonce alg sem dev settings bs pk
 
   test ∷
@@ -348,13 +335,13 @@ main = do
             $ testProperty "run HITLT" $ property p
         ]
 
-readProcessSilently :: FilePath -> [String] -> IO String
+readProcessSilently ∷ FilePath → [String] → IO String
 readProcessSilently path args = readCreateProcess silentProc ""
  where
   baseProc = proc path args
   silentProc = baseProc { std_err = CreatePipe }
 
-callProcessSilently :: FilePath -> [String] -> IO ()
+callProcessSilently ∷ FilePath → [String] → IO ()
 callProcessSilently path args =
   void $ readProcessSilently path args
 
@@ -368,13 +355,12 @@ nixConfig ∷ String → IO String
 nixConfig key =
   readProcessSilently "nix" ["eval", "--raw", "--file", "build-config.nix", key]
 
-
 runHitltCLU ∷
   ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize SecP256ModPrime) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
-  (CluInstruction, (Mod p, Mod p)) →
+  (CluInstruction, (PrimeField p, PrimeField p)) →
   PropertyT IO ()
 runHitltCLU sem dev settings (op, (x, y)) =
   runHitlt (ModSize p `Div` 8) sem dev settings bs eq
@@ -384,7 +370,7 @@ runHitltCLU sem dev settings (op, (x, y)) =
          ((0, (op, ((bitCoerce x, bitCoerce y), pV))) ∷ CluInput)
 
   eq = pack $ toList
-    $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
+    $ bitCoerce @_ @(ByteVec (ByteSize (PrimeField SecP256ModPrime)))
     $ case op of
         Add → x + y
         Sub → x - y
@@ -400,14 +386,18 @@ runHitltCalculator ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod SecP256ModPrime → Mod SecP256ModPrime →
+  PrimeField SecP256ModPrime →
+  PrimeField SecP256ModPrime →
   PropertyT IO ()
 runHitltCalculator sem dev settings a b =
-  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings bs eq
+  runHitlt (ByteSize (PrimeField SecP256ModPrime)) sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(ByteVec (2 * ByteSize (Mod SecP256ModPrime))) (a, b)
-  eq = pack $ toList $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
+     $ bitCoerce @_ @(ByteVec (2 * ByteSize (PrimeField SecP256ModPrime)))
+       (a, b)
+  eq = pack
+     $ toList
+     $ bitCoerce @_ @(ByteVec (ByteSize (PrimeField SecP256ModPrime)))
      $ goldenRoutine a b
 
 runHitltPubKeyAlgorithm ∷
@@ -427,7 +417,7 @@ runHitltPubKeyAlgorithm sem dev settings h k d =
        . bitCoerce
 
   hDigest = case Hash.digestFromByteString @Hash.SHA256 $ toBS h of
-    Nothing → error "The Digest should be always computable from the ByteString"
+    Nothing → error "The Digest should always derivable from the ByteString"
     Just x  → x
 
   scalarK = throwCryptoError $ decodeScalar  @Curve_P256R1 Proxy $ toBS k
@@ -450,36 +440,46 @@ runStack ∷
   [StackAction StackSize (Unsigned StackValueSize)] →
   PropertyT IO ()
 runStack messageSize sem dev settings actions = do
-  let bsAction = pack . toList . bitCoerce
-       . fmap (\b -> if hasUndefined b then 0 else b) . bitCoerce @_ @(Vec _ Bit)
   -- If we run the test multiple times, we want to empty the stack.
   let actionList = Pop (natToNum @(StackSize)) : actions
+
   dutResponses ← liftIO $ bracket_ (waitQSem sem) (signalQSem sem)
    $ mapM (sendRequest messageSize dev settings . bsAction) actionList
 
   let simResponses
-            = sampleN @System (List.length actions + 3)
-            $ withClockResetEnable clockGen resetGen enableGen
-            $ stack @_ @StackSize @(Unsigned StackValueSize)
-            $ fromList
-            $ Pop 0 : actionList <> [Pop 0]
-  let boardResponses = map (snd . bitCoerce @_ @(Unsigned StackPadding, _)
+        = sampleN @System (List.length actions + 3)
+        $ withClockResetEnable clockGen resetGen enableGen
+        $ stack @_ @StackSize @(Unsigned StackValueSize)
+        $ fromList
+        $ Pop 0 : actionList <> [Pop 0]
+      boardResponses = map (snd . bitCoerce @_ @(Unsigned StackPadding, _)
        . fromMaybe (error "unthinkable") . Vec.fromList . unpack) dutResponses
 
-  let safeTail = maybe (error "unthinkable") snd . List.uncons
   boardResponses === safeTail (safeTail simResponses)
+ where
+  bsAction
+    = pack
+    . toList
+    . bitCoerce
+    . fmap (\b → if hasUndefined b then 0 else b)
+    . bitCoerce @_ @(Vec _ Bit)
+
+  safeTail = maybe (error "unthinkable") snd . List.uncons
 
 runHitltInverseModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod SecP256ModPrime →
+  PrimeField SecP256ModPrime →
   PropertyT IO ()
 runHitltInverseModulo sem dev settings x = do
-  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings (toBS x)
+  runHitlt (ByteSize (PrimeField SecP256ModPrime)) sem dev settings (toBS x)
     $ toBS $ invMod @SecP256ModPrime x
  where
-  toBS = pack . toList . bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime)))
+  toBS
+    = pack
+    . toList
+    . bitCoerce @_ @(ByteVec (ByteSize (PrimeField SecP256ModPrime)))
 
 runHitltModulo ∷
   QSem →
@@ -515,17 +515,21 @@ runHitltKaratsubaModulo ∷
   QSem →
   FilePath →
   SerialPortSettings →
-  Mod SecP256ModPrime →
-  Mod SecP256ModPrime →
+  PrimeField SecP256ModPrime →
+  PrimeField SecP256ModPrime →
   PropertyT IO ()
 runHitltKaratsubaModulo sem dev settings x y =
-  runHitlt (ByteSize (Mod SecP256ModPrime)) sem dev settings bs eq
+  runHitlt (ByteSize (PrimeField SecP256ModPrime)) sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(ByteVec (2 * (ByteSize (Mod SecP256ModPrime)))) (x, y)
+     $ bitCoerce
+         @_
+         @(ByteVec (2 * (ByteSize (PrimeField SecP256ModPrime)))) (x, y)
 
   eq = pack $ toList
-     $ bitCoerce @_ @(ByteVec (ByteSize (Mod SecP256ModPrime))) $ x * y
+     $ bitCoerce
+         @_
+         @(ByteVec (ByteSize (PrimeField SecP256ModPrime))) $ x * y
 
 runHitltSHA ∷
   ∀ (alg ∷ SHA) →
@@ -535,11 +539,13 @@ runHitltSHA ∷
   SerialPortSettings →
   ByteString →
   PropertyT IO ()
-runHitltSHA alg sem dev settings input | SHAFacts ← knownSHA alg =
- let
+runHitltSHA alg sem dev settings input
+  | SHAFacts ← knownSHA alg
+  , SNat ∷ SNat resultSize ← SNat @(MessageDigestSize alg `Div` 8)
+  = runHitlt resultSize sem dev settings bs eq
+ where
   bs = escapeAndTerminate input
   eq = cryptoHash alg input
- in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
 
 runHitltDeterministicNonce ∷
   ∀ (alg ∷ SHA) →
@@ -551,18 +557,20 @@ runHitltDeterministicNonce ∷
   Integer →
   PropertyT IO ()
 runHitltDeterministicNonce alg sem dev settings message pk
- | SHAFacts ← knownSHA alg
- , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8) =
- let
-  toBS   = pack . toList . bitCoerce . fromInteger @(Digest alg)
+  | SHAFacts ← knownSHA alg
+  , SNat ∷ SNat resultSize ← SNat @(MessageDigestSize alg `Div` 8)
+  = runHitlt resultSize sem dev settings (escapeAndTerminate $ p `append` h) ref
+ where
   refDig = cryptoHash# (Proxy @alg) message
   h = pack $ Memory.unpack refDig
   p = pack $ Vec.toList $ bitCoerce
     $ fromInteger @(Unsigned (MessageDigestSize SHA256)) pk
-  pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pk
-  ref    = Spec.deterministicNonce Hash.SHA256 pKref refDig $ Just . toBS
- in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings
-   (escapeAndTerminate $ p `append` h) ref
+  pKref = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pk
+  ref ∷ ByteString
+  ref | SHAFacts ← knownSHA alg
+      , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
+      = Spec.deterministicNonce Hash.SHA256 pKref refDig $ Just
+      . pack . toList . bitCoerce . fromInteger @(Digest alg)
 
 runHitltHMACSHA ∷
   ∀ (alg ∷ SHA) →
@@ -575,20 +583,20 @@ runHitltHMACSHA ∷
   PropertyT IO ()
 runHitltHMACSHA alg sem dev settings key msg
   | SHAFacts ← knownSHA alg
-  = let
-      n = natToNum @(BlockSize alg `Div` 8)
-      bs = withKeySize (BS.length key)
-        <> escape key
-        <> escape (BS.replicate (n - BS.length key) 0xFF)
-        <> escapeAndTerminate msg
-      eq = BS.pack $ Memory.unpack
-         $ HMAC.hmacGetDigest $ HMAC.hmac @_ @_ @(CryptoToHash alg) key msg
-    in
-      runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
+  , SNat ∷ SNat resultSize ← SNat @(MessageDigestSize alg `Div` 8)
+  = runHitlt resultSize sem dev settings bs eq
  where
-  withKeySize n
-    | n > 0x00 && n < 0xFF = BS.pack [ 0x00, toEnum n ]
-    | otherwise            = error $ "Invalid key size: " <> show n
+  n | SHAFacts ← knownSHA alg = natToNum @(BlockSize alg `Div` 8)
+  bs = withKeySize (BS.length key)
+    <> escape key
+    <> escape (BS.replicate (n - BS.length key) 0xFF)
+    <> escapeAndTerminate msg
+  eq = BS.pack $ Memory.unpack
+     $ HMAC.hmacGetDigest $ HMAC.hmac @_ @_ @(CryptoToHash alg) key msg
+
+  withKeySize m
+    | m > 0x00 && m < 0xFF = BS.pack [ 0x00, toEnum m ]
+    | otherwise            = error $ "Invalid key size: " <> show m
 
 upload ∷
   QSem →
@@ -620,13 +628,13 @@ runHitlt ∷
   ByteString →
   PropertyT IO ()
 runHitlt messageSize sem dev settings bs eq = do
-  let pr = concatMap (printf "%02x " ∷ Word8 → String) . unpack
-
   dutResponse ← liftIO
     $ bracket_ (waitQSem sem) (signalQSem sem)
     $ sendRequest messageSize dev settings bs
 
   pr dutResponse === pr eq
+ where
+  pr = concatMap (printf "%02x " ∷ Word8 → String) . unpack
 
 sendRequest ∷
   ∀ (messageSize ∷ Nat) → KnownNat messageSize ⇒
@@ -657,10 +665,6 @@ emptyBuffer messageSize serial = do
   xs ← hGetNonBlocking serial $ natToNum @messageSize
   unless (BS.null xs) $ emptyBuffer messageSize serial
 
--- | Serial timeout in microseconds
-hitltTimeoutTime ∷ Int
-hitltTimeoutTime = 10_000_000
-
 -- | Serial timeout error
 hitltTimeoutErr ∷ Int → ByteString → HitltTimeout
 hitltTimeoutErr size bs
@@ -685,44 +689,14 @@ escape = BS.concatMap $ \case
   0x00 → pack [0x00, 0x00]
   byte → singleton byte
 
-genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
+genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (ℤₘ p)
 genMod = genModBounded minBound maxBound
 
 genModBounded ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒
-  Index p → Index p → PropertyT m (Mod p)
+  Index p → Index p → PropertyT m (ℤₘ p)
 genModBounded minB maxB = do
   x ← forAll $ genIndex @p $ Range.linear minB maxB
   return $ createMod @p x
-
-class CryptoHash (alg ∷ SHA) where
-  type CryptoToHash (alg ∷ SHA)
-  cryptoHash# ∷ Proxy alg → ByteString → Hash.Digest (CryptoToHash alg)
-
-instance CryptoHash SHA1 where
-  type CryptoToHash SHA1 = Hash.SHA1
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA224 where
-  type CryptoToHash SHA224  = Hash.SHA224
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA256 where
-  type CryptoToHash SHA256  = Hash.SHA256
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA384 where
-  type CryptoToHash SHA384  = Hash.SHA384
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512 where
-  type CryptoToHash SHA512 = Hash.SHA512
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512224 where
-  type CryptoToHash SHA512224  = Hash.SHA512t_224
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512256 where
-  type CryptoToHash SHA512256  = Hash.SHA512t_256
-  cryptoHash# _ = Hash.hash
-
-cryptoHash ∷
- ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
-cryptoHash alg = BS.pack . Memory.unpack . cryptoHash# (Proxy @alg)
 
 parseCS ∷ String → CommSpeed
 parseCS = \case

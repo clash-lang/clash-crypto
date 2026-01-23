@@ -8,9 +8,9 @@ Portability : POSIX
 Streaming based padding implementation of FIPS 180-4.
 -}
 
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
@@ -22,14 +22,14 @@ module Clash.Crypto.Hash.SHA.Streaming.Padding
   , MsgPad(..)
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.DataStream
-import Clash.Sized.Internal.BitVector
 
 import Data.Constraint.Nat.Extra
   ( DDiv, LeTrans, ModBound, TimesMod, DivisorIsLess, DivisorMonotoneInverse
   , ModZero, CLog2IsLessProduct, PositiveResultCond0, CLog2LECond0
   )
+import Data.Kind (Type)
 import Data.Type.Bool (If)
 import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
@@ -161,8 +161,8 @@ padMessageStream alg
   terminate dLast trim (ePad, meVec)
     | trim > 0
     , Rewrite ← fact₀
-    , let c = fromEnum trim; bits = ((dLast `shiftR#` c) .<<+ 1) `shiftL#` c - 1
-    = (ePad, or# bits <$> meVec)
+    , let c = fromEnum trim; bits = ((dLast `shiftR` c) .<<+ 1) `shiftL` c - 1
+    = (ePad, (∨) bits <$> meVec)
 
     | otherwise
     = (ePad, meVec)
@@ -302,4 +302,4 @@ padMessageStream alg
     = Rewrite
 
 riseMsb ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ BitVector n → BitVector n
-riseMsb = (pack high ++#) . truncateB# @(n-1) @1
+riseMsb = (pack high ++#) . checkedTruncateB @(n-1) @1

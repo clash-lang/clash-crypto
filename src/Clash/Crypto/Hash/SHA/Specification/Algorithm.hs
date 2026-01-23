@@ -19,7 +19,7 @@ module Clash.Crypto.Hash.SHA.Specification.Algorithm
   , toDigest
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import Data.Function ((&))
 import GHC.TypeNats.Proof (Rewrite(..), using)

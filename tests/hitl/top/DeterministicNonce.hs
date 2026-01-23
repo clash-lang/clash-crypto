@@ -1,3 +1,13 @@
+{-|
+Module      : DeterministicNonce
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic'.
+-}
+
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -13,7 +23,7 @@ import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Clash.Crypto.Hash.SHA (SHA(..), sha)
 import Hitl.Clash.Crypto.Hash.Escape (descape)
 import Hitl.Clash.Cores.Uart.Extra (withUartRequestResponseHandler)
-import Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce)
+import Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic (deriveNonce)
 import Clash.Signal.Channel
 import Clash.Crypto.Calculator.ISA (SecP256OrdPrime)
 import Clash.Signal.DataStream (mapEnd)
@@ -38,13 +48,10 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ \b → let
-    (result, shaInput)
-     = deriveNonce SecP256OrdPrime SHAX
-       (mapEnd (const ()) $ descape b)
-       shaOutput
-    shaOutput = sha SHAX shaInput
-   in
-    newsfeed result
+  $ \b → let (result, shaInput)
+               = deriveNonce SecP256OrdPrime SHAX
+                   (mapEnd (const ()) $ descape b)
+                   (sha SHAX shaInput)
+          in newsfeed result
 
 makeTopEntity 'topEntity

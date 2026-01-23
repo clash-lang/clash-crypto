@@ -1,10 +1,20 @@
+{-|
+Module      : Stack
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Sized.Stack.stack'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
 
 module Stack where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Data.Maybe (fromMaybe)
 
@@ -29,8 +39,8 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom24 Bit
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD) $
-   (\(bulkRead @(StackAction StackSize (Unsigned StackValueSize)) -> val) ->
-        (\v s -> v >> pure (0 :: Unsigned StackPadding, s))
+   (\(bulkRead @(StackAction StackSize (Unsigned StackValueSize)) → val) →
+        (\v s → v >> pure (0 :: Unsigned StackPadding, s))
         <$> delay Nothing val
         <*> stack (fromMaybe (Pop 0) <$> val))
 

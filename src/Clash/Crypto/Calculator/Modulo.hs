@@ -11,9 +11,10 @@ Types and algorithms for modulo integers.
 {-# LANGUAGE UndecidableInstances #-}
 
 module Clash.Crypto.Calculator.Modulo
-  ( Mod(..)
-  , Prime
+  ( ℤₘ
+  , Zm
   , ModSize
+  , PrimeField
   , ComputeModuloUnsignedCycles
   , unMod
   , createMod
@@ -23,35 +24,26 @@ module Clash.Crypto.Calculator.Modulo
   , moduloShift
   ) where
 
-import Clash.Crypto.Calculator.Utils
-import Clash.Num.Wrapping (Wrapping (Wrapping))
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
+
+import Clash.Num.Wrapping (Wrapping(..), toWrapping)
 import Clash.Signal.Channel
 
-import Data.Coerce (coerce)
 import Language.Haskell.Unicode (type (≤))
 
 -- * Useful types
 
-type ModSize n = CLog 2 n
+type ModSize m = CLog 2 m
 
-newtype Mod (n ∷ Nat) = Mod (Wrapping (Index n))
- deriving (Eq, Generic, Ord, Bounded) deriving newtype (NFDataX, Show)
+type ℤₘ (m ∷ Nat) = Wrapping (Index m)
+type Zm (m ∷ Nat) = ℤₘ m
+type PrimeField m = ℤₘ m
 
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Num (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Enum (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Real (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Integral (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Bits (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ BitPack (Mod n)
+unMod ∷ ℤₘ n → Index n
+unMod = fromWrapping
 
-type Prime n = Mod n
-
-unMod ∷ Mod n → Index n
-unMod = coerce
-
-createMod ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ Index n → Mod n
-createMod = coerce
+createMod ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ Index n → ℤₘ n
+createMod = toWrapping
 
 -- |The number of cycles an instance of 'computeModuloUnsigned` takes to run.
 type ComputeModuloUnsignedCycles m len = len - ModSize m
@@ -65,11 +57,11 @@ computeModuloUnsigned ∷
   , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Unsigned len) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m)
 computeModuloUnsigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (len + 1 - ModSize m))
-  get _ = Mod @m . bitCoerce . resize . fst
+  get _ = createMod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
 
@@ -100,11 +92,16 @@ computeModuloSigned ∷
   , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Signed (len + 1)) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m)
 computeModuloSigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (len + 2 - ModSize m))
-  get _ = Mod @m . bitCoerce . resize . signedToUnsigned . fst
+  get _ = createMod @m
+        . bitCoerce @(Unsigned (ModSize m))
+        . checkedTruncateB @_ @(len + 1 - ModSize m)
+        . bitCoerce
+        . abs
+        . fst
   compute _ (n, j) = ((next n j, if j > 0 then j - 1 else j), j > 0)
   -- ^ using `satPred SatBound j` instead does not work here because of
   -- https://github.com/clash-lang/ghc-typelits-natnormalise/issues/94
@@ -123,9 +120,9 @@ moduloShift ∷
   ( KnownNat m, KnownNat shifts, HiddenClockResetEnable dom
   , 1 ≤ m, 1 ≤ shifts
   ) ⇒
-  Channel dom (Mod m, Index shifts) →
+  Channel dom (ℤₘ m, Index shifts) →
   -- ^ Number to shift, number of shifts
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m)
 moduloShift = enhance put get compute
  where
   put (n, _) = (extend $ bitCoerce n, maxBound ∷ Index shifts)

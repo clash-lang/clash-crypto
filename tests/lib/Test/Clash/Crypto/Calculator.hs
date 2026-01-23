@@ -19,7 +19,7 @@ module Test.Clash.Crypto.Calculator
   , goldenRoutine
   ) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
 import Clash.Class.Counter (Counter(..))
 import Data.Type.Ord (Compare)
 
@@ -28,7 +28,7 @@ import Clash.Crypto.Calculator.Modulo
 
 import Test.Clash.Crypto.Calculator.InverseModulo (invMod)
 
-goldenRoutine ∷ Mod SecP256ModPrime → Mod SecP256ModPrime → Mod SecP256ModPrime
+goldenRoutine ∷ ℤₘ SecP256ModPrime → ℤₘ SecP256ModPrime → ℤₘ SecP256ModPrime
 goldenRoutine a b =
   let
     c = sq $ sq a                        -- RUN 2 Routine0

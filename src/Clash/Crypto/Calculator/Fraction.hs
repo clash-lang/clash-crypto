@@ -8,8 +8,6 @@ Portability : POSIX
 Hardware representation for fractions where the denominator is a power of 2.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Crypto.Calculator.Fraction where
@@ -26,8 +24,10 @@ import Clash.Prelude.Safe
 data HWFraction denMax len = HWFraction (Index denMax) (Signed (len + 1))
  deriving (Show, Eq, Generic, NFDataX)
 
-shiftRFraction :: (KnownNat denMax, KnownNat len) =>
- HWFraction denMax len -> HWFraction denMax len
+shiftRFraction ∷
+  (KnownNat denMax, KnownNat len) ⇒
+  HWFraction denMax len →
+  HWFraction denMax len
 shiftRFraction (HWFraction n s) = HWFraction (n + 1) s
 
 instance Resize (HWFraction denMax) where
@@ -35,7 +35,7 @@ instance Resize (HWFraction denMax) where
   zeroExtend (HWFraction n s) = HWFraction n (zeroExtend s)
   truncateB (HWFraction n s) = HWFraction n (truncateB s)
 
-instance (KnownNat denMax, KnownNat len) => Num (HWFraction denMax len) where
+instance (KnownNat denMax, KnownNat len) ⇒ Num (HWFraction denMax len) where
   (HWFraction n s) + (HWFraction m t) =
    if n >= m -- First number has a bigger denominator
     then HWFraction n (s + shiftL t (fromEnum $ n - m))

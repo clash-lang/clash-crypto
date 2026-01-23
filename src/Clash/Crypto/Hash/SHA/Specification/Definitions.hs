@@ -10,14 +10,14 @@ Basic definitions covering the fundamentals of FIPS 180-4.
 
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 
 module Clash.Crypto.Hash.SHA.Specification.Definitions where
 
-import Clash.Prelude
-import Clash.Sized.Internal.BitVector
+import Clash.Prelude.Safe
 
 import Control.Arrow (first)
 import Data.Proxy (Proxy(..))
@@ -32,32 +32,32 @@ import Clash.Crypto.Hash.SHA.Specification.Types
 
 infixl 8 ∧
 (∧) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(∧) = and#
+(∧) = (.&.)
 
 infixl 5 ∨
 (∨) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(∨) = or#
+(∨) = (.|.)
 
 infixl 6 ⊕
 (⊕) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(⊕) = xor#
+(⊕) = xor
 
 (¬) ∷ KnownNat w ⇒ BitVector w → BitVector w
-(¬) = complement#
+(¬) = complement
 
 infixl 5 ≪
 (≪) ∷
   KnownNat w ⇒ BitVector w →
   ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
   BitVector w
-x ≪ n = shiftL# x $ snatToNum (SNat @n)
+x ≪ n = shiftL x $ snatToNum (SNat @n)
 
 infixl 5 ≫
 (≫) ∷
   KnownNat w ⇒ BitVector w →
   ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
   BitVector w
-x ≫ n = shiftR# x $ snatToNum (SNat @n)
+x ≫ n = shiftR x $ snatToNum (SNat @n)
 
 _ROTL ∷
   ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒

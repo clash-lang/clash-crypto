@@ -1,6 +1,6 @@
 {-|
 Module      : Clash.Crypto.Calculator.InverseModulo
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -12,6 +12,7 @@ Implementations of inverse modulo algorithms.
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -25,7 +26,9 @@ module Clash.Crypto.Calculator.InverseModulo
   , sictMiSequential
   ) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
+
+import Clash.Class.NumConvert
 import Clash.Signal.Channel
 
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
@@ -34,14 +37,12 @@ import GHC.TypeLits.KnownNat (KnownNat1(..), SNatKn(..), nameToSymbol)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
 
-import qualified GHC.TypeLits as P (Mod)
-
-import Clash.Crypto.Calculator.Fraction (HWFraction (HWFraction), shiftRFraction)
+import Clash.Crypto.Calculator.Fraction
+  (HWFraction (HWFraction), shiftRFraction)
 import Clash.Crypto.Calculator.Karatsuba
   (karatsubaSequential, karatsubaSequentialModulo)
 import Clash.Crypto.Calculator.Modulo
-  (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
-import Clash.Crypto.Calculator.Utils (unsignedToSigned, signedToUnsigned)
+  (ℤₘ, ModSize, moduloShift, computeModuloUnsigned, computeModuloSigned)
 
 -- * Binary Euclidean Algorithm
 
@@ -54,20 +55,22 @@ import Clash.Crypto.Calculator.Utils (unsignedToSigned, signedToUnsigned)
 -- zero as input.
 bea ∷
   ∀ m dom. (KnownNat m, HiddenClockResetEnable dom, 2 ≤ m) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 bea = enhance put get compute
  where
   put n
     | Rewrite ← using @(CLog2KeepsPositive m)
-    = ( ( extend @_ @_ @(ModSize m - 1) $ unsignedToSigned $ bitCoerce n
-        , m, 1, 0)
+    = ( (numConvert $ bitCoerce @_ @(Unsigned _) n, m, 1, 0)
       , BeaStart
       )
 
   get _ ((_, _, _, y), _)
     | Rewrite ← using @(CLog2KeepsPositive m)
-    = bitCoerce $ truncateB @_ @_ @(ModSize m - 1) $ signedToUnsigned y
+    = bitCoerce @(Unsigned (ModSize m))
+    $ checkedTruncateB
+    $ bitCoerce @(Signed (ModSize m + ModSize m))
+    $ abs y
 
   compute _ (s0@(u, v, x, y), mode0) = (, mode0 /= BeaEnd) $ case mode0 of
     BeaEnd                          → (s0,                   mode0    )
@@ -124,7 +127,7 @@ type FastGCDIterations d = Iterations (ModSize d)
 
 -- | Precomputed value used by FastGCD.
 type Precomp (f ∷ Nat) =
-  P.Mod (Div (f + 1) 2 ^ (FastGCDIterations f - 1)) f
+  (((f + 1) `Div` 2) ^ (FastGCDIterations f - 1)) `Mod` f
 
 type MulRegisterSize = 36
 type GCDStreamingStages = 3
@@ -160,7 +163,7 @@ divSteps m = enhance put get compute
     { remaining = maxBound
     , delta = 1
     , f = natToNum @m
-    , g = unsignedToSigned $ resize x
+    , g = numConvert @(Unsigned (FastGCDIterations m)) $ resize x
     , v = 0
     , r = 1
     } ∷ FastGCDState m
@@ -202,8 +205,8 @@ fastGcdSequential ∷
   ( KnownNat m, 1 ≤ m, HiddenClockResetEnable dom
   , 1 ≤ Iterations m, ModSize m ≤ FastGCDIterations m
   ) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 fastGcdSequential (divSteps m . fmap bitCoerce → divResult)
   = computeModuloUnsigned @m
   $ karatsubaSequential GCDStreamingStages MulRegisterSize
@@ -221,8 +224,8 @@ pattern FLTMul = True
 -- Theorem. Fine up to 256 bits, and only works with prime moduli.
 fltCtmi ∷
   ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
-  Channel dom (Mod p) →
-  Channel dom (Mod p)
+  Channel dom (ℤₘ p) →
+  Channel dom (ℤₘ p)
 fltCtmi (fmap bitCoerce → input) = fmap bitCoerce output
  where
   (output, s)
@@ -293,12 +296,12 @@ type family SictPrecomp (m ∷ Nat) ∷ Nat where
 
 type family SictPrecomp# (m ∷ Nat) (pow ∷ Nat) (val ∷ Nat) (tmp ∷ Nat)  ∷ Nat where
   SictPrecomp# _ 0 _   _   = 1
-  SictPrecomp# m 1 val tmp = (val * tmp) `P.Mod` m
+  SictPrecomp# m 1 val tmp = (val * tmp) `Mod` m
   SictPrecomp# m n val tmp = SictPrecomp# m
-                             -- even --              -- odd --
-      (If (n `P.Mod` 2 == 0) (n `Div` 2)             (n - 1)                )
-      (If (n `P.Mod` 2 == 0) ((val * val) `P.Mod` m) val                    )
-      (If (n `P.Mod` 2 == 0) (tmp `P.Mod` m)         ((tmp * val) `P.Mod` m))
+                           -- even --          -- odd --
+      (If (n `Mod` 2 == 0) (n `Div` 2)         (n - 1)            )
+      (If (n `Mod` 2 == 0) (val * val `Mod` m) val                )
+      (If (n `Mod` 2 == 0) (tmp `Mod` m)       (tmp * val `Mod` m))
 
 instance (KnownNat m, 1 ≤ m) => KnownNat1 $(nameToSymbol ''SictPrecomp) m where
   natSing1 =
@@ -330,7 +333,7 @@ sictMiLoop m = enhance put get compute
  where
   put input = SictMi
     { remaining = maxBound
-    , u = unsignedToSigned input
+    , u = numConvert input
     , v = natToNum @m
     , q = 0
     , r = 1
@@ -368,8 +371,8 @@ sictMiSequential ∷
   , 1 ≤ m - 2 * ModSize m, 1 <= m, 1 <= SictPrecomp m
   , 2 * ModSize m ≤ m, 1 ≤ 2 * ModSize m * (m - 1)
   ) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 sictMiSequential
   = fmap bitCoerce
   . karatsubaSequentialModulo GCDStreamingStages MulRegisterSize

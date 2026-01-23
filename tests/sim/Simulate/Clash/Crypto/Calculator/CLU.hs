@@ -12,9 +12,9 @@ Simulation tests for 'Clash.Crypto.Calculator.CLU'.
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Simulate.Clash.Crypto.Calculator.CLU where
+module Simulate.Clash.Crypto.Calculator.CLU (tastyTests) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
 import Clash.Hedgehog.Sized.Index (genIndex)
 import Clash.Signal.Channel
 import Language.Haskell.Unicode (type (≤))
@@ -24,9 +24,10 @@ import Data.Monoid (First(..))
 import Hedgehog
 import Test.Tasty
 import Test.Tasty.Hedgehog
+import Test.Clash.Crypto.Calculator.InverseModulo (invMod)
 
 import qualified Data.List as List
-import qualified Data.Modular as Modular
+
 import qualified Hedgehog.Range as Range
 
 import Clash.Crypto.Calculator.ISA
@@ -38,63 +39,63 @@ tastyTests
   = localOption (HedgehogTestLimit (Just 1000))
   $ testGroup "Clash.Crypto.Calculator.CLU"
       [ testProperty "Addition" $ property $ do
-          a ∷ Mod SecP256ModPrime ← genMod
-          b ∷ Mod SecP256ModPrime ← genMod
+          a ∷ PrimeField SecP256ModPrime ← genMod
+          b ∷ PrimeField SecP256ModPrime ← genMod
           testCLU Add a b $ a + b
-          c ∷ Mod SecP256OrdPrime ← genMod
-          d ∷ Mod SecP256OrdPrime ← genMod
+          c ∷ PrimeField SecP256OrdPrime ← genMod
+          d ∷ PrimeField SecP256OrdPrime ← genMod
           testCLU Add c d $ c + d
       , testProperty "Subtraction" $ property $ do
-          a ∷ Mod SecP256ModPrime ← genMod
-          b ∷ Mod SecP256ModPrime ← genMod
+          a ∷ PrimeField SecP256ModPrime ← genMod
+          b ∷ PrimeField SecP256ModPrime ← genMod
           testCLU Sub a b $ a - b
-          c ∷ Mod SecP256OrdPrime ← genMod
-          d ∷ Mod SecP256OrdPrime ← genMod
+          c ∷ PrimeField SecP256OrdPrime ← genMod
+          d ∷ PrimeField SecP256OrdPrime ← genMod
           testCLU Sub c d $ c - d
       , testProperty "TestBit" $ property $ do
-          a ∷ Mod SecP256ModPrime ← genMod
-          b ∷ Mod SecP256ModPrime ← genMod
+          a ∷ PrimeField SecP256ModPrime ← genMod
+          b ∷ PrimeField SecP256ModPrime ← genMod
           testCLU Bit a b $ if
             | b < natToNum @(ModSize SecP256ModPrime)
             , testBit a (fromEnum b) → 1
             | otherwise → 0
-          c ∷ Mod SecP256OrdPrime ← genMod
-          d ∷ Mod SecP256OrdPrime ← genMod
+          c ∷ PrimeField SecP256OrdPrime ← genMod
+          d ∷ PrimeField SecP256OrdPrime ← genMod
           testCLU Bit c d $ if
             | d < natToNum @(ModSize SecP256OrdPrime)
             , testBit c (fromEnum d) → 1
             | otherwise → 0
       , testProperty "Multiplication" $ property $ do
-          a ∷ Mod SecP256ModPrime ← genMod
-          b ∷ Mod SecP256ModPrime ← genMod
+          a ∷ PrimeField SecP256ModPrime ← genMod
+          b ∷ PrimeField SecP256ModPrime ← genMod
           testCLU Mul a b $ a * b
-          c ∷ Mod SecP256OrdPrime ← genMod
-          d ∷ Mod SecP256OrdPrime ← genMod
+          c ∷ PrimeField SecP256OrdPrime ← genMod
+          d ∷ PrimeField SecP256OrdPrime ← genMod
           testCLU Mul c d $ c * d
       , localOption (HedgehogTestLimit (Just 20))
         $ testProperty "Inverse" $ property $ do
-          a ∷ Mod SecP256ModPrime ← genMod
-          b ∷ Mod SecP256ModPrime ← genMod
+          a ∷ PrimeField SecP256ModPrime ← genMod
+          b ∷ PrimeField SecP256ModPrime ← genMod
           testCLU Inv a b $ if
             | a == 0    → b
-            | otherwise → invGolden a
-          c ∷ Mod SecP256OrdPrime ← genMod
-          d ∷ Mod SecP256OrdPrime ← genMod
+            | otherwise → invMod a
+          c ∷ PrimeField SecP256OrdPrime ← genMod
+          d ∷ PrimeField SecP256OrdPrime ← genMod
           testCLU Inv c d $ if
             | c == 0    → d
-            | otherwise → invGolden c
+            | otherwise → invMod c
       ]
  where
-  genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (Mod p)
+  genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (ℤₘ p)
   genMod = do
     x ← forAll $ genIndex @p $ Range.linear minBound maxBound
     return $ createMod @p x
 
 testCLU ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p, p ≤ SecP256ModPrime) ⇒
   CluInstruction →
-  Mod p →
-  Mod p →
-  Mod p →
+  PrimeField p →
+  PrimeField p →
+  PrimeField p →
   PropertyT m ()
 testCLU op a b c
   = (ex c ===)
@@ -110,17 +111,5 @@ testCLU op a b c
   $ fromList
   $ Keep : Keep : Release : List.repeat Keep
  where
-  ex ∷ Mod p → Unsigned (ModSize p)
+  ex ∷ PrimeField p → Unsigned (ModSize p)
   ex = bitCoerce
-
-invGolden ∷ ∀ p. Modular.Modulus p ⇒ Mod p → Mod p
-invGolden
-  = fromInteger
-  . Modular.unMod
-  . fromMaybe moduloError
-  . Modular.inv
-  . Modular.toMod @p
-  . toInteger
- where
-  moduloError =
-    error "The inverse always exists in a prime field."

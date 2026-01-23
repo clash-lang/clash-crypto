@@ -1,10 +1,21 @@
+{-|
+Module      : HMAC
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.MAC.HMAC.hmac'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
+
 module HMAC (topEntity, descape) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Signal.Channel (newsfeed)

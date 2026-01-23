@@ -8,9 +8,9 @@ Portability : POSIX
 Simulation tests for 'Clash.Crypto.Calculator.Karatsuba'.
 -}
 
-module Simulate.Clash.Crypto.Calculator.Karatsuba where
+module Simulate.Clash.Crypto.Calculator.Karatsuba (tastyTests) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
 import Clash.Hedgehog.Sized.Index (genIndex)
 
 import Clash.Signal.Channel
@@ -33,50 +33,50 @@ import Clash.Crypto.Calculator.Modulo
 import Clash.Crypto.Calculator.Karatsuba
   ( karatsuba, karatsubaSequential, karatsubaSequentialModulo )
 
-tastyTests :: TestTree
+tastyTests ∷ TestTree
 tastyTests
   = localOption (HedgehogTestLimit (Just 500))
   $ testGroup "Clash.Crypto.Calculator.Karatsuba"
       [ testProperty "combinational" $ property $ do
-          a <- forAll $ genUnsigned $ Range.linear minBound maxBound
-          b <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          a ← forAll $ genUnsigned $ Range.linear minBound maxBound
+          b ← forAll $ genUnsigned $ Range.linear minBound maxBound
           testKaratsubaEqualityWithMultiplication a b
       , testProperty "sequential" $ property $ do
-          a <- forAll $ genUnsigned $ Range.linear minBound maxBound
-          b <- forAll $ genUnsigned $ Range.linear minBound maxBound
+          a ← forAll $ genUnsigned $ Range.linear minBound maxBound
+          b ← forAll $ genUnsigned $ Range.linear minBound maxBound
           testKaratsubaSequential a b
       , testProperty "withModulo" $ property $ do
-          kT <- forAll $ integral $ Range.linear 1 (shiftL 1 256)
-          Just (SomeNat (_ :: Proxy k)) <- return $ someNatVal kT
+          kT ← forAll $ integral $ Range.linear 1 (shiftL 1 256)
+          Just (SomeNat (_ ∷ Proxy k)) ← return $ someNatVal kT
           case (Proxy ∷ Proxy 1) %<=? (Proxy ∷ Proxy k) of
-            NLE _ _ -> return ()
-            LE Refl -> do
-              a :: Mod k <- genMod
-              b :: Mod k <- genMod
+            NLE _ _ → return ()
+            LE Refl → do
+              a ∷ ℤₘ k ← genMod
+              b ∷ ℤₘ k ← genMod
               testKSM (a, b) $ fromInteger
                 $ (toInteger a * toInteger b) `mod` kT
       ]
  where
-  genMod ∷ ∀ k m. (Monad m, KnownNat k, 1 ≤ k) ⇒ PropertyT m (Mod k)
+  genMod ∷ ∀ k m. (Monad m, KnownNat k, 1 ≤ k) ⇒ PropertyT m (ℤₘ k)
   genMod = do
     x ← forAll $ genIndex @k $ Range.linear minBound maxBound
     return $ createMod @k x
 
 type TestLen = 512
 
-testKaratsubaEqualityWithMultiplication :: Monad m =>
- Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
+testKaratsubaEqualityWithMultiplication ∷ Monad m ⇒
+ Unsigned TestLen → Unsigned TestLen → PropertyT m ()
 testKaratsubaEqualityWithMultiplication a b =
   karatsuba 6 a b
   ===
   resize (resize @_ @_ @(TestLen * 2) a * resize @_ @_ @(TestLen * 2) b)
 
-testKaratsubaSequential :: Monad m =>
- Unsigned TestLen -> Unsigned TestLen -> PropertyT m ()
+testKaratsubaSequential ∷ Monad m ⇒
+ Unsigned TestLen → Unsigned TestLen → PropertyT m ()
 testKaratsubaSequential p1 p2 = do
   actualOutput === expectedOutput
  where
-  expectedOutput :: Unsigned (TestLen * 2)
+  expectedOutput ∷ Unsigned (TestLen * 2)
   expectedOutput = resize p1 * resize p2
 
   actualOutput
@@ -92,10 +92,10 @@ testKaratsubaSequential p1 p2 = do
     $ fromList
     $ Keep : Keep : Release : List.repeat Keep
 
-testKSM ::
+testKSM ∷
   forall p m.
-  (Monad m, KnownNat p, 1 <= p) =>
-  (Mod p, Mod p) -> Mod p -> PropertyT m ()
+  (Monad m, KnownNat p, 1 ≤ p) ⇒
+  (ℤₘ p, ℤₘ p) → ℤₘ p → PropertyT m ()
 testKSM i r = do
   actualOutput === r
  where

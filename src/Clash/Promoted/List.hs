@@ -9,8 +9,6 @@ Type-level list operations.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -46,7 +44,7 @@ type family Length xs
 
 -- | A type alias for sorted lists. Note that there is no mechanism in
 -- place forcing the list to actually be sorted.
-type SortedList :: Type → Type
+type SortedList ∷ Type → Type
 type SortedList a = [a]
 
 -- | Inserts an element into a sorted list unless the element is

@@ -14,15 +14,16 @@ Simulation tests for 'Clash.Crypto.Hash.SHA'.
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module Simulate.Clash.Crypto.Hash.SHA where
+module Simulate.Clash.Crypto.Hash.SHA (tastyTests) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 import Clash.Sized.Vector (unsafeFromList)
 
 import Data.ByteString (ByteString)
 import Data.Constraint.Nat.Extra
+import Data.Kind (Type)
 import Data.Maybe
 import Data.Proxy
 import GHC.TypeNats.Proof (Rewrite(..), using)
@@ -31,12 +32,11 @@ import Language.Haskell.Unicode (type (≤))
 import Test.Tasty
 import Test.Tasty.Hedgehog
 
+import Test.Clash.Crypto.Hash.SHA
+
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-
 import qualified Crypto.Hash as Hash
-
-import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.List as List
 
@@ -222,35 +222,6 @@ testHashNCStream alg xs
     in
       pr ref === pr dut
 
-class CryptoHash (alg ∷ SHA) where
-  type CryptoToHash (alg ∷ SHA)
-  cryptoHash# ∷ Proxy alg → ByteString → Hash.Digest (CryptoToHash alg)
-
-instance CryptoHash SHA1 where
-  type CryptoToHash SHA1 = Hash.SHA1
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA224 where
-  type CryptoToHash SHA224  = Hash.SHA224
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA256 where
-  type CryptoToHash SHA256  = Hash.SHA256
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA384 where
-  type CryptoToHash SHA384  = Hash.SHA384
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512 where
-  type CryptoToHash SHA512 = Hash.SHA512
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512224 where
-  type CryptoToHash SHA512224  = Hash.SHA512t_224
-  cryptoHash# _ = Hash.hash
-instance CryptoHash SHA512256 where
-  type CryptoToHash SHA512256  = Hash.SHA512t_256
-  cryptoHash# _ = Hash.hash
-
-cryptoHash ∷
- ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
-cryptoHash alg = BS.pack . Memory.unpack . cryptoHash# (Proxy @alg)
 
 -- | Some example input for unit testing.
 input1 ∷ ByteString

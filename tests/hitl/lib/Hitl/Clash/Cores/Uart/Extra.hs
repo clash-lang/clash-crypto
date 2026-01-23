@@ -1,3 +1,15 @@
+{-|
+Module      : Hitl.Clash.Cores.Uart.Extra
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Extra utilities beside 'Hitl.Clash.Cores.Uart'.
+-}
+
+{-# LANGUAGE Trustworthy #-}
+
 module Hitl.Clash.Cores.Uart.Extra
   ( Byte
   , ByteSize
@@ -6,10 +18,11 @@ module Hitl.Clash.Cores.Uart.Extra
   , withUartRequestResponseHandler
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)
+import Language.Haskell.Unicode (type (≤))
 
 import Hitl.Clash.Cores.Uart (ValidBaud, uart)
 
@@ -27,7 +40,7 @@ isReadyIndicator = 0xAB
 withUartRequestResponseHandler ∷
   ∀ baud dom a.
   ( KnownDomain dom, ValidBaud dom baud, NFDataX a, BitPack a
-  , BitSize a `Mod` BitSize Byte ~ 0, 1 <= ByteSize a
+  , BitSize a `Mod` BitSize Byte ~ 0, 1 ≤ ByteSize a
   ) ⇒
   Clock dom →
   -- ^ clock
@@ -76,20 +89,20 @@ withUartRequestResponseHandler clk rst baud requestResponseHandler rx
 bulkRead ∷
   ∀ a dom.
   ( HiddenClockResetEnable dom, BitPack a
-  , BitSize a `Mod` BitSize Byte ~ 0, 1 <= ByteSize a
+  , BitSize a `Mod` BitSize Byte ~ 0, 1 ≤ ByteSize a
   ) ⇒
   Signal dom (Maybe Byte) →
   Signal dom (Maybe a)
 bulkRead = mealy (~~>) ival
  where
   ival ∷ (Index (ByteSize a), Vec (ByteSize a) Byte)
-  ival = (0, def)
+  ival = (0, repeat 0)
 
   (n, v) ~~> Just ((v <<+) → nv)
     | Rewrite ← using @(CancelMultiple (BitSize a) (BitSize Byte))
     = if n < maxBound
         then ((n + 1, nv ), Nothing            )
-        else ((0,     def), Just $ bitCoerce nv)
+        else ((0,     repeat 0), Just $ bitCoerce nv)
 
   s ~~> Nothing
     = (s, Nothing)

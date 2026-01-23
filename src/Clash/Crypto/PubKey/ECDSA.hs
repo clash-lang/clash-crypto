@@ -1,21 +1,29 @@
+{-|
+Module      : Clash.Crypto.PubKey.ECDSA
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Algorithm to sign a payload using ECDSA expressed in the instructions of the
+calculator. In the documentation stacks are represented as an unpunctuated
+list @x y z@, where @x@ is the top of the stack. Curve points are stored as
+two quantities, and are written @x y@ or jointly @{r}@, representing two
+elements on the stack. The two quantities represent the affine coordinate of
+the point, except @0 0@, which represents the infinite point, denoted O.
+-}
+
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- | Algorithm to sign a payload using ECDSA expressed in the instructions of
--- the calculator. In the documentation stacks are represented as an
--- unpunctuated list @x y z@, where @x@ is the top of the stack. Curve points
--- are stored as two quantities, and are written @x y@ or jointly @{r}@,
--- representing two elements on the stack. The two quantities represent the
--- affine coordinate of the point, except @0 0@, which represents the infinite
--- point, denoted O.
 module Clash.Crypto.PubKey.ECDSA where
 
 import Data.Proxy (Proxy(..))
 import Data.Type.Ord (Compare)
 
 import Clash.Crypto.Calculator.ISA
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Class.Counter (Counter(..))
 
 -- | Weierstrass elliptic curve of the form @y² = x³ + Ax + B@ over a Galois
@@ -464,7 +472,7 @@ instance
     IPIsZero n             | (False, m) ← cso n → IPIsZero m
     _ → EndOfSequence
    where
-    cso ∷ Counter a => a -> (Bool, a)
+    cso ∷ Counter a ⇒ a → (Bool, a)
     cso = countSuccOverflow
 
   start _ = \case

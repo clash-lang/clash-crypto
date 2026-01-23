@@ -13,7 +13,7 @@ module Clash.Crypto.Hash.SHA.Streaming
   , computeBlock
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 import Clash.Signal.Delayed.Extra

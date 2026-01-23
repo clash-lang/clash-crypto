@@ -10,6 +10,7 @@ actions besides the usual push and pop, all of which run in a
 single cycle.
 -}
 
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Clash.Sized.Stack
@@ -17,10 +18,12 @@ module Clash.Sized.Stack
   , stack
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
+import Clash.Explicit.BlockRam (ResetStrategy(..), blockRamU)
 
 import Control.Monad (guard)
 import Data.Maybe (fromMaybe, isJust)
+import Language.Haskell.Unicode (type (≤))
 
 -- | The possible actions for manipulating the stack.
 data StackAction n a
@@ -38,7 +41,7 @@ data StackAction n a
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
 
-deriving instance (KnownNat n, 1 <= n, BitPack a) ⇒ BitPack (StackAction n a)
+deriving instance (KnownNat n, 1 ≤ n, BitPack a) ⇒ BitPack (StackAction n a)
 
 -- | A block RAM based stack supporting the given list of actions,
 -- each always requiring a single cycle until its result appears on
@@ -104,7 +107,10 @@ stack stackAction = case toUNat (SNat @n) of
   USucc un@(USucc _) → result
    where
     (raddr, writeAct, result) = mealyB (~~>) (Nothing, 0, False, False)
-      (stackAction, blockRamU NoClearOnReset (fromUNat un) raddr writeAct)
+      ( stackAction
+      , (hideClockResetEnable blockRamU)
+          NoClearOnReset (fromUNat un) raddr writeAct
+      )
 
     (top, charge0, success0, wasInspect0) ~~> (action, val) =
       let
@@ -133,7 +139,7 @@ stack stackAction = case toUNat (SNat @n) of
           CopyUp{}             → Just (toAddr @n 0, top0)
           _                    → Nothing
 
-        readAddr :: Index (n - 1)
+        readAddr ∷ Index (n - 1)
         readAddr = case action of
           Push{}    → toAddr @n 0
           Pop n     → toAddr n

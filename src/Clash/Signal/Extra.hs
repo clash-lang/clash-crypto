@@ -9,8 +9,6 @@ Some additional utility functions for memory control and signal
 manipulations.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Signal.Extra

@@ -9,6 +9,8 @@ Some properties that can be proven to be valid from the FIPS 180-4
 specification.
 -}
 
+{-# LANGUAGE Safe #-}
+
 module Clash.Crypto.Hash.SHA.Specification.Properties
   ( SHAFacts(..)
   , KnownSHA

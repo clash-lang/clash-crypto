@@ -1,20 +1,12 @@
+# GHC / Cabal / Stack
 .cabal-sandbox/
-.direnv/
 .ghc.environment.*
 .stack-work/
 cabal.sandbox.config
 cabal.config
+dist/
 dist-newstyle/
 stack.yaml.lock
-tags
-TAGS
-result
-result-log
-/cabal.project.local
-.envrc
-.opam-local/
-_build/
-_build_nix/
 *.o
 *.o-boot
 *.hi
@@ -41,3 +33,24 @@ _build_nix/
 *.vos
 *.vok
 *.vo
+
+# HDL Directories (often created during development cycle)
+/vhdl
+/verilog
+/systemverilog
+
+# Nix Output
+result*
+
+# Direnv
+.direnv/
+.envrc
+
+# Tags
+tags
+TAGS
+
+# Project Specific
+_build/
+_build_nix/
+.opam-local/

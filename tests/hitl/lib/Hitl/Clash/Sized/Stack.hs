@@ -1,10 +1,22 @@
+{-|
+Module      : Hitl.Clash.Sized.Stack
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Shared primitives for 'Clash.Sized.Stack'.
+-}
+
+{-# LANGUAGE Safe #-}
+
 module Hitl.Clash.Sized.Stack
   ( StackSize
   , StackValueSize
   , StackPadding
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import Hitl.Clash.Cores.Uart.Extra (Byte)
 

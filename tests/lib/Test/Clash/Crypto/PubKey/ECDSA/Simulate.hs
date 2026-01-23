@@ -1,8 +1,16 @@
--- | Types and a simplification procedure to facilitate symbolic execution of
--- the ECDSA signing algorithm. 'EcdsaSymbol' contains constructors that
--- represent intermediate values in the calculation of point addition, scalar
--- multiplication and signing. 'simp' detects the structure of the intermediate
--- values and translates them to instances of 'EcdsaSymbol'.
+{-|
+Module      : Test.Clash.Crypto.PubKey.ECDSA.Simulate
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Types and a simplification procedure to facilitate symbolic execution of
+the ECDSA signing algorithm. 'EcdsaSymbol' contains constructors that
+represent intermediate values in the calculation of point addition, scalar
+multiplication and signing. 'simp' detects the structure of the intermediate
+values and translates them to instances of 'EcdsaSymbol'.
+-}
 
 {-# LANGUAGE PatternSynonyms #-}
 

@@ -8,15 +8,16 @@ Portability : POSIX
 Simulation tests for 'Clash.Crypto.Calculator.Modulo'.
 -}
 
-module Simulate.Clash.Crypto.Calculator.Modulo where
+module Simulate.Clash.Crypto.Calculator.Modulo (tastyTests) where
 
 import Clash.Crypto.Calculator.Modulo (computeModuloUnsigned, ModSize, unMod)
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 import Data.Proxy
 import Data.Type.Equality (type (:~:)(Refl))
+import Language.Haskell.Unicode (type (≤))
 import GHC.Stack (HasCallStack)
 import GHC.TypeLits.Compare ((%<=?), type (:<=?) (..))
 
@@ -34,13 +35,13 @@ tastyTests
   $ testGroup "Clash.Crypto.Calculator.Modulo"
       [ testProperty "Equality between sequential and combinational"
         $ property $ do
-          n <- forAll $ genUnsigned $ Range.linear 0 (50_000 ∷ Unsigned 64)
-          modulus <- forAll $ genUnsigned $ Range.linear 2 500
+          n ← forAll $ genUnsigned $ Range.linear 0 (50_000 ∷ Unsigned 64)
+          modulus ← forAll $ genUnsigned $ Range.linear 2 500
           testMod n modulus
       ]
 
 testOutput ∷
-  ∀ (modT ∷ Nat) → (KnownNat modT, 1 <= modT, ModSize modT <= 64) ⇒
+  ∀ (modT ∷ Nat) → (KnownNat modT, 1 ≤ modT, ModSize modT ≤ 64) ⇒
   Unsigned 64 →
   -- ^ n
   Unsigned 64 →
@@ -62,7 +63,7 @@ testOutput modT n modulus
 
 testMod ∷ (MonadFail m, MonadTest m) ⇒ Unsigned 64 → Unsigned 64 → m ()
 testMod n modulus = do
-  Just (SomeNat (_ ∷ Proxy modT)) <- return $ someNatVal $ toInteger modulus
+  Just (SomeNat (_ ∷ Proxy modT)) ← return $ someNatVal $ toInteger modulus
   case (Proxy ∷ Proxy 1) %<=? (Proxy ∷ Proxy modT) of
     LE Refl → case (Proxy ∷ Proxy (ModSize modT)) %<=? (Proxy ∷ Proxy 64) of
       LE Refl → testOutput modT n modulus === fromIntegral n `mod` modulus

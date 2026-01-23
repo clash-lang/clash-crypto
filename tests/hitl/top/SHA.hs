@@ -1,13 +1,23 @@
+{-|
+Module      : SHA
+Copyright   : Copyright © 2024 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.Hash.SHA.sha'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module SHA (topEntity, descape) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel (newsfeed)
 import Clash.Annotations.TH (makeTopEntity)
 

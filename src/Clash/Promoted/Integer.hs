@@ -5,13 +5,10 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Recreates type level integers from type-level naturals via adding a
-sign.
+Recreates type level integers from type-level naturals via adding a sign.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
