@@ -16,7 +16,7 @@ if [ -z "$DOCKER" ]; then
 fi
 
 if [ -z "$ATTIC_VERSION" ]; then
-  ATTIC_VERSION=$(sed -rn "s/^ARG ATTIC_VERSION=\"(.*)\"$/\\1/p" $HERE/Dockerfile)
+  ATTIC_VERSION=$(sed -rn "s/^ARG ATTIC_VERSION=\"(.*)\"$/\\1/p" Dockerfile)
 fi
 
 if [ -z "$ATTIC_VERSION_TAG" ]; then
@@ -26,8 +26,8 @@ fi
 DATE=$(date +%Y%m%d)
 
 (
-  cd $ROOT
-  $DOCKER build . -f $HERE/Dockerfile \
+  cd ../..
+  $DOCKER build . -f .github/setup/Dockerfile \
     --build-arg ATTIC_VERSION="$ATTIC_VERSION" \
     -t ghcr.io/qbaylogic/clash-crypto-ci:latest \
     -t ghcr.io/qbaylogic/clash-crypto-ci:$DATE-$ATTIC_VERSION_TAG \
