@@ -8,7 +8,7 @@ Portability : POSIX
 Simulation tests for 'Clash.Crypto.Calculator.InverseModulo'.
 -}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -freduction-depth=400 #-}
 
 module Simulate.Clash.Crypto.Calculator.InverseModulo (tastyTests) where
 
@@ -27,12 +27,10 @@ import qualified Data.List as List
 
 import Clash.Crypto.Calculator.ISA (SecP256ModPrime)
 import Clash.Crypto.Calculator.InverseModulo
-  (bea, fastGcdSequential, fltCtmi, sictMiSequential, deriveSictPrecomp)
+  (bea, fastGcdSequential, fltCtmi, sictMiSequential)
 import Clash.Crypto.Calculator.Modulo
 
 import Test.Clash.Crypto.Calculator.InverseModulo (invMod)
-
-deriveSictPrecomp SecP256ModPrime
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.Calculator.InverseModulo"
