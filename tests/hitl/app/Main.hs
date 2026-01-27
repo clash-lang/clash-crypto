@@ -315,16 +315,22 @@ main = do
             $ testProperty "build bitstream" $ property
             $ liftIO $ nixBuild (".#hitlt." <> name)
         , withResource
-            (upload nixRun sem dev settings name)
+            (upload sem dev settings name)
             (const $ return ())
             $ const
             $ testProperty "run HITLT" $ property p
         ]
 
-  nixBuild  attr = callProcess "nix" ["build", "--no-link", attr]
-  nixRun    attr = callProcess "nix" ["run", attr]
-  nixConfig key  =
-    readProcess "nix" ["eval", "--raw", "--file", "build-config.nix", key] ""
+nixBuild ∷ String → IO ()
+nixBuild  attr = callProcess "nix" ["build", "--no-link", attr]
+
+nixRun ∷ String → IO ()
+nixRun    attr = callProcess "nix" ["run", attr]
+
+nixConfig ∷ String → IO String
+nixConfig key  =
+  readProcess "nix" ["eval", "--raw", "--file", "build-config.nix", key] ""
+
 
 runHitltCLU ∷
   ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize SecP256ModPrime) ⇒
@@ -525,13 +531,12 @@ runHitltHMACSHA alg sem dev settings key msg
     | otherwise            = error $ "Invalid key size: " <> show n
 
 upload ∷
-  (String → IO ()) →
   QSem →
   FilePath →
   SerialPortSettings →
   String →
   IO()
-upload nixRun sem dev settings name
+upload sem dev settings name
   = bracket_ (waitQSem sem) (signalQSem sem)
   $ hWithSerial dev settings $ \serial → do
       hSetBuffering serial NoBuffering

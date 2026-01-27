@@ -13,7 +13,6 @@
       url = "github:clash-lang/clash-compiler?ref=12169a7255319811505810a84315b9b64771a02d";
       flake = false;
     };
-    serialportSrc = { url = "github:standardsemiconductor/serialport"; flake = false; };
     ghc-typelits-proof-assist.url =
       "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist";
     ghc-tcplugin-api = { url = "github:sheaf/ghc-tcplugin-api"; flake = false; };
@@ -26,7 +25,6 @@
   , flake-utils
   , ecpprog
   , clash-compiler
-  , serialportSrc
   , ghc-typelits-proof-assist
   , ghc-tcplugin-api
   , ghc-typelits-natnormalise
@@ -35,7 +33,7 @@
   , ...
   }:
     flake-utils.lib.eachDefaultSystem (system:
-      let compiler-version = "ghc9103";
+      let ghc-version = "ghc9103";
           config = import ./build-config.nix;
           ecpprogOverlay = _: _: {
             ecpprog = ecpprog.defaultPackage.${system};
@@ -51,7 +49,7 @@
           clashLib = import ./nix/clash.nix { inherit pkgs lib; };
           inherit (pkgs.haskell.lib) dontCheck doJailbreak overrideCabal;
 
-          hsPkgs0 = pkgs.haskell.packages.${compiler-version};
+          hsPkgs0 = pkgs.haskell.packages.${ghc-version};
           overlay = final: prev: {
             clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
               (clash-compiler + "/clash-prelude") { });
@@ -61,7 +59,6 @@
               (clash-compiler + "/clash-lib") { });
             clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
               (clash-compiler + "/clash-ghc") { });
-            serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
             network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
             ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghc-tcplugin-api { });
             ghc-typelits-natnormalise = dontCheck (prev.callCabal2nix "ghc-typelits-natnormalise" ghc-typelits-natnormalise { });
@@ -98,6 +95,10 @@
           defaultDevShell = hsPkgs.shellFor {
             name = "GHC 9.10.3";
             packages = p: [ p.clash-crypto ];
+            shellHook = ''
+              SHAKEPATH=`cabal list-bin clash-crypto:shake`
+              export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
+            '';
             nativeBuildInputs = envTools;
           };
           opamOverlay = _: prevA: {
@@ -127,7 +128,7 @@
           };
 
           hitltHsPkgs = hsPkgs.extend (_: prev: { clash-crypto = dontCheck prev.clash-crypto; });
-          inherit (import ./nix/hitl.nix hitltHsPkgs) hitltBaseArgs hitltTopEntities;
+          inherit (import ./nix/hitlt.nix hitltHsPkgs) hitltBaseArgs hitltTopEntities;
           clashHitlt = k: v: clashLib.ecp5.clash (hitltBaseArgs // v // { name = k; });
           hitlt = builtins.mapAttrs clashHitlt hitltTopEntities;
           hitltUpload = builtins.mapAttrs (n: _:

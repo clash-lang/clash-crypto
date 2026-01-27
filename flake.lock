@@ -353,24 +353,7 @@
         "ghc-typelits-knownnat": "ghc-typelits-knownnat_2",
         "ghc-typelits-natnormalise": "ghc-typelits-natnormalise_2",
         "ghc-typelits-proof-assist": "ghc-typelits-proof-assist",
-        "nixpkgs": "nixpkgs_4",
-        "serialportSrc": "serialportSrc"
-      }
-    },
-    "serialportSrc": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1762642033,
-        "narHash": "sha256-qDRmEVI204hPV00UQtPZElUH3JqhFcu7IIpRKtqaFes=",
-        "owner": "standardsemiconductor",
-        "repo": "serialport",
-        "rev": "0f10214fe78753f1430e9ac1e193f360ab3d7fa6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "standardsemiconductor",
-        "repo": "serialport",
-        "type": "github"
+        "nixpkgs": "nixpkgs_4"
       }
     },
     "systems": {

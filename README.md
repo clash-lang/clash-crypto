@@ -35,9 +35,9 @@ packages that build bitstreams used for hardware-in-the-loop tests.
 ### Development Tooling
 
 The development shell can be entered using `nix develop`. This makes typical
-haskell tools available (`cabal`, `ghc`), as well as FPGA tooling (yosys,
-nextpnr). The project uses `shellFor`, which means that all the dependencies of
-`clash-crypto` are first built through nix, and then made available to cabal.
+haskell tools available (`cabal`, `ghc`), as well as FPGA tooling (`yosys`,
+`nextpnr`). The project uses `shellFor`, which means that all the dependencies
+of `clash-crypto` are first built through Nix, and then made available to cabal.
 
 A few alternative development shells are available, which are listed in the
 flake, but can also be found by tab completion:
@@ -77,7 +77,7 @@ bin  top.bit
 ```
 
 There is also a corresponding entry in `apps` for each of these, which will
-simply call `ecpprog` with any following arguments, as well as the path to the
+simply call `ecpprog` with any subsequent arguments, as well as the path to the
 corresponding bitstream:
 
 ```
@@ -91,11 +91,11 @@ Each synthesis target consists of three main steps, each of which is a separate
 derivation:
 
 * `.#packages.x86_64-linux.hitltHsPkgs.clash-crypto`: the build output of the
-  `clash-crypto` without running any tests;
+  `clash-crypto` library without running any tests;
 * `.#packages.x86_64-linux.hitlt.SHA1.src`: the verilog result of running clash
   on an environment with `clash-crypto`;
 * `.#packages.x86_64-linux.hitlt.SHA1`: the result of running the appropriate
-  synthesis tools to build a bitstream from verilog input.
+  synthesis tools to build a bitstream from the verilog input.
 
 Each of these can be built separately with `nix build`. Some tricks useful for
 inspecting the build:
@@ -104,84 +104,22 @@ inspecting the build:
   stderr. This might especially be helpful for long place-and-route processes
   and such.
 * You can look up the log of a build with `nix log ...`.
+* You can inspect the commands run by common `stdenv` phases with `nix eval --raw`:
 
-Another reasonable question is what each of these derivations actually do? You
-can ask nix what the plan to build a derivation is as follows:
+  ```
+  $ nix eval --raw .#packages.x86_64-linux.hitlt.SHA1.src.buildPhase
+  export PATH=/nix/store/(...)-ghc-9.10.3-with-packages/bin:$PATH
+  clash \
+    -package-db /nix/store/(...)-ghc-9.10.3-with-packages/lib/ghc-*/lib/package.conf.d \
+    -outputdir . \
+    --verilog -fclash-clear '-fclash-spec-limit=200' '-fclash-inline-limit=200' '-fconstraint-solver-iterations=20' \
+    SHA -main-is topEntitySHA1
 
-```
-$ nix derivation show .#packages.x86_64-linux.hitlt.SHA1.src
-{
-  "/nix/store/(...)-clash-crypto-hitlt-instances-SHA-topEntitySHA1-hdl.drv": {
-    "args": [
-      "-e",
-      "/nix/store/(...)-source-stdenv.sh",
-      "/nix/store/(...)-default-builder.sh"
-    ],
-    "builder": "/nix/store/(...)-bash-5.3p3/bin/bash",
-    "env": {
-      "__structuredAttrs": "",
-      "binding": "topEntitySHA1",
-      "buildInputs": "",
-      "buildPhase": "export PATH=/nix/store/(...)-ghc-9.10.3-with-packages/bin:$PATH\nclash \\\n  -package-db /nix/store/(...)-ghc-9.10.3-with-packages/lib/ghc-*/lib/package.conf.d \\\n  -outputdir . \\\n  --verilog -fclash-clear '-fclash-spec-limit=200' '-fclash-inline-limit=200' '-fconstraint-solver-iterations=20' \\\n  SHA -main-is topEntitySHA1\n",
-      (...)
-      "stdenv": "/nix/store/(...)-stdenv-linux",
-      "strictDeps": "",
-      "system": "x86_64-linux"
-    },
-    "inputDrvs": {
-      "/nix/store/(...)-ghc-9.10.3-with-packages.drv": (...),
-      "/nix/store/(...)-bash-5.3p3.drv": (...),
-      "/nix/store/(...)-stdenv-linux.drv": (...)
-    },
-    "inputSrcs": [
-      "/nix/store/(...)-source-stdenv.sh",
-      "/nix/store/(...)-default-builder.sh"
-    ],
-    "name": "clash-crypto-hitlt-instances-SHA-topEntitySHA1-hdl",
-    "outputs": (...)
-    "system": "x86_64-linux"
-  }
-}
-```
-
-Nix will execute `builder` with `args` as arguments and `env` as environment
-variables. This derivation uses a `stdenv`-based build plan: `source-stdenv.sh`
-will call `$stdenv/setup` i.e. a file `setup` in the directory specified in the
-`env` under `stdenv`. It's worth a read at some point! The summary, though, is
-as follows:
-
-* Does `env` define `buildCommandPath`? If so, source `buildCommandPath`.
-* Otherwise, does `env` define `buildCommand`? If so, evaluate `buildCommand`.
-* Otherwise, does `env` define `phases`? If so, run each phase in sequence:
-  * Set the phase label in nix
-  * Evaluate the environment variable whose name is the phase label
-* Otherwise, run the default phases. Not all of them are listed here, but a few
-  of the important ones are, in sequence:
-  * `unpackPhase` (default: extract or copy $src)
-  * `configurePhase`
-  * `buildPhase`
-  * `checkPhase`
-  * `installPhase`
-
-So, what does the derivation actually do? You can quickly scan if the derivation
-uses `stdenv`; then look for the phases or `buildCommand(Path)`. The above
-example only uses `buildPhase` and `installPhase`, running the following
-commands:
-
-```
-$ nix eval --raw .#packages.x86_64-linux.hitlt.SHA1.src.buildPhase
-export PATH=/nix/store/(...)-ghc-9.10.3-with-packages/bin:$PATH
-clash \
-  -package-db /nix/store/(...)-ghc-9.10.3-with-packages/lib/ghc-*/lib/package.conf.d \
-  -outputdir . \
-  --verilog -fclash-clear '-fclash-spec-limit=200' '-fclash-inline-limit=200' '-fconstraint-solver-iterations=20' \
-  SHA -main-is topEntitySHA1
-
-$ nix eval --raw .#packages.x86_64-linux.hitlt.SHA1.src.installPhase
-mkdir -p $out
-mv SHA.topEntitySHA1/* $out
-rm $out/clash-manifest.json
-```
+  $ nix eval --raw .#packages.x86_64-linux.hitlt.SHA1.src.installPhase
+  mkdir -p $out
+  mv SHA.topEntitySHA1/* $out
+  rm $out/clash-manifest.json
+  ```
 
 This should give you enough information to run the command interactively if
 needed.
