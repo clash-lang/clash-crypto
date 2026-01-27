@@ -81,7 +81,6 @@ library
     Clash.Crypto.Calculator.Utils
     Clash.Crypto.PubKey.ECDSA
     Clash.Crypto.ECDSA.DeterministicNonce
-    Clash.Crypto.ECDSA.Routines
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types

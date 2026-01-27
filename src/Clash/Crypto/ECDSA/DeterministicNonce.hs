@@ -12,12 +12,7 @@ A streaming implementation generating a nonce for deterministic ECDSA.
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Clash.Crypto.ECDSA.DeterministicNonce
-  ( deriveNonce
-  , chunkContent
-  , ChunkPosition (..)
-  , SendState (..)
-  ) where
+module Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce) where
 
 import Clash.Prelude
 import Clash.Signal.Channel
@@ -31,100 +26,18 @@ import Clash.Crypto.Hash.SHA
 import qualified Clash.Crypto.Calculator.Modulo as M
 
 import Clash.Crypto.MAC.HMAC
-import Clash.Class.Counter (countSucc)
-import Clash.Debug (traceShowId)
 
--- | The different stages of the deterministic nonce generation algorithm.
-data NonceStage
- = InitFirst | InitSecond | InitThird | InitFourth
- | NonceLoopLen | NonceLoopKey | NonceLoopV | NonceWait
- deriving (Eq, Show, Enum, Generic, NFDataX)
-
-data NonceInput alg = NonceInput
- { inputLast    ∷ Maybe (Digest alg)
- , inputSha     ∷ Content (Digest alg)
- , inputPk      ∷ BitVector 8
- , inputMessage ∷ Frame () (Index 8) (BitVector 8)
- , inputHash    ∷ Frame () (Index 8) (BitVector 8)
- , inputChunk   ∷ Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
- , chunkerDone  ∷ Bool
- }
-
-data NonceOutput alg = NonceOutput
- { isResult  ∷ Bool
- , toChunk   ∷ Maybe (Digest alg)
- , shaInput  ∷ Frame () (Index 8) (BitVector 8)
- , shaOutput ∷ Content (Digest alg)
- , hmacInput ∷ Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
- , chunkPos  ∷ ChunkPosition
- , printPk   ∷ Bool
- }
-
-data NonceState alg = NonceState
- { nonceStage  ∷ NonceStage
- , chunkStage  ∷ SendState
- , currentKey  ∷ Digest alg
- , currentV    ∷ Digest alg
- , currentHash ∷ Digest alg
- , sendCounter ∷ Index (MessageDigestSize alg `Div` 8)
- } deriving Generic
-
-instance KnownNat (MessageDigestSize alg) ⇒ NFDataX (NonceState alg)
-
-lastChunk ∷ NonceStage → SendState
-lastChunk = \case
- InitFirst    → SeedLast
- InitSecond   → VSend
- InitThird    → SeedLast
- InitFourth   → VSend
- NonceLoopLen → VSend
- NonceLoopKey → ByteSend
- NonceLoopV   → VSend
- NonceWait    → error "NonceWait doesn't chunk data"
-
-extraByteFrame ∷ forall alg → NonceStage →
- Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
-extraByteFrame _ = \case
- InitFirst    → Middle 0
- InitThird    → Middle 1
- NonceLoopKey → End () 0
- _            → error "These states don't use an extra byte"
-
--- Output for most of the states
-outputPassBy ∷ NonceInput alg → NonceOutput alg
-outputPassBy i = NonceOutput
- { isResult  = False
- , toChunk   = Nothing
- , shaInput  = i.inputHash
- , shaOutput = i.inputSha
- , hmacInput = i.inputChunk
- , chunkPos  = FirstChunk
- , printPk   = False
- }
-
-nextStage ∷ NonceStage → NonceStage
-nextStage NonceLoopV   = NonceLoopLen
-nextStage s            = succ s
-
-stageV ∷ NonceStage → Bool
-stageV    InitSecond   = True
-stageV    InitFourth   = True
-stageV    NonceLoopLen = True
-stageV    NonceLoopV   = True
-stageV    _            = False
-
--- | An implementation of the deterministic nonce generation for ECDSA found
--- in Appendix A.3.3 of FIPS 186-5. The outputted number is returned *before*
--- computing its power since it makes sharing resources easier in the context
--- of a circuit.
-
+-- | An implementation of the deterministic nonce generation for ECDSA
+-- described in Appendix A.3.3 of FIPS 186-5, henceforth referred to as
+-- "the algorithm". The result is outputted *before* computing its
+-- power (step 4.4) since it makes sharing resources easier in the context of
+-- a circuit.
 deriveNonce ∷
-  ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
-  ∀ (p ∷ Nat)  → (KnownNat p, 1 ≤ p) ⇒
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (p ∷ Nat) → (KnownNat p, 1 ≤ p) ⇒
   ∀ (alg ∷ SHA) →
-  (KnownSHA alg, CLog 2 p ~ MessageDigestSize alg,
-   1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
+   (KnownSHA alg, CLog 2 p ~ MessageDigestSize alg, Mod (BlockSize alg) 8 ~ 0,
+    1 ≤ MessageDigestSize alg `Div` 8, 8 ≤ BlockSize alg) ⇒
   DataStream dom () (Index 8) (BitVector 8) →
   -- ^ message
   Signal dom (BitVector 8) →
@@ -138,34 +51,44 @@ deriveNonce p alg message pk
  = let
   initialState ∷ NonceState alg
   initialState = NonceState
-   { nonceStage  = NonceWait
+   { nonceStage  = NonceIdle
    , chunkStage  = KeySend
    , currentV    = bitCoerce $ repeat (0x01 ∷ BitVector 8)
    , currentKey  = 0
-   , currentHash = error "Initial hash in not defined nor used"
+   , currentHash = error "Initial hash is undefined"
    , sendCounter = minBound
    }
 
+  toV = bitCoerce @_ @(Vec (MessageDigestSize alg `Div` 8) (BitVector 8))
+
+  firstByte s
+   = Start (natToNum @(MessageDigestSize alg `Div` 8))
+   $ toV s.currentKey !! (0 :: Index (MessageDigestSize alg `Div` 8))
+
   (~~>) ∷ NonceState alg → NonceInput alg → (NonceState alg, NonceOutput alg)
-  -- Start the generation if a new message has been processed.
-  s@(nonceStage → NonceWait) ~~> i =
+
+  -- Wait for a new message to be processed.
+  s@(nonceStage → NonceIdle) ~~> i =
    let out = (outputPassBy i) { shaOutput = None } ∷ NonceOutput alg in
    case i.inputSha of
-    Fresh h → (nS, out { toChunk = Just nS.currentKey })
+    Fresh h → (nS, out { hmacInput = firstByte nS } )
      where nS = s { nonceStage  = InitFirst
                   , chunkStage  = KeySend
                   , currentHash = h
+                  , sendCounter = minBound
                   }
-    _ → (s, out { shaInput  = i.inputMessage })
+    _ → (s, out { shaInput = i.inputMessage })
 
-  -- Process data from HMAC.
+  -- Process data coming from HMAC and use it as the next HMAC key or next V.
   s ~~> i@(inputLast → Just val) =
-   let nS = s { nonceStage = nextStage s.nonceStage
-              , chunkStage = KeySend } ∷ NonceState alg
+   let nS = s { nonceStage  = nextStage s.nonceStage
+              , sendCounter = minBound
+              , chunkStage  = KeySend
+              } ∷ NonceState alg
        outS | stageV s.nonceStage = nS { currentV   = val }
             | otherwise           = nS { currentKey = val }
        r = bitCoerce @_ @(Unsigned (CLog 2 p)) val
-   in if r /= 0 && r < natToNum @p && s.nonceStage == NonceLoopLen
+   in if r /= 0 && r < natToNum @p && s.nonceStage == NonceLoopCheck
     then (initialState,
           (outputPassBy i)
           { shaInput  = i.inputMessage
@@ -173,48 +96,47 @@ deriveNonce p alg message pk
           , isResult  = True
           }
          )
-    else (outS, (outputPassBy i) { toChunk = Just outS.currentKey } )
+    else (outS, (outputPassBy i) { hmacInput = firstByte outS } )
 
-  -- Chunk the data
+  -- Waiting for HMAC to finish computing.
+  s ~~> i | s.sendCounter == maxBound && lastChunk s.nonceStage == s.chunkStage =
+   (s, outputPassBy i)
+
+  -- Chunk the data into frames for HMAC.
   s ~~> i | s.chunkStage == ByteSend
-         || (s.sendCounter == maxBound && s.chunkStage == SeedFirst)
-         || (i.chunkerDone && lastChunk s.nonceStage /= s.chunkStage) =
-   let cP = if nS.chunkStage == lastChunk nS.nonceStage
-            then LastChunk else MiddleChunk
-       nS = s { chunkStage = succ s.chunkStage, sendCounter = minBound }
-       out = (outputPassBy i) { chunkPos = cP } ∷ NonceOutput alg
-       outFinal =
-        case chunkStage nS of
-         VSend      → out { toChunk   = Just nS.currentV }
-         FillerSend → out { toChunk   = Just $ error "Filler data" }
-         ByteSend   → out { hmacInput = extraByteFrame alg nS.nonceStage }
-         SeedFirst  → out { hmacInput = Middle i.inputPk, printPk = True }
-         SeedLast   → out { toChunk   = Just nS.currentHash }
-         _          → error "Nonce generation: should never be reached"
-   in (nS, outFinal)
+         || (s.sendCounter == maxBound && lastChunk s.nonceStage /= s.chunkStage) =
+   let nS = s { chunkStage = succ s.chunkStage, sendCounter = minBound }
+       out = outputPassBy i 
+       m = 0 :: Index (MessageDigestSize alg `Div` 8)
+       hmacIn = case chunkStage nS of
+        FillerSend → Middle $ error "Filler data"
+        VSend      → Middle $ toV nS.currentV    !! m
+        ByteSend   → extraByteFrame alg nS.nonceStage
+        SeedFirst  → Middle i.inputPk
+        SeedLast   → Middle $ toV nS.currentHash !! m
+        _          → error "Nonce generation: should never be reached"
+   in (nS, out { hmacInput = hmacIn, printPk = chunkStage nS == SeedFirst })
 
-  -- Wait for the data to be chunked or for the last chunk to be processed.
-  s ~~> i = ( s { sendCounter = countSucc s.sendCounter }
-            , case s.chunkStage of
-               SeedFirst -> (outputPassBy i) { hmacInput = Middle i.inputPk }
-               _         -> (outputPassBy i) { chunkPos  = cP }
-            )
+  s ~~> i = (nS , (outputPassBy i) { hmacInput = hmacIn })
    where
-    cP | s.chunkStage == lastChunk s.nonceStage = LastChunk
-       | s.chunkStage == KeySend                = FirstChunk
-       | otherwise                              = MiddleChunk
+    nS = s { sendCounter = satSucc SatBound s.sendCounter }
+    cP | nS.chunkStage  == lastChunk nS.nonceStage
+      && nS.sendCounter == maxBound = End ()
+       | otherwise                  = Middle
+    hmacIn =  case nS.chunkStage of
+     KeySend    → cP $ toV nS.currentKey  !! nS.sendCounter
+     FillerSend → Middle $ error "Filler data"
+     VSend      → cP $ toV nS.currentV    !! nS.sendCounter
+     SeedFirst  → Middle i.inputPk
+     SeedLast   → cP $ toV nS.currentHash !! nS.sendCounter
+     _          → error "Nonce generation: should never be reached"
 
   output = mealy (~~>) initialState $ NonceInput
        <$> newsfeed lastRes <*> getContent shaOutput <*> pk
        <*> message          <*> hmacOutput
-       <*> chunked          <*> cDone
-
-  (chunked, cDone)
-   = chunkContent alg (cachedFromMaybe $ register Nothing output.toChunk)
-   $ register FirstChunk output.chunkPos
 
   (lastRes, hmacOutput)
-   = hmacE alg output.hmacInput
+   = hmacE alg (register NoData $ output.hmacInput)
    $ delayC $ Channel output.shaOutput
    
   shaOutput = sha alg $ register Idle output.shaInput
@@ -231,45 +153,108 @@ data SendState
  | SeedLast
  deriving (Eq, Show, Generic, NFDataX, Enum)
 
--- | The position of the chunk in the stream.
-data ChunkPosition = FirstChunk | MiddleChunk | LastChunk
- deriving (Generic, NFDataX)
+-- | The different stages of the deterministic nonce generation algorithm.
+-- Apart from `NonceIdle`, they bear a one-to-one relationship with steps
+-- 1.6 to 1.9, 4.2.1, 4.5, and 4.6 of the algorithm.
+data NonceStage
+ = InitFirst | InitSecond | InitThird | InitFourth
+ | NonceLoopCheck | NonceLoopKey | NonceLoopV | NonceIdle
+ deriving (Eq, Show, Enum, Generic, NFDataX)
 
--- | Chunks the provided `BitVector` into smaller pieces, taking account of
--- the chunk's position in the stream.
-chunkContent ∷ forall dom. HiddenClockResetEnable dom ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg, KnownNat (MessageDigestSize alg),
-   KnownNat (BlockSize alg), 1 ≤ MessageDigestSize alg `Div` 8) ⇒
-  Channel dom (BitVector (MessageDigestSize alg)) →
-  -- ^ content to chunk
-  Signal dom ChunkPosition →
-  -- ^ position of the chunk in the stream
-  ( DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
-  -- ^ output stream
-  , Signal dom Bool
-  -- ^ return signal (True when finished chunking)
-  )
-chunkContent alg contC chunkType
- | SHAFacts ← knownSHA alg
- , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8) =
- let
-  stage ∷ Signal dom (Index (MessageDigestSize alg `Div` 8 + 1))
-  stage = register maxBound
-        $ mux contC.hasUpdates (pure 0)
-        $ mux contC.isNonEmpty (satSucc SatBound <$> stage) stage
-  opFirst curStage =
-   case curStage of
-    0 → Start $ natToNum @(MessageDigestSize alg `Div` 8)
-    _ → Middle
-  opLast curStage = if curStage == maxBound - 1 then End () else Middle
-  op curStage typ = if curStage == maxBound then const NoData else
-   case typ of
-    FirstChunk  → opFirst curStage
-    MiddleChunk → Middle
-    LastChunk   → opLast curStage
-  frame cont typ curStage
-   = maybe NoData (op curStage typ) $ ((!! curStage) . bitCoerce) <$> cont
-  done =
-   (== maxBound) <$> stage .&&. register True ((/= maxBound) <$> stage)
- in
-  (frame <$> content contC <*> chunkType <*> stage, done)
+-- | The inputs to the deterministic nonce generation's Mealy machine.
+data NonceInput alg = NonceInput
+ { -- | The last digest produced by HMAC.
+   inputLast    ∷ Maybe (Digest alg)
+   -- | The output of the SHA circuit that is either used for generating the
+   --   message hash or fed to HMAC.
+ , inputSha     ∷ Content (Digest alg)
+   -- | The private key of the device, which comes at one byte per cycle.
+ , inputPk      ∷ BitVector 8
+   -- | The message to be hashed, as byte-sized frames.
+ , inputMessage ∷ Frame () (Index 8) (BitVector 8)
+   -- | The output from HMAC used as input for the SHA circuit.
+ , inputHash    ∷ Frame () (Index 8) (BitVector 8)
+ }
+
+-- | The outputs of the deterministic nonce generation's Mealy machine.
+data NonceOutput alg = NonceOutput
+ { -- | A marker for termination.
+   isResult  ∷ Bool
+   -- | The input to the SHA circuit: it is either the output from HMAC or the
+   --   input message.
+ , shaInput  ∷ Frame () (Index 8) (BitVector 8)
+   -- | The output of the SHA circuit, fed into HMAC.
+ , shaOutput ∷ Content (Digest alg)
+   -- | The input frames for HMAC, computed from the following values:
+   -- * The HMAC key
+   -- * The V value
+   -- * The private key
+   -- * The message hash
+ , hmacInput ∷ Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+   -- | Resets the circuit outputting the private key.
+ , printPk   ∷ Bool
+ }
+
+-- | The internal state of the deterministic nonce generation's Mealy machine.
+data NonceState alg = NonceState
+ { -- | The current step in the algorithm.
+   nonceStage  ∷ NonceStage
+   -- | The chunk currently being sent.
+ , chunkStage  ∷ SendState
+   -- | The current HMAC key.
+ , currentKey  ∷ Digest alg
+   -- | The current V.
+ , currentV    ∷ Digest alg
+   -- | The hash computed from the message.
+ , currentHash ∷ Digest alg
+   -- | A counter tracking how many bytes have been processed for a given
+   -- chunk of data.
+ , sendCounter ∷ Index (MessageDigestSize alg `Div` 8)
+ } deriving Generic
+
+instance KnownNat (MessageDigestSize alg) ⇒ NFDataX (NonceState alg)
+
+-- | Returns the last chunk associated to a step of the algorithm.
+lastChunk ∷ NonceStage → SendState
+lastChunk = \case
+ InitFirst      → SeedLast
+ InitSecond     → VSend
+ InitThird      → SeedLast
+ InitFourth     → VSend
+ NonceLoopCheck → VSend
+ NonceLoopKey   → ByteSend
+ NonceLoopV     → VSend
+ NonceIdle      → error "NonceWait doesn't chunk data"
+
+-- | Returns the extra byte frame needed by the algorithm, for the relevant
+-- states.
+extraByteFrame ∷ forall alg → NonceStage →
+ Frame (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8)
+extraByteFrame _ = \case
+ InitFirst    → Middle 0
+ InitThird    → Middle 1
+ NonceLoopKey → End () 0
+ _            → error "These states don't use an extra byte"
+
+-- Generic output for the Mealy machine.
+outputPassBy ∷ NonceInput alg → NonceOutput alg
+outputPassBy i = NonceOutput
+ { isResult  = False
+ , shaInput  = i.inputHash
+ , shaOutput = i.inputSha
+ , hmacInput = NoData
+ , printPk   = False
+ }
+
+-- Returns the next stage in the algorithm.
+nextStage ∷ NonceStage → NonceStage
+nextStage NonceLoopV   = NonceLoopCheck
+nextStage s            = succ s
+
+-- | Is the output of the stage reused as the HMAC key or the `V` value?
+stageV ∷ NonceStage → Bool
+stageV  InitSecond     = True
+stageV  InitFourth     = True
+stageV  NonceLoopCheck = True
+stageV  NonceLoopV     = True
+stageV  _              = False
