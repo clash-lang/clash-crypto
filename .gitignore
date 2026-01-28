@@ -12,6 +12,7 @@ result
 /cabal.project.local
 .envrc
 .opam-local/
+_build/
 *.o
 *.o-boot
 *.hi
