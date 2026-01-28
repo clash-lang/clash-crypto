@@ -10,7 +10,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     ecpprog.url = "github:diegodiv/ecpprog";
     clash-compiler = {
-      url = "github:clash-lang/clash-compiler?ref=12169a7255319811505810a84315b9b64771a02d";
+      url = "github:clash-lang/clash-compiler";
       flake = false;
     };
     ghc-typelits-proof-assist.url =
