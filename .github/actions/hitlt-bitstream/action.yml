@@ -15,14 +15,13 @@ runs:
   steps:
     - name: "Run Synthesis and P&R"
       shell: bash
-      run: nix build --no-link .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}
+      run: nix build --no-link .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}^*
     - name: "Push any changes to the cache"
       shell: bash
       run: |
         attic push \
           "${{ inputs.cache }}" \
-          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase
-          }})"
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}^*)"
     - name: "Fetch Logs"
       shell: bash
       run: |
