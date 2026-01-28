@@ -23,9 +23,9 @@ runs:
       run: |
         attic push \
           "${{ inputs.cache }}" \
-          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src^out)"
-          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src^log)"
-          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}^out)"
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src^out)" \
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}.src^log)" \
+          "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}^out)" \
           "$(nix path-info .#packages.x86_64-linux.hitlt.${{ inputs.testcase }}^log)"
     - name: "Fetch Logs"
       shell: bash
