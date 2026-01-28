@@ -46,14 +46,20 @@
     }@args:
       pkgs.stdenv.mkDerivation ((builtins.removeAttrs args [ "hsPkgs" "exposedComponents" "extraExposedComponents" ]) // {
         __contentAddressed = true;
+        outputs = [ "out" "log" ];
+        prePhases = [ "setupLogPhase" ];
+        setupLogPhase = "mkdir -p $log";
         dontUnpack = true;
+        # GHC outputs useful information on stderr, and Clash outputs useful
+        # information on stdout, so join them in the log file.
         buildPhase = ''
           export PATH=${env}/bin:$PATH
           clash \
             -package-db ${env}/lib/ghc-*/lib/package.conf.d \
             -outputdir . \
             ${lib.strings.escapeShellArgs flags} \
-            ${module} -main-is ${binding}
+            ${module} -main-is ${binding} \
+            2>&1 | tee $log/clash.log
         '';
         installPhase = ''
           mkdir -p $out
@@ -86,6 +92,11 @@
   ecp5.synthesize =
     # Synthesis options
     { yosysFlags ? []
+    , yosysVerbosity ? "--quiet"
+
+    # Note that the yosys script commands and flags below are passed as escaped
+    # shell arguments, but are otherwise passed raw to yosys. For example: paths
+    # containing spaces should be quoted for processing by yosys.
     , preRead    ? ""
     , read       ? "read_verilog ${readFlags} *.v"
     , readFlags  ? ""
@@ -101,6 +112,7 @@
 
     # Place & route options
     , nextpnrFlags ? []
+    , nextpnrVerbosity ? "--quiet"
 
     # Bitstream packing options
     , ecppackFlags ? []
@@ -111,6 +123,9 @@
     }@args:
       let programArg = arg: if arg == "" then ""  else lib.escapeShellArgs [ "-p" arg ];
       in pkgs.stdenv.mkDerivation (args // {
+        outputs = [ "out" "log" ];
+        prePhases = [ "setupLogPhase" ];
+        setupLogPhase = "mkdir -p $log";
         nativeBuildInputs = [ pkgs.yosys pkgs.nextpnr pkgs.trellis ];
         configurePhase = ''
           mkdir -p 01-synthesized
@@ -124,6 +139,8 @@
         '';
         synthesizePhase = ''
           yosys \
+            ${lib.escapeShellArg yosysVerbosity} \
+            --logfile >(tee $log/synth.log) \
             ${lib.escapeShellArgs yosysFlags} \
             ${programArg preRead} \
             ${programArg read} \
@@ -136,8 +153,9 @@
             ${programArg postWrite}
         '';
         placeAndRoutePhase = ''
-          nextpnr-ecp5 --version
           nextpnr-ecp5 \
+            ${lib.escapeShellArg nextpnrVerbosity} \
+            --log >(tee $log/pnr.log) \
             ${lib.escapeShellArgs nextpnrFlags} \
             --json 01-synthesized/top.json \
             --textcfg 02-routed/top.config

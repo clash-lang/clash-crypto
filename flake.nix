@@ -8,6 +8,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    nix-filter.url = "github:numtide/nix-filter";
     ecpprog.url = "github:diegodiv/ecpprog";
     clash-compiler = {
       url = "github:clash-lang/clash-compiler";
@@ -23,6 +24,7 @@
   outputs =
   { nixpkgs
   , flake-utils
+  , nix-filter
   , ecpprog
   , clash-compiler
   , ghc-typelits-proof-assist
@@ -35,6 +37,13 @@
     flake-utils.lib.eachDefaultSystem (system:
       let ghc-version = "ghc9103";
           config = import ./build-config.nix;
+          src = nix-filter.lib {
+            root = self;
+            exclude = [
+              (nix-filter.lib.matchExt "nix")
+              "flake.lock"
+            ];
+          };
           ecpprogOverlay = _: _: {
             ecpprog = ecpprog.defaultPackage.${system};
           };
@@ -65,7 +74,7 @@
             ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghc-typelits-knownnat { });
             ghc-typelits-extra = dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghc-typelits-extra { });
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
-            clash-crypto = (overrideCabal (final.callCabal2nix "clash-crypto" ./. {}) {
+            clash-crypto = (overrideCabal (final.callCabal2nix "clash-crypto" src {}) {
               configureFlags = [
                 "--ghc-option=-DHITLT_BAUD=${config.serial-speed}"
               ];

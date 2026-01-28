@@ -172,6 +172,21 @@
         "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       }
     },
+    "nix-filter": {
+      "locked": {
+        "lastModified": 1757882181,
+        "narHash": "sha256-+cCxYIh2UNalTz364p+QYmWHs0P+6wDhiWR4jDIKQIU=",
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "rev": "59c44d1909c72441144b93cf0f054be7fe764de5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1726583932,
@@ -230,6 +245,7 @@
         "ghc-typelits-knownnat": "ghc-typelits-knownnat",
         "ghc-typelits-natnormalise": "ghc-typelits-natnormalise",
         "ghc-typelits-proof-assist": "ghc-typelits-proof-assist",
+        "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs_3"
       }
     },
