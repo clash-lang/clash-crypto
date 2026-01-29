@@ -10,12 +10,13 @@ import Clash.Prelude
 import Clash.Annotations.TH (makeTopEntity)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
-import Clash.Crypto.Hash.SHA (SHA(..), MessageDigestSize)
+import Clash.Crypto.Hash.SHA (SHA(..), sha)
 import Hitl.Clash.Crypto.Hash.Escape (descape)
-import Hitl.Clash.Cores.Uart.Extra (Byte, withUartRequestResponseHandler)
+import Hitl.Clash.Cores.Uart.Extra (withUartRequestResponseHandler)
 import Clash.Crypto.ECDSA.DeterministicNonce (deriveNonce)
 import Clash.Signal.Channel
 import Clash.Crypto.Calculator.ISA (SecP256OrdPrime)
+import Clash.Signal.DataStream (mapEnd)
 
 -- allows to select an SHA variant via a CPP define
 #ifndef HITLT_SHA
@@ -38,23 +39,11 @@ topEntity ∷
 topEntity (orangePll24 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
   $ \b → let
-    privateKey ∷ Signal Dom24 (Vec (MessageDigestSize SHAX `Div` 8) Byte)
-    (privateKey, frames)
-     = unbundle $ receiveBytes
-     $ bundle (register undefined privateKey, b, result.hasUpdates)
-    pkC = head <$> pk2
-    pk2 = mux rstpk privateKey
-        $ (flip rotateLeftS) d1 <$> register undefined pk2
-    receiveBytes
-     = mealy (~~>) (minBound ∷ Index (MessageDigestSize SHAX `Div` 8 + 1))
-    _ ~~> (_, _, True) = (minBound, (undefined, Nothing))
-    i ~~> (pk, Just byte, _)
-     = (satSucc SatBound i,
-        if i /= maxBound then (pk <<+ byte, Nothing)
-                         else (pk         , Just byte))
-    i ~~> (pk, Nothing, _) = (i, (pk, Nothing))
-    (result, rstpk) = deriveNonce SecP256OrdPrime SHAX (descape frames)
-        $ pkC
+    (result, shaInput)
+     = deriveNonce SecP256OrdPrime SHAX
+       (mapEnd (const ()) $ descape b)
+       shaOutput
+    shaOutput = sha SHAX shaInput
    in
     newsfeed result
 

@@ -12,7 +12,6 @@ import qualified Crypto.Hash as Spec
 import qualified Crypto.PubKey.ECC.ECDSA as Spec
 import qualified Crypto.PubKey.ECC.Types as Spec
 import Clash.Signal.DataStream
-import qualified Data.ByteString as BS
 import qualified Data.List as List
 import Clash.Signal.Channel
 import Clash.Crypto.ECDSA.DeterministicNonce
@@ -20,45 +19,40 @@ import Clash.Crypto.Hash.SHA
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import qualified Clash.Crypto.Calculator.Modulo as M
 import Clash.Crypto.Calculator.ISA (SecP256ModPrime, SecP256OrdPrime)
+import qualified Data.ByteArray as Memory
+import qualified Clash.Sized.Vector as Vec
 
 tastyTests ∷ TestTree
-tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce" $
-  [
-    localOption (HedgehogShrinkLimit (Just 2))
-    $ localOption (HedgehogTestLimit (Just 20))
-    $ testProperty "Nonce generation" $ property $ do
-      message <- forAll $ Gen.bytes (Range.linear 100 1000)
+tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce"
+  [ testProperty "Nonce generation" $ property $ do
+      message <- forAll $ Gen.bytes (Range.linear 1 1000)
       pK      <- forAll
        $ Gen.integral (Range.linear 1 (natToNum @SecP256ModPrime - 1))
       let refDig = Spec.hash @_ @Spec.SHA256 message
-          pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pK
+          h = Memory.unpack refDig
+          p = Vec.toList $ bitCoerce
+            $ fromInteger @(Unsigned (MessageDigestSize SHA256)) pK
+          pKref = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pK
           ref = Spec.deterministicNonce Spec.SHA256 pKref refDig
               $ Just . fromInteger
           impl = withClockResetEnable clockGen resetGen enableGen
-               $ runNonce (datastreamFromBS message) (fromInteger pK)
+               $ generateNonce (datastreamFromBV $ p <> (bitCoerce <$> h))
       ref === impl
   ]
 
-runNonce ∷ HiddenClockResetEnable System ⇒
- DataStream System () (Index 8) (BitVector 8) →
- BitVector 256 →
+generateNonce ∷ HiddenClockResetEnable System ⇒
+ DataStream System () () (BitVector 8) →
  M.Mod SecP256OrdPrime
-runNonce message pk
-  = fromMaybe (error "Should contain an element") $ listToMaybe $ catMaybes
+generateNonce message
+  = fromMaybe (error "No response received") $ listToMaybe $ catMaybes
   $ sample @System $ newsfeed result
  where
-  (result, rst) = deriveNonce SecP256OrdPrime SHA256 message pkC
-  -- A small circuit that outputs the private key.
-  pkC = head <$> pk2
-  pk2 = mux rst (pure $ bitCoerce pk)
-      $ flip rotateLeftS d1 <$> register (bitCoerce pk) pk2
+  (result, hmacOutput) = deriveNonce SecP256OrdPrime SHA256 message hmacInput
+  hmacInput = sha SHA256 hmacOutput
 
-datastreamFromBS ∷ BS.ByteString → DataStream dom () (Index 8) (BitVector 8)
-datastreamFromBS = datastreamFromBV . fmap bitCoerce . BS.unpack
-
-datastreamFromBV ∷ [BitVector 8] → DataStream dom () (Index 8) (BitVector 8)
+datastreamFromBV ∷ [BitVector 8] → DataStream dom () () (BitVector 8)
 datastreamFromBV bvs
- = fromList $ Idle : Idle : (listFromBV () 0  bvs <> List.repeat Idle)
+ = fromList $ Idle : Idle : listFromBV () ()  bvs <> List.repeat Idle
 
 listFromBV ∷  a → b → [BitVector 8] → [Frame a b (BitVector 8)]
 listFromBV start end bvs

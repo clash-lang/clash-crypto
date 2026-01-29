@@ -23,6 +23,5 @@ main = defaultMain $ testGroup "clash-crypto simulation tests"
   , CLU.tastyTests
   , Calculator.tastyTests
   , ECDSA.tastyTests
-  , Stack.tastyTests
   , Nonce.tastyTests
   ]

@@ -6,6 +6,7 @@ Stability   : experimental
 Portability : POSIX
 
 Some extra type families and properties for type level naturals.
+Rocq proofs require 8.20.0 or higher.
 -}
 
 {-# LANGUAGE UndecidableInstances #-}
@@ -17,7 +18,10 @@ Some extra type families and properties for type level naturals.
 module Data.Constraint.Nat.Extra
   ( -- * Type Families
     DDiv
+  , DivUp
     -- * Proven Evidience
+  , DivUpBigger
+  , DivUpBiggerOne
   , TimesMod
   , LeTrans
   , ModBound
@@ -59,6 +63,54 @@ type family DDiv n m where
           :<>: Text " and m = " :<>: ShowType m :<>: Text "."
           )
       )
+
+-- | Division rounding up.
+type DivUp a b = a `Div` b + Min (a `Mod` b) 1
+
+instance (1 <= b) ⇒ DivUpBigger a b
+class (a <= (Div a b + Min (a `Mod` b) 1) * b) ⇒ DivUpBigger a b
+
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. 1 ≤ b → a ≤ (a / b + min (a % b) 1) * b)
+--
+{-/ Proof (Coq): DivUpBigger
+ Require Import Arith.
+ intros.
+ case_eq (a mod b).
+ Import Nat.
+ - intro Hmod0. simpl. rewrite <- plus_n_O.
+   apply eq_le_incl. rewrite mul_comm ; rewrite Div0.div_exact ; exact Hmod0.
+ - intros n HmodSn. simpl. rewrite min_0_r.
+ Search (_ / _). Search "case".
+ case (le_gt_cases b a).
+ + intro. rewrite mul_comm. rewrite add_comm. apply lt_le_incl. apply mul_succ_div_gt.
+   apply neq_0_le_1 ; exact H.
+ + intro Haltb. pose proof Haltb as H2. rewrite <- div_small_iff in Haltb. rewrite Haltb. simpl.
+   rewrite add_0_r. apply lt_le_incl ; exact H2. apply neq_0_le_1 ; exact H.
+/-}
+instance DivUpBigger a b ⇒ QED (DivUpBigger a b)
+
+
+instance (1 <= b, 1 <= a) ⇒ DivUpBiggerOne a b
+class (1 <= (Div a b + Min (a `Mod` b) 1)) ⇒ DivUpBiggerOne a b
+
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. 1 ≤ b, 1 ≤ a → 1 ≤ a / b + min (a % b) 1
+--
+{-/ Proof (Coq): DivUpBiggerOne
+ Require Import Arith.
+ Import Nat.
+ intros.
+ case (le_gt_cases b a).
+ - intro Hblea. rewrite <- mul_1_l at 1.
+   apply lt_lt_add_r.
+   apply div_str_pos. split. exact H. exact Hblea.
+ - intro Haltb. rewrite div_small; auto. simpl.
+   rewrite mod_small ; auto. rewrite min_r ; auto.
+/-}
+instance DivUpBiggerOne a b ⇒ QED (DivUpBiggerOne a b)
 
 instance
   ( 1 <= c
@@ -159,7 +211,7 @@ class
   - apply Hb.
   - apply Hc.
 /-}
-instance CondMonotoneGE a b c x => QED (CondMonotoneGE a b c x)
+instance CondMonotoneGE a b c x ⇒ QED (CondMonotoneGE a b c x)
 
 instance
   ( 1 <= b, a `Mod` b ~ 0

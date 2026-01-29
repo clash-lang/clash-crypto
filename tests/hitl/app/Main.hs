@@ -327,7 +327,7 @@ main = do
     TestTree
   testDeterministicNonce alg name sem dev settings
     = test sem dev settings name $ do
-        bs ← forAll $ Gen.bytes $ Range.linear 100 1000
+        bs ← forAll $ Gen.bytes $ Range.linear 1 1000
         pk ← forAll
          $ Gen.integral (Range.linear 1 (natToNum @SecP256ModPrime - 1))
         runHitltDeterministicNonce alg sem dev settings bs pk
@@ -553,10 +553,13 @@ runHitltDeterministicNonce alg sem dev settings message pk
  let
   toBS   = pack . toList . bitCoerce . fromInteger @(Digest alg)
   refDig = cryptoHash# (Proxy @alg) message
+  h = pack $ Memory.unpack refDig
+  p = pack $ Vec.toList $ bitCoerce
+    $ fromInteger @(Unsigned (MessageDigestSize SHA256)) pk
   pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pk
   ref    = Spec.deterministicNonce Hash.SHA256 pKref refDig $ Just . toBS
  in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings
-   (toBS pk `append` escapeAndTerminate message) ref
+   (escapeAndTerminate $ p `append` h) ref
 
 runHitltHMACSHA ∷
   ∀ (alg ∷ SHA) →

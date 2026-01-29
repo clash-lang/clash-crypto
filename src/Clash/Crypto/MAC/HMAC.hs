@@ -78,8 +78,8 @@ data HmacStage
 -- This implementation currently does __not__ support keys that
 -- require more than 'BlockSize' @alg@ many bits.
 hmac ∷
-  ∀ (dom ∷ Domain). (HiddenClockResetEnable dom) ⇒
-  ∀ (alg ∷ SHA) → (KnownSHA alg) ⇒
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
   -- ^ input stream
