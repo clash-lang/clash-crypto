@@ -24,7 +24,7 @@ import Control.Exception
   ( SomeException, Exception, Handler(..)
   , catches, throw, bracket_
   )
-import Control.Monad (unless)
+import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap)
 import Data.ByteString
@@ -313,7 +313,7 @@ main = do
     = sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
-            $ liftIO $ nixBuild (".#hitlt." <> name)
+            $ liftIO $ nixBuild name
         , withResource
             (upload sem dev settings name)
             (const $ return ())
@@ -322,10 +322,10 @@ main = do
         ]
 
 nixBuild ∷ String → IO ()
-nixBuild  attr = callProcess "nix" ["build", "--no-link", attr]
+nixBuild  attr = callProcess "nix" ["run", ".#realize", attr]
 
 nixRun ∷ String → IO ()
-nixRun    attr = callProcess "nix" ["run", attr]
+nixRun    attr = void $ readProcess "nix" ["run", attr] ""
 
 nixConfig ∷ String → IO String
 nixConfig key  =

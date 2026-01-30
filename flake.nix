@@ -152,6 +152,10 @@
         devShells.allFeatures =
           (defaultDevShell.overrideAttrs hlsOverlay).overrideAttrs opamOverlay;
         apps.hitlt = hitltUpload;
+        apps.realize = {
+          type = "app";
+          program = "${./nix/realize.sh}";
+        };
         packages.default = hsPkgs.clash-crypto;
         packages.hitlt = hitlt;
         packages.hitltHsPkgs = hitltHsPkgs;
