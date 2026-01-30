@@ -175,7 +175,6 @@ library hitlt-instances
     , clash-crypto
     , clash-crypto:hitl
     , clash-crypto:test
-    , template-haskell
   exposed-modules:
     BEA
     Calculator
@@ -189,7 +188,6 @@ library hitlt-instances
     Modulo
     SictMi
     SHA
-    SHA.TH
     Stack
 
 test-suite hitlt

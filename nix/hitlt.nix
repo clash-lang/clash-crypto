@@ -12,37 +12,52 @@ hsPkgs: {
         "-fconstraint-solver-iterations=20"
       ];
     };
-    target.package = "clash-crypto:hitlt-instances";
     nextpnrFlags = [
       "--85k"
       "--package" "CSFBGA285"
       "--lpf" "${./../orangecrab.pcf}"
     ];
   };
-  hitltTopEntities = {
-    BEA = { target = { module = "BEA"; }; };
-    Calculator = { target = { module = "Calculator"; }; };
-    CLU = { target = { module = "CLU"; }; };
-    FastGCD = { target = { module = "FastGCD"; }; };
-    FltCtmi = { target = { module = "FltCtmi"; }; };
-    Karatsuba = { target = { module = "Karatsuba"; }; };
-    KaratsubaModulo = { target = {  module = "KaratsubaModulo"; }; };
-    Modulo = { target = { module = "Modulo"; }; };
-    SictMi = { target = { module = "SictMi"; }; };
-    Stack = { target = { module = "Stack"; }; };
-    SHA1 = { target = { module = "SHA"; }; binding = "topEntitySHA1"; };
-    SHA224 = { target = { module = "SHA"; }; binding = "topEntitySHA224"; };
-    SHA256 = { target = { module = "SHA"; }; binding = "topEntitySHA256"; };
-    SHA384 = { target = { module = "SHA"; }; binding = "topEntitySHA384"; };
-    SHA512 = { target = { module = "SHA"; }; binding = "topEntitySHA512"; };
-    SHA512224 = { target = { module = "SHA"; }; binding = "topEntitySHA512224"; };
-    SHA512256 = { target = { module = "SHA"; }; binding = "topEntitySHA512256"; };
-    HMACSHA1 = { target = { module = "HMAC"; }; binding = "topEntitySHA1"; };
-    HMACSHA224 = { target = { module = "HMAC"; }; binding = "topEntitySHA224"; };
-    HMACSHA256 = { target = { module = "HMAC"; }; binding = "topEntitySHA256"; };
-    HMACSHA384 = { target = { module = "HMAC"; }; binding = "topEntitySHA384"; };
-    HMACSHA512 = { target = { module = "HMAC"; }; binding = "topEntitySHA512"; };
-    HMACSHA512224 = { target = { module = "HMAC"; }; binding = "topEntitySHA512224"; };
-    HMACSHA512256 = { target = { module = "HMAC"; }; binding = "topEntitySHA512256"; };
-  };
+  hitltTopEntities =
+    let byModule = module: {
+          target = {
+            package = "clash-crypto:hitlt-instances";
+            inherit module;
+          };
+        };
+        bySource = source: sha: {
+          target = {
+            source = "${./..}/tests/hitl/top/${source}";
+          };
+          clashArgs = {
+            extraEnvPackages = [ "clash-crypto" ];
+            extraFlags = [ "-DHITLT_SHA=${sha}" ];
+          };
+        };
+    in {
+      BEA = byModule "BEA";
+      Calculator = byModule "Calculator";
+      CLU = byModule "CLU";
+      FastGCD = byModule "FastGCD";
+      FltCtmi = byModule "FltCtmi";
+      Karatsuba = byModule "Karatsuba";
+      KaratsubaModulo = byModule  "KaratsubaModulo";
+      Modulo = byModule "Modulo";
+      SictMi = byModule "SictMi";
+      Stack = byModule "Stack";
+      SHA1 = bySource "SHA.hs" "SHA1";
+      SHA224 = bySource "SHA.hs" "SHA224";
+      SHA256 = bySource "SHA.hs" "SHA256";
+      SHA384 = bySource "SHA.hs" "SHA384";
+      SHA512 = bySource "SHA.hs" "SHA512";
+      SHA512224 = bySource "SHA.hs" "SHA512224";
+      SHA512256 = bySource "SHA.hs" "SHA512256";
+      HMACSHA1 = bySource "HMAC.hs" "SHA1";
+      HMACSHA224 = bySource "HMAC.hs" "SHA224";
+      HMACSHA256 = bySource "HMAC.hs" "SHA256";
+      HMACSHA384 = bySource "HMAC.hs" "SHA384";
+      HMACSHA512 = bySource "HMAC.hs" "SHA512";
+      HMACSHA512224 = bySource "HMAC.hs" "SHA512224";
+      HMACSHA512256 = bySource "HMAC.hs" "SHA512256";
+    };
 }

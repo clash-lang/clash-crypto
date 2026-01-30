@@ -68,6 +68,7 @@
         '';
         installPhase = ''
           mkdir -p $out
+          find
           mv */* $out
           rm $out/clash-manifest.json
         '';
