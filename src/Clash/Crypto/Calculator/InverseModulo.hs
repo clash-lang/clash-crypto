@@ -142,14 +142,15 @@ type FastGCDState m = FastGCDRecord (FastGCDIterations m)
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
 -- inversion.
 divSteps ∷
-  ∀ m dom.
-  ( KnownNat m, HiddenClockResetEnable dom
-  , KnownNat (FastGCDIterations m), 1 ≤ m, 1 ≤ FastGCDIterations m
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (m ∷ Nat) → (KnownNat m, 1 ≤ m) ⇒
+  ( KnownNat (FastGCDIterations m)
+  , 1 ≤ FastGCDIterations m
   , ModSize m ≤ FastGCDIterations m
   ) ⇒
   Channel dom (Unsigned (ModSize m)) →
   Channel dom (Index (DenMax m), Signed (FastGCDIterations m + 1))
-divSteps = enhance put get compute
+divSteps m = enhance put get compute
  where
   put x = FastGCD
     { remaining = maxBound
@@ -199,7 +200,7 @@ fastGcdSequential ∷
   ) ⇒
   Channel dom (Mod m) →
   Channel dom (Mod m)
-fastGcdSequential (divSteps @m . fmap bitCoerce → divResult)
+fastGcdSequential (divSteps m . fmap bitCoerce → divResult)
   = computeModuloUnsigned @m
   $ karatsubaSequential GCDStreamingStages MulRegisterSize
   $ fmap ((, natToNum @(Precomp m) ∷ Unsigned (ModSize m)) . bitCoerce)
@@ -289,10 +290,11 @@ data SictMiState m = SictMi
  } deriving (Generic, NFDataX, Show)
 
 sictMiLoop ∷
-  ∀ m dom. (KnownNat m, HiddenClockResetEnable dom, 1 ≤ m) ⇒
+  ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
+  ∀ (m ∷ Nat) → (KnownNat m, 1 ≤ m) ⇒
   Channel dom (Unsigned (ModSize m)) →
   Channel dom (Signed (SictIterations m * 2 + 1))
-sictMiLoop = enhance put get compute
+sictMiLoop m = enhance put get compute
  where
   put input = SictMi
     { remaining = maxBound
@@ -304,7 +306,7 @@ sictMiLoop = enhance put get compute
 
   get _ SictMi{..} = q
 
-  compute _ s@SictMi{..}
+  compute _ (s@SictMi{..} ∷ SictMiState m)
     | remaining > 0 = Computing $ next s
     | otherwise     = Releasing s
 
@@ -340,9 +342,9 @@ sictMiSequential
   = fmap bitCoerce
   . karatsubaSequentialModulo GCDStreamingStages MulRegisterSize
   . fmap ( (, natToNum @(m - 1) + 1)
-         . (, getSictPrecomp @m ∷ Unsigned (ModSize m))
+         . (, getSictPrecomp (SNat @m) ∷ Unsigned (ModSize m))
          . bitCoerce
          )
   . computeModuloSigned @m @(SictIterations m * 2)
-  . sictMiLoop @m
+  . sictMiLoop m
   . fmap bitCoerce

@@ -81,14 +81,13 @@
       "locked": {
         "lastModified": 1761554814,
         "narHash": "sha256-n80z/7Da2+UKFzyhbncgztZtiHY6C3YkeY1JaRD73hQ=",
-        "ref": "main",
+        "ref": "refs/heads/main",
         "rev": "b747bbf319a17ca329292bf3f08089477d493446",
         "revCount": 11,
         "type": "git",
         "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       },
       "original": {
-        "ref": "main",
         "type": "git",
         "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
       }
