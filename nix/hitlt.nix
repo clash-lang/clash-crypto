@@ -1,4 +1,4 @@
-hsPkgs: {
+hsPkgs: rec {
   hitltBaseArgs = {
     hsPkgs = hsPkgs;
     clashArgs = {
@@ -31,7 +31,9 @@ hsPkgs: {
           };
           clashArgs = {
             extraEnvPackages = [ "clash-crypto" ];
-            extraFlags = [ "-DHITLT_SHA=${sha}" ];
+            extraFlags = hitltBaseArgs.clashArgs.extraFlags ++ [
+              "-DHITLT_SHA=${sha}"
+            ];
           };
         };
     in {
