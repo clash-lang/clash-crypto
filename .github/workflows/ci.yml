@@ -23,7 +23,7 @@ jobs:
     name: Build & cache Nix devShell
     runs-on: [self-hosted, compute]
     container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: []
     steps:
@@ -58,7 +58,7 @@ jobs:
     runs-on: [self-hosted, compute]
     timeout-minutes: 60
     container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: [nix-build]
     strategy:
@@ -93,7 +93,7 @@ jobs:
     name: HITLT Bitstreams
     runs-on: [self-hosted, compute]
     container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=11g
     needs: [nix-build]
     strategy:
@@ -137,7 +137,7 @@ jobs:
     name: HITLT Bitstreams (High Memory)
     runs-on: [self-hosted, compute]
     container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: [nix-build]
     strategy:
@@ -169,7 +169,7 @@ jobs:
     name: HITL Tests
     runs-on: [self-hosted, hardware-access, orangecrab]
     container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: >-
         --memory=11g
         --device /dev/bus/usb
