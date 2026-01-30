@@ -174,7 +174,7 @@ jobs:
         --memory=11g
         --device /dev/bus/usb
         --device /dev/ttyPmodUSB0
-    needs: [nix-build, hitlt-bitstreams]
+    needs: [nix-build, hitlt-bitstreams, hitlt-bitstreams-highmem]
     strategy:
       matrix:
         test:
