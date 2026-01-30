@@ -133,7 +133,7 @@ jobs:
           cache: ${{ env.PROJECT }}
           testcase: ${{ matrix.test }}
 
-  hitlt-bitstreams:
+  hitlt-bitstreams-highmem:
     name: HITLT Bitstreams (High Memory)
     runs-on: [self-hosted, compute]
     container:
