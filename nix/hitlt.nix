@@ -40,6 +40,7 @@ hsPkgs: rec {
       BEA = byModule "BEA";
       Calculator = byModule "Calculator";
       CLU = byModule "CLU";
+      ECDSASign = byModule "ECDSASign";
       FastGCD = byModule "FastGCD";
       FltCtmi = byModule "FltCtmi";
       Karatsuba = byModule "Karatsuba";

@@ -133,6 +133,38 @@ jobs:
           cache: ${{ env.PROJECT }}
           testcase: ${{ matrix.test }}
 
+  hitlt-bitstreams:
+    name: HITLT Bitstreams (High Memory)
+    runs-on: [self-hosted, compute]
+    container:
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260109-687dd7d
+      options: --memory=30g
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - ECDSASign
+
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Login to the local cache"
+        run: |
+          attic login \
+            --set-default "${{ env.PROJECT }}" \
+            "${{ env.ATTIC_CACHE }}" \
+            "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
+      - name: "Build HITLT Bitstreams"
+        uses: "./.github/actions/hitlt-bitstream"
+        with:
+          cache: ${{ env.PROJECT }}
+          testcase: ${{ matrix.test }}
+
   hitlt:
     name: HITL Tests
     runs-on: [self-hosted, hardware-access, orangecrab]
@@ -158,33 +190,6 @@ jobs:
           - FltCtmi
           - CLU
           - Calculator.Calculator
-
-    steps:
-      - name: "Checkout the repository"
-        uses: actions/checkout@v4
-      - name: "Repository specific setup"
-        run: |
-          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
-          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
-          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
-      - name: "Run HITLT"
-        uses: "./.github/actions/hitlt"
-        with:
-          testcase: ${{ matrix.test }}
-
-  hitlt-bigmem:
-    name: HITL Tests that use lots of RAM
-    runs-on: [self-hosted, hardware-access, orangecrab]
-    container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
-      options: >-
-        --memory=30g
-        --device /dev/bus/usb
-        --device /dev/ttyPmodUSB0
-    needs: [nix-build]
-    strategy:
-      matrix:
-        test:
           - ECDSASign
 
     steps:
