@@ -9,6 +9,7 @@ stack.yaml.lock
 tags
 TAGS
 result
+result/
 /cabal.project.local
 .envrc
 .opam-local/

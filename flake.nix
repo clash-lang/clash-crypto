@@ -22,7 +22,8 @@
     ghc-typelits-extra = { url = "github:clash-lang/ghc-typelits-extra"; flake = false; };
   };
   outputs =
-  { nixpkgs
+  { self
+  , nixpkgs
   , flake-utils
   , nix-filter
   , ecpprog
