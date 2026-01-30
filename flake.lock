@@ -128,7 +128,7 @@
         "narHash": "sha256-l1rQk8hQ7ywYGkfT9TtRuP4E1SH4n1LioxquHgzf+rY=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-knownnat",
-        "rev": "2e57de3b709dab085fb1657cf73d4f5e833229ee",
+        "rev": "47ed62f90218ecf74246caabbbeaeb22e8be8246",
         "type": "github"
       },
       "original": {
