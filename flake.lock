@@ -112,7 +112,7 @@
         "narHash": "sha256-ynlFGRhTcXwG/fgpIk/GAy+mpvo8eBCptTuRWGl/YC4=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-extra",
-        "rev": "4dadc824a3ef9a511fcf6605167715a5a655ba0d",
+        "rev": "db8cfbd17a8c8984d28c8af254cc81860d8430a9",
         "type": "github"
       },
       "original": {
