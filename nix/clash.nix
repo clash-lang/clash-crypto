@@ -17,17 +17,22 @@
 
   onlyClash =
     { hsPkgs
-    , package
-    , module ? "Main"
+    # Target must be in one of two forms:
+    # - For compiled modules: { package = "pkg"; module = "Mod"; }
+    # - For source files:     { source = "/path"; }
+    # Note that source files most likely require you to specify the needed
+    # packages in extraEnvPackages.
+    , target
     , binding ? "topEntity"
-    , envPackages ? [ "clash-ghc" (cabal.splitTarget package).package ] ++ extraEnvPackages
+    , envPackages ? [ "clash-ghc" ] ++ extraEnvPackages ++
+        lib.optional (target ? package) (cabal.splitTarget target.package).package
     , extraEnvPackages ? []
-    , exposedComponents ? (builtins.map cabal.splitTarget [
-        package
+    , exposedComponents ? (builtins.map cabal.splitTarget ([
         "ghc-typelits-natnormalise"
         "ghc-typelits-extra"
         "ghc-typelits-knownnat"
-      ]) ++ extraExposedComponents
+      ] ++ lib.optional (target ? package) target.package)
+    ) ++ extraExposedComponents
     , extraExposedComponents ? []
     , env ?
       (hsPkgs.ghcWithPackages
@@ -44,7 +49,7 @@
     , extraFlags ? []
     , ...
     }@args:
-      pkgs.stdenv.mkDerivation ((builtins.removeAttrs args [ "hsPkgs" "exposedComponents" "extraExposedComponents" ]) // {
+      pkgs.stdenv.mkDerivation ((builtins.removeAttrs args [ "hsPkgs" "exposedComponents" "extraExposedComponents" "target" ]) // {
         __contentAddressed = true;
         outputs = [ "out" "log" ];
         prePhases = [ "setupLogPhase" ];
@@ -58,28 +63,27 @@
             -package-db ${env}/lib/ghc-*/lib/package.conf.d \
             -outputdir . \
             ${lib.strings.escapeShellArgs flags} \
-            ${module} -main-is ${binding} \
+            ${target.module or target.source} -main-is ${binding} \
             2>&1 | tee $log/clash.log
         '';
         installPhase = ''
           mkdir -p $out
-          mv ${lib.strings.escapeShellArg "${module}.${binding}"}/* $out
+          mv */* $out
           rm $out/clash-manifest.json
         '';
       });
 
   ecp5.clash =
     { hsPkgs
-    , package
-    , module ? "Main"
+    , target
     , binding ? "topEntity"
-    , name ? "${package}-${module}-${binding}"
+    , name ? "${target}-${binding}"
     , clashArgs ? {}
     , ...
     }@args0:
-      let args = builtins.removeAttrs args0 [ "hsPkgs" "clashArgs" ];
+      let args = builtins.removeAttrs args0 [ "hsPkgs" "clashArgs" "target" ];
           clashArgs0 = {
-            inherit hsPkgs package module binding;
+            inherit hsPkgs target binding;
             name = "${name}-hdl";
           };
           clashSrc = onlyClash (clashArgs0 // clashArgs);

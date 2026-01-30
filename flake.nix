@@ -138,7 +138,8 @@
 
           hitltHsPkgs = hsPkgs.extend (_: prev: { clash-crypto = dontCheck prev.clash-crypto; });
           inherit (import ./nix/hitlt.nix hitltHsPkgs) hitltBaseArgs hitltTopEntities;
-          clashHitlt = k: v: clashLib.ecp5.clash (hitltBaseArgs // v // { name = k; });
+          clashHitlt = k: v:
+            clashLib.ecp5.clash (lib.recursiveUpdate hitltBaseArgs v // { name = k; });
           hitlt = builtins.mapAttrs clashHitlt hitltTopEntities;
           hitltUpload = builtins.mapAttrs (n: _:
             { upload = { type = "app"; program = "${hitlt.${n}}/bin/upload"; }; }
