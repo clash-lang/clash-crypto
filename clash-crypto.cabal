@@ -75,7 +75,6 @@ library
     Clash.Crypto.Calculator.CLU
     Clash.Crypto.Calculator.Fraction
     Clash.Crypto.Calculator.InverseModulo
-    Clash.Crypto.Calculator.InverseModulo.Internal
     Clash.Crypto.Calculator.ISA
     Clash.Crypto.Calculator.Karatsuba
     Clash.Crypto.Calculator.Modulo

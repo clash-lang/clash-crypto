@@ -9,8 +9,12 @@ Implementations of inverse modulo algorithms.
 -}
 
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Clash.Crypto.Calculator.InverseModulo
   ( Precomp
@@ -19,19 +23,19 @@ module Clash.Crypto.Calculator.InverseModulo
   , fltCtmi
   , fltCtmiE
   , sictMiSequential
-  , deriveSictPrecomp
   ) where
 
 import Clash.Prelude hiding (Mod)
 import Clash.Signal.Channel
 
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
+import Data.Type.Equality (type (==))
+import GHC.TypeLits.KnownNat (KnownNat1(..), SNatKn(..), nameToSymbol)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
 
 import qualified GHC.TypeLits as P (Mod)
 
-import Clash.Crypto.Calculator.InverseModulo.Internal
 import Clash.Crypto.Calculator.Fraction (HWFraction (HWFraction), shiftRFraction)
 import Clash.Crypto.Calculator.Karatsuba
   (karatsubaSequential, karatsubaSequentialModulo)
@@ -281,6 +285,34 @@ fltCtmiE (unzipC → (input, p)) smmOut =
 -- This algorithm comes from Jin and Miyaji's paper Short-Iteration
 -- Constant-Time GCD and Modular inversion.
 
+type SictIterations m = 2 * ModSize m
+
+type family SictPrecomp (m ∷ Nat) ∷ Nat where
+  SictPrecomp 0 = 1
+  SictPrecomp m = SictPrecomp# m (m - SictIterations m - 1) 2 1
+
+type family SictPrecomp# (m ∷ Nat) (pow ∷ Nat) (val ∷ Nat) (tmp ∷ Nat)  ∷ Nat where
+  SictPrecomp# _ 0 _   _   = 1
+  SictPrecomp# m 1 val tmp = (val * tmp) `P.Mod` m
+  SictPrecomp# m n val tmp = SictPrecomp# m
+                             -- even --              -- odd --
+      (If (n `P.Mod` 2 == 0) (n `Div` 2)             (n - 1)                )
+      (If (n `P.Mod` 2 == 0) ((val * val) `P.Mod` m) val                    )
+      (If (n `P.Mod` 2 == 0) (tmp `P.Mod` m)         ((tmp * val) `P.Mod` m))
+
+instance (KnownNat m, 1 ≤ m) => KnownNat1 $(nameToSymbol ''SictPrecomp) m where
+  natSing1 =
+    let m = natToNum @m
+        i = natToNum @(SictIterations m)
+        calc 0 _   _   = 1
+        calc 1 val tmp = val * tmp `mod` m
+        calc n val tmp = calc
+          (if n `mod` 2 == 0 then n `div` 2         else n - 1            )
+          (if n `mod` 2 == 0 then val * val `mod` m else val              )
+          (if n `mod` 2 == 0 then tmp `mod` m       else tmp * val `mod` m)
+     in SNatKn $ calc (m - i - 1) 2 1
+  {-# INLINE natSing1 #-}
+
 data SictMiState m = SictMi
  { remaining ∷ Index (SictIterations m + 1)
  , u         ∷ Signed (ModSize m + 1)
@@ -333,7 +365,7 @@ sictMiLoop m = enhance put get compute
 sictMiSequential ∷
   ∀ m dom.
   ( KnownNat m, HiddenClockResetEnable dom
-  , 1 ≤ m, SictPrecompKnownNat m, 1 ≤ m - 2 * ModSize m
+  , 1 ≤ m - 2 * ModSize m, 1 <= m, 1 <= SictPrecomp m
   , 2 * ModSize m ≤ m, 1 ≤ 2 * ModSize m * (m - 1)
   ) ⇒
   Channel dom (Mod m) →
@@ -342,7 +374,7 @@ sictMiSequential
   = fmap bitCoerce
   . karatsubaSequentialModulo GCDStreamingStages MulRegisterSize
   . fmap ( (, natToNum @(m - 1) + 1)
-         . (, getSictPrecomp (SNat @m) ∷ Unsigned (ModSize m))
+         . (, natToNum @(SictPrecomp m) ∷ Unsigned (ModSize m))
          . bitCoerce
          )
   . computeModuloSigned @m @(SictIterations m * 2)
