@@ -1,4 +1,4 @@
-hsPkgs: rec {
+hsPkgs: config: rec {
   hitltBaseArgs = {
     hsPkgs = hsPkgs;
     clashArgs = {
@@ -33,6 +33,7 @@ hsPkgs: rec {
             extraEnvPackages = [ "clash-crypto" ];
             extraFlags = hitltBaseArgs.clashArgs.extraFlags ++ [
               "-DHITLT_SHA=${sha}"
+              "-DHITLT_BAUD=${config.serial-speed}"
             ];
           };
         };

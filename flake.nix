@@ -138,7 +138,7 @@
           };
 
           hitltHsPkgs = hsPkgs.extend (_: prev: { clash-crypto = dontCheck prev.clash-crypto; });
-          inherit (import ./nix/hitlt.nix hitltHsPkgs) hitltBaseArgs hitltTopEntities;
+          inherit (import ./nix/hitlt.nix hitltHsPkgs config) hitltBaseArgs hitltTopEntities;
           clashHitlt = k: v:
             clashLib.ecp5.clash (lib.recursiveUpdate hitltBaseArgs v // { name = k; });
           hitlt = builtins.mapAttrs clashHitlt hitltTopEntities;

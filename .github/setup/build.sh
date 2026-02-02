@@ -1,7 +1,4 @@
 #!/bin/bash
-HERE=$(dirname $(realpath "$0"))
-ROOT=$(dirname $(dirname "$HERE"))
-
 DOCKERS="docker podman err"
 
 if [ -z "$DOCKER" ]; then
