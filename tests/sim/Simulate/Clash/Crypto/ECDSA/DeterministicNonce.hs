@@ -1,4 +1,4 @@
-module Simulate.Clash.Crypto.ECDSA.Nonce (tastyTests) where
+module Simulate.Clash.Crypto.ECDSA.DeterministicNonce (tastyTests) where
 
 import Clash.Prelude
 
