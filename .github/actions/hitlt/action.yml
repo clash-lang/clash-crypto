@@ -18,7 +18,7 @@ runs:
       run: echo "{ hitlt-serial-dev = \"/dev/ttyPmodUSB0\"; }" > build-config-local.nix
     - name: "Pull the Nix devShell from the cache"
       shell: bash
-      run: nix build .#devShells.x86_64-linux.default
+      run: nix build --no-link .#devShells.x86_64-linux.default
     - name: "Run synthesis, P&R, and the test(s)"
       shell: bash
       run: |
