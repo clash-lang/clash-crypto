@@ -23,7 +23,7 @@ jobs:
     name: Build & cache Nix devShell
     runs-on: [self-hosted, compute]
     container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: []
     steps:
@@ -40,20 +40,25 @@ jobs:
             --set-default "${{ env.PROJECT }}" \
             "${{ env.ATTIC_CACHE }}" \
             "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
-      - name: "Build the Nix devShell"
-        run: nix build .#devShells.x86_64-linux.allFeatures
-      - name: "Push any changes to the cache"
+      - name: "Build and cache the Nix devShell"
         run: |
+          nix build --no-link .#devShells.x86_64-linux.allFeatures
           attic push \
             "${{ env.PROJECT }}" \
             "$(nix path-info .#devShells.x86_64-linux.allFeatures)"
+      - name: "Build and cache clash-crypto untested"
+        run: |
+          nix build --no-link .#packages.x86_64-linux.hitltHsPkgs.clash-crypto
+          attic push \
+            "${{ env.PROJECT }}" \
+            "$(nix path-info .#packages.x86_64-linux.hitltHsPkgs.clash-crypto)"
 
   simulate:
     name: Simulation Tests
     runs-on: [self-hosted, compute]
     timeout-minutes: 60
     container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: [nix-build]
     strategy:
@@ -84,16 +89,92 @@ jobs:
         with:
           testcase: ${{ matrix.test }}
 
+  hitlt-bitstreams:
+    name: HITLT Bitstreams
+    runs-on: [self-hosted, compute]
+    container:
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
+      options: --memory=11g
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - SHA1
+          - SHA224
+          - SHA256
+          - HMACSHA256
+          - Stack
+          - Karatsuba
+          - KaratsubaModulo
+          - Modulo
+          - BEA
+          - FastGCD
+          - FltCtmi
+          - CLU
+          - Calculator
+
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Login to the local cache"
+        run: |
+          attic login \
+            --set-default "${{ env.PROJECT }}" \
+            "${{ env.ATTIC_CACHE }}" \
+            "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
+      - name: "Build HITLT Bitstreams"
+        uses: "./.github/actions/hitlt-bitstream"
+        with:
+          cache: ${{ env.PROJECT }}
+          testcase: ${{ matrix.test }}
+
+  hitlt-bitstreams-highmem:
+    name: HITLT Bitstreams (High Memory)
+    runs-on: [self-hosted, compute]
+    container:
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
+      options: --memory=30g
+    needs: [nix-build]
+    strategy:
+      matrix:
+        test:
+          - ECDSASign
+
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v4
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Login to the local cache"
+        run: |
+          attic login \
+            --set-default "${{ env.PROJECT }}" \
+            "${{ env.ATTIC_CACHE }}" \
+            "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
+      - name: "Build HITLT Bitstreams"
+        uses: "./.github/actions/hitlt-bitstream"
+        with:
+          cache: ${{ env.PROJECT }}
+          testcase: ${{ matrix.test }}
+
   hitlt:
     name: HITL Tests
     runs-on: [self-hosted, hardware-access, orangecrab]
     container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: >-
         --memory=11g
         --device /dev/bus/usb
         --device /dev/ttyPmodUSB0
-    needs: [nix-build]
+    needs: [nix-build, hitlt-bitstreams, hitlt-bitstreams-highmem]
     strategy:
       matrix:
         test:
@@ -109,33 +190,6 @@ jobs:
           - FltCtmi
           - CLU
           - Calculator.Calculator
-
-    steps:
-      - name: "Checkout the repository"
-        uses: actions/checkout@v4
-      - name: "Repository specific setup"
-        run: |
-          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
-          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
-          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
-      - name: "Run HITLT"
-        uses: "./.github/actions/hitlt"
-        with:
-          testcase: ${{ matrix.test }}
-
-  hitlt-bigmem:
-    name: HITL Tests that use lots of RAM
-    runs-on: [self-hosted, hardware-access, orangecrab]
-    container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
-      options: >-
-        --memory=30g
-        --device /dev/bus/usb
-        --device /dev/ttyPmodUSB0
-    needs: [nix-build]
-    strategy:
-      matrix:
-        test:
           - ECDSASign
 
     steps:

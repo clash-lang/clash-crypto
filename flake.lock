@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "clash-compiler": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1766926198,
+        "narHash": "sha256-Dt8EkrmRCpLAbrTwdyAqpmM7NaU1Suh9WFAhg5vZx/c=",
+        "owner": "clash-lang",
+        "repo": "clash-compiler",
+        "rev": "d0f65c47fe946699cb7818d24ae16dd8e7aff286",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "clash-compiler",
+        "type": "github"
+      }
+    },
     "ecpprog": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -73,6 +89,70 @@
         "type": "github"
       }
     },
+    "ghc-tcplugin-api": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768388673,
+        "narHash": "sha256-3RriTela4iwbvHhF3UigmBOfxJv0+YQGAlXQbnXsX74=",
+        "owner": "sheaf",
+        "repo": "ghc-tcplugin-api",
+        "rev": "c583750b5899846cb455f3fe2d58b3ba9bc910d0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sheaf",
+        "repo": "ghc-tcplugin-api",
+        "type": "github"
+      }
+    },
+    "ghc-typelits-extra": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1764765869,
+        "narHash": "sha256-ynlFGRhTcXwG/fgpIk/GAy+mpvo8eBCptTuRWGl/YC4=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-extra",
+        "rev": "db8cfbd17a8c8984d28c8af254cc81860d8430a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-extra",
+        "type": "github"
+      }
+    },
+    "ghc-typelits-knownnat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1760704938,
+        "narHash": "sha256-l1rQk8hQ7ywYGkfT9TtRuP4E1SH4n1LioxquHgzf+rY=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-knownnat",
+        "rev": "47ed62f90218ecf74246caabbbeaeb22e8be8246",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-knownnat",
+        "type": "github"
+      }
+    },
+    "ghc-typelits-natnormalise": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768420697,
+        "narHash": "sha256-igR4OILxX+WmQapDSTMnEJ/8qVLA9Npf3PmZlcnSIdM=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-natnormalise",
+        "rev": "a4fdc5bf17f678e74a47bf3b8924c6a35e214fb2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-natnormalise",
+        "type": "github"
+      }
+    },
     "ghc-typelits-proof-assist": {
       "inputs": {
         "flake-utils": "flake-utils_3",
@@ -90,6 +170,21 @@
       "original": {
         "type": "git",
         "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
+      }
+    },
+    "nix-filter": {
+      "locked": {
+        "lastModified": 1757882181,
+        "narHash": "sha256-+cCxYIh2UNalTz364p+QYmWHs0P+6wDhiWR4jDIKQIU=",
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "rev": "59c44d1909c72441144b93cf0f054be7fe764de5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "nix-filter",
+        "type": "github"
       }
     },
     "nixpkgs": {
@@ -126,11 +221,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1762482733,
-        "narHash": "sha256-g/da4FzvckvbiZT075Sb1/YDNDr+tGQgh4N8i5ceYMg=",
+        "lastModified": 1767364772,
+        "narHash": "sha256-fFUnEYMla8b7UKjijLnMe+oVFOz6HjijGGNS1l7dYaQ=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "e1ebeec86b771e9d387dd02d82ffdc77ac753abc",
+        "rev": "16c7794d0a28b5a37904d55bcca36003b9109aaa",
         "type": "github"
       },
       "original": {
@@ -142,9 +237,15 @@
     },
     "root": {
       "inputs": {
+        "clash-compiler": "clash-compiler",
         "ecpprog": "ecpprog",
         "flake-utils": "flake-utils_2",
+        "ghc-tcplugin-api": "ghc-tcplugin-api",
+        "ghc-typelits-extra": "ghc-typelits-extra",
+        "ghc-typelits-knownnat": "ghc-typelits-knownnat",
+        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise",
         "ghc-typelits-proof-assist": "ghc-typelits-proof-assist",
+        "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs_3"
       }
     },

@@ -8,9 +8,13 @@ dist-newstyle/
 stack.yaml.lock
 tags
 TAGS
+result
+result-log
 /cabal.project.local
 .envrc
 .opam-local/
+_build/
+_build_nix/
 *.o
 *.o-boot
 *.hi

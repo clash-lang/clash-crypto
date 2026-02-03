@@ -1,0 +1,187 @@
+{ lib, pkgs }: rec {
+  cabal = rec {
+    splitTarget = target:
+      let parts = builtins.match "([^:]+)(:([^:]+))?" target;
+          package = builtins.elemAt parts 0;
+          component = builtins.elemAt parts 2;
+      in { inherit package component; };
+
+    munge = component:
+      if component.component == null
+      then component.package
+      else "z-${component.package}-z-${component.component}";
+
+    expose = component:
+      "-package-id $(ghc-pkg --simple-output field ${munge component} id)";
+  };
+
+  onlyClash =
+    { hsPkgs
+    # Target must be in one of two forms:
+    # - For compiled modules: { package = "pkg"; module = "Mod"; }
+    # - For source files:     { source = "/path"; }
+    # Note that source files most likely require you to specify the needed
+    # packages in extraEnvPackages.
+    , target
+    , binding ? "topEntity"
+    , envPackages ? [ "clash-ghc" ] ++ extraEnvPackages ++
+        lib.optional (target ? package) (cabal.splitTarget target.package).package
+    , extraEnvPackages ? []
+    , exposedComponents ? (builtins.map cabal.splitTarget ([
+        "ghc-typelits-natnormalise"
+        "ghc-typelits-extra"
+        "ghc-typelits-knownnat"
+      ] ++ lib.optional (target ? package) target.package)
+    ) ++ extraExposedComponents
+    , extraExposedComponents ? []
+    , env ?
+      (hsPkgs.ghcWithPackages
+        (p: builtins.map (n: builtins.getAttr n p) envPackages)
+      ).overrideAttrs (_: prev: {
+        buildCommand = ''
+          ${prev.buildCommand}
+          ${lib.strings.concatStringsSep "\n" (
+            builtins.map (c: "$out/bin/ghc-pkg expose ${cabal.munge c}") exposedComponents
+          )}
+        '';
+      })
+    , flags ? [ "--verilog" ] ++ extraFlags
+    , extraFlags ? []
+    , ...
+    }@args:
+      pkgs.stdenv.mkDerivation ((builtins.removeAttrs args [ "hsPkgs" "exposedComponents" "extraExposedComponents" "target" ]) // {
+        __contentAddressed = true;
+        outputs = [ "out" "log" ];
+        prePhases = [ "setupLogPhase" ];
+        setupLogPhase = "mkdir -p $log";
+        dontUnpack = true;
+        # GHC outputs useful information on stderr, and Clash outputs useful
+        # information on stdout, so join them in the log file.
+        buildPhase = ''
+          export PATH=${env}/bin:$PATH
+          clash \
+            -package-db ${env}/lib/ghc-*/lib/package.conf.d \
+            -outputdir . \
+            ${lib.strings.escapeShellArgs flags} \
+            ${target.module or target.source} -main-is ${binding} \
+            2>&1 | tee $log/clash.log
+        '';
+        installPhase = ''
+          mkdir -p $out
+          mv */* $out
+          rm $out/clash-manifest.json
+        '';
+      });
+
+  ecp5.clash =
+    { hsPkgs
+    , target
+    , binding ? "topEntity"
+    , name ? "${target}-${binding}"
+    , clashArgs ? {}
+    , ...
+    }@args0:
+      let args = builtins.removeAttrs args0 [ "hsPkgs" "clashArgs" "target" ];
+          clashArgs0 = {
+            inherit hsPkgs target binding;
+            name = "${name}-hdl";
+          };
+          clashSrc = onlyClash (clashArgs0 // clashArgs);
+          synthArgs = args // {
+            inherit name;
+            src = clashSrc;
+          };
+      in ecp5.synthesize synthArgs;
+
+  ecp5.synthesize =
+    # Synthesis options
+    { yosysFlags ? []
+    , yosysVerbosity ? "--quiet"
+
+    # Note that the yosys script commands and flags below are passed as escaped
+    # shell arguments, but are otherwise passed raw to yosys. For example: paths
+    # containing spaces should be quoted for processing by yosys.
+    , preRead    ? ""
+    , read       ? "read_verilog ${readFlags} *.v"
+    , readFlags  ? ""
+    , postRead   ? ""
+    , preSynth   ? ""
+    , synthFlags ? ""
+    , synth      ? "synth_ecp5 ${synthFlags}"
+    , postSynth  ? ""
+    , preWrite   ? ""
+    , write      ? "write_json ${writeFlags} 01-synthesized/top.json"
+    , writeFlags ? ""
+    , postWrite  ? ""
+
+    # Place & route options
+    , nextpnrFlags ? []
+    , nextpnrVerbosity ? "--quiet"
+
+    # Bitstream packing options
+    , ecppackFlags ? []
+    , doCompress ? true
+
+    # Expect at least name, src(s) to be passed along to mkDerivation
+    , ...
+    }@args:
+      let programArg = arg: if arg == "" then ""  else lib.escapeShellArgs [ "-p" arg ];
+      in pkgs.stdenv.mkDerivation (args // {
+        outputs = [ "out" "log" ];
+        prePhases = [ "setupLogPhase" ];
+        setupLogPhase = "mkdir -p $log";
+        nativeBuildInputs = [ pkgs.yosys pkgs.nextpnr pkgs.trellis ];
+        configurePhase = ''
+          mkdir -p 01-synthesized
+          mkdir -p 02-routed
+          mkdir -p 03-bitstream
+        '';
+        buildPhase = ''
+          runPhase synthesizePhase
+          runPhase placeAndRoutePhase
+          runPhase packPhase
+        '';
+        synthesizePhase = ''
+          yosys \
+            ${lib.escapeShellArg yosysVerbosity} \
+            --logfile >(tee $log/synth.log) \
+            ${lib.escapeShellArgs yosysFlags} \
+            ${programArg preRead} \
+            ${programArg read} \
+            ${programArg postRead} \
+            ${programArg preSynth} \
+            ${programArg synth} \
+            ${programArg postSynth} \
+            ${programArg preWrite} \
+            ${programArg write} \
+            ${programArg postWrite}
+        '';
+        placeAndRoutePhase = ''
+          nextpnr-ecp5 \
+            ${lib.escapeShellArg nextpnrVerbosity} \
+            --log >(tee $log/pnr.log) \
+            ${lib.escapeShellArgs nextpnrFlags} \
+            --json 01-synthesized/top.json \
+            --textcfg 02-routed/top.config
+        '';
+        packPhase = ''
+          ecppack \
+            ${lib.escapeShellArgs ecppackFlags} \
+            ${lib.optionalString doCompress "--compress"} \
+            --input 02-routed/top.config \
+            --bit 03-bitstream/top.bit
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp 03-bitstream/top.bit $out/top.bit
+          ${lib.optionalString (pkgs ? ecpprog) ''
+            mkdir -p $out/bin
+            cat <<EOF > $out/bin/upload
+            #!/bin/bash
+            ${pkgs.ecpprog}/bin/ecpprog "\$@" -S $out/top.bit
+            EOF
+            chmod +x $out/bin/upload
+          ''}
+        '';
+      });
+}

@@ -9,7 +9,7 @@ Build and push the image via
 
 ```
 cd .github/setup
-docker build -t ghcr.io/qbaylogic/nix-attic:latest -t ghcr.io/qbaylogic/nix-attic:<today>-<commit>
+./build.sh
 docker login ghcr.io/qbaylogic
 docker push ghcr.io/qbaylogic/nix-attic:latest
 docker push ghcr.io/qbaylogic/nix-attic:<today>-<commit>

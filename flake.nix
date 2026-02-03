@@ -6,87 +6,111 @@
     extra-trusted-public-keys = [ "clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=" ];
   };
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    nix-filter.url = "github:numtide/nix-filter";
     ecpprog.url = "github:diegodiv/ecpprog";
-    ghc-typelits-proof-assist.url = "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist";
+    clash-compiler = {
+      url = "github:clash-lang/clash-compiler";
+      flake = false;
+    };
+    ghc-typelits-proof-assist.url =
+      "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist";
+    ghc-tcplugin-api = { url = "github:sheaf/ghc-tcplugin-api"; flake = false; };
+    ghc-typelits-natnormalise = { url = "github:clash-lang/ghc-typelits-natnormalise"; flake = false; };
+    ghc-typelits-knownnat = { url = "github:clash-lang/ghc-typelits-knownnat"; flake = false; };
+    ghc-typelits-extra = { url = "github:clash-lang/ghc-typelits-extra"; flake = false; };
   };
-  outputs = { nixpkgs, flake-utils, ecpprog, ghc-typelits-proof-assist, ... }:
+  outputs =
+  { self
+  , nixpkgs
+  , flake-utils
+  , nix-filter
+  , ecpprog
+  , clash-compiler
+  , ghc-typelits-proof-assist
+  , ghc-tcplugin-api
+  , ghc-typelits-natnormalise
+  , ghc-typelits-knownnat
+  , ghc-typelits-extra
+  , ...
+  }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system}.extend (_: prev: {
-             yosys = prev.callPackage ./nix/yosys.nix {};
-          });
+      let ghc-version = "ghc9103";
+          config = import ./build-config.nix;
+          src = nix-filter.lib {
+            root = self;
+            exclude = [
+              (nix-filter.lib.matchExt "nix")
+              "flake.lock"
+            ];
+          };
+          ecpprogOverlay = _: _: {
+            ecpprog = ecpprog.defaultPackage.${system};
+          };
+          yosysOverlay = _: prev: {
+            yosys = prev.callPackage ./nix/yosys.nix {};
+          };
+          extensions = [ ecpprogOverlay yosysOverlay ];
+          pkgs0 = nixpkgs.legacyPackages.${system};
+          pkgs = pkgs0.extend (pkgs0.lib.composeManyExtensions extensions);
 
-          serialportSrc = pkgs.fetchFromGitHub {
-            owner = "standardsemiconductor";
-            repo = "serialport";
-            rev = "ce42a5afebb55d2e2e84be7f5386d69c343e3942";
-            sha256 = "sha256-oBG8DylFwzUu212AiNOg2x+D1jmI2hAvMJQT0F8wWlE=";
-          };
-          clashCompilerSrc = pkgs.fetchFromGitHub {
-            owner = "clash-lang";
-            repo = "clash-compiler";
-            rev = "d0f65c47fe946699cb7818d24ae16dd8e7aff286";
-            sha256 = "sha256-Dt8EkrmRCpLAbrTwdyAqpmM7NaU1Suh9WFAhg5vZx/c=";
-          };
-          ghcTcpluginApiSrc = pkgs.fetchFromGitHub {
-            owner = "sheaf";
-            repo = "ghc-tcplugin-api";
-            rev = "c583750b5899846cb455f3fe2d58b3ba9bc910d0";
-            sha256 = "sha256-3RriTela4iwbvHhF3UigmBOfxJv0+YQGAlXQbnXsX74=";
-          };
-          ghcTypelitsNatnormaliseSrc = pkgs.fetchFromGitHub {
-            owner = "clash-lang";
-            repo = "ghc-typelits-natnormalise";
-            rev = "a4fdc5bf17f678e74a47bf3b8924c6a35e214fb2";
-            sha256 = "sha256-igR4OILxX+WmQapDSTMnEJ/8qVLA9Npf3PmZlcnSIdM=";
-          };
-          ghcTypelitsKnownnatSrc = pkgs.fetchFromGitHub {
-            owner = "clash-lang";
-            repo = "ghc-typelits-knownnat";
-            rev = "47ed62f90218ecf74246caabbbeaeb22e8be8246";
-            sha256 = "sha256-l1rQk8hQ7ywYGkfT9TtRuP4E1SH4n1LioxquHgzf+rY=";
-          };
-          ghcTypelitsExtraSrc = pkgs.fetchFromGitHub {
-            owner = "clash-lang";
-            repo = "ghc-typelits-extra";
-            rev = "db8cfbd17a8c8984d28c8af254cc81860d8430a9";
-            sha256 = "sha256-ynlFGRhTcXwG/fgpIk/GAy+mpvo8eBCptTuRWGl/YC4=";
-          };
+          inherit (pkgs) lib;
+          clashLib = import ./nix/clash.nix { inherit pkgs lib; };
+          inherit (pkgs.haskell.lib) dontCheck doJailbreak overrideCabal;
 
-          inherit (pkgs.haskell.lib) dontCheck doJailbreak;
+          hsPkgs0 = pkgs.haskell.packages.${ghc-version};
           overlay = final: prev: {
             clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
-              (clashCompilerSrc + "/clash-prelude") { });
+              (clash-compiler + "/clash-prelude") { });
             clash-prelude-hedgehog = dontCheck (prev.callCabal2nix "clash-prelude-hedgehog"
-              (clashCompilerSrc + "/clash-prelude-hedgehog") { });
+              (clash-compiler + "/clash-prelude-hedgehog") { });
             clash-lib = dontCheck (prev.callCabal2nix "clash-lib"
-              (clashCompilerSrc + "/clash-lib") { });
+              (clash-compiler + "/clash-lib") { });
             clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
-              (clashCompilerSrc + "/clash-ghc") { });
-            serialport = dontCheck (prev.callCabal2nix "serialport" serialportSrc { });
-            ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghcTcpluginApiSrc { });
-            ghc-typelits-natnormalise = dontCheck (prev.callCabal2nix "ghc-typelits-natnormalise" ghcTypelitsNatnormaliseSrc { });
-            ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghcTypelitsKnownnatSrc { });
-            ghc-typelits-extra = dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghcTypelitsExtraSrc { });
-            network = dontCheck (prev.callHackage "network" "3.2.7.0" {});
-            clash-crypto = final.callCabal2nix "clash-crypto" ./. { };
+              (clash-compiler + "/clash-ghc") { });
+            network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
+            ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghc-tcplugin-api { });
+            ghc-typelits-natnormalise = dontCheck (prev.callCabal2nix "ghc-typelits-natnormalise" ghc-typelits-natnormalise { });
+            ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghc-typelits-knownnat { });
+            ghc-typelits-extra = dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghc-typelits-extra { });
             ghc-typelits-proof-assist = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { }));
+            clash-crypto = (overrideCabal (final.callCabal2nix "clash-crypto" src {}) {
+              configureFlags = [
+                "--ghc-option=-DHITLT_BAUD=${config.serial-speed}"
+              ];
+            }).overrideAttrs (_: _: {
+              checkFlags = [ "simulation" ];
+            });
           };
-          myHsPkgs = pkgs.haskell.packages.ghc9103.extend overlay;
-          defaultDevShell = myHsPkgs.shellFor {
+          hsPkgs = hsPkgs0.extend overlay;
+
+          envTools =
+            (with pkgs; [ gnumake yosys nextpnr trellis ]) ++
+            [ pkgs.ecpprog ] ++
+            (with hsPkgs; [ cabal-install ])
+            ;
+          # Environment that is burned in to the CI runner image. The goal is to
+          # alleviate cache.nixos.org a bit, but not over-specify the
+          # environment such that the image needs to be updated often.
+          ciEnv = pkgs.buildEnv {
+            name = "ci-env";
+            paths = envTools ++ (with hsPkgs; [
+              clash-prelude
+              clash-prelude-hedgehog
+              clash-lib
+              clash-ghc
+            ]);
+          };
+          defaultDevShell = hsPkgs.shellFor {
             name = "GHC 9.10.3";
             packages = p: [ p.clash-crypto ];
             shellHook = ''
               SHAKEPATH=`cabal list-bin clash-crypto:shake`
               export PATH="$(dirname $SHAKEPATH):$PATH:$(dirname $SHAKEPATH)"
             '';
-            nativeBuildInputs =
-              with pkgs; [ gnumake yosys nextpnr trellis ] ++
-              (with myHsPkgs; [ cabal-install ]) ++
-              [ecpprog.defaultPackage.${system}]
-              ;
-            };
+            nativeBuildInputs = envTools;
+          };
           opamOverlay = _: prevA: {
             name = prevA.name + " with opam";
             shellHook = prevA.shellHook + ''
@@ -107,9 +131,20 @@
           };
           hlsOverlay = _: prevA : {
             name = prevA.name + " with HLS";
-            nativeBuildInputs = prevA.nativeBuildInputs ++
-                    (with myHsPkgs; [ haskell-language-server ]);
+            nativeBuildInputs =
+              prevA.nativeBuildInputs ++
+              (with hsPkgs; [ haskell-language-server ])
+              ;
           };
+
+          hitltHsPkgs = hsPkgs.extend (_: prev: { clash-crypto = dontCheck prev.clash-crypto; });
+          inherit (import ./nix/hitlt.nix hitltHsPkgs config) hitltBaseArgs hitltTopEntities;
+          clashHitlt = k: v:
+            clashLib.ecp5.clash (lib.recursiveUpdate hitltBaseArgs v // { name = k; });
+          hitlt = builtins.mapAttrs clashHitlt hitltTopEntities;
+          hitltUpload = builtins.mapAttrs (n: _:
+            { upload = { type = "app"; program = "${hitlt.${n}}/bin/upload"; }; }
+          ) hitltTopEntities;
       in
       {
         devShells.default = defaultDevShell;
@@ -117,6 +152,14 @@
         devShells.withHLS = defaultDevShell.overrideAttrs hlsOverlay;
         devShells.allFeatures =
           (defaultDevShell.overrideAttrs hlsOverlay).overrideAttrs opamOverlay;
-        packages.default = dontCheck myHsPkgs.clash-crypto;
+        apps.hitlt = hitltUpload;
+        apps.realize = {
+          type = "app";
+          program = "${./nix/realize.sh}";
+        };
+        packages.default = hsPkgs.clash-crypto;
+        packages.hitlt = hitlt;
+        packages.hitltHsPkgs = hitltHsPkgs;
+        packages.ciEnv = ciEnv;
       });
 }

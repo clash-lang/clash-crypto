@@ -199,14 +199,14 @@ test-suite hitlt
     , bytestring
     , clash-crypto
     , clash-crypto:hitl
-    , clash-crypto:shake-rules
     , clash-crypto:test
     , clash-prelude-hedgehog
     , crypton
     , hedgehog >= 1.0
     , memory
     , modular-arithmetic
-    , serialport >= 0.5.6
+    , serialport >= 0.6.0
+    , process
     , tasty >= 1.5
     , tasty-hedgehog >= 1.2 && < 1.5
 

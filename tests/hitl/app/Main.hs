@@ -24,7 +24,7 @@ import Control.Exception
   ( SomeException, Exception, Handler(..)
   , catches, throw, bracket_
   )
-import Control.Monad (unless)
+import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap)
 import Data.ByteString
@@ -40,19 +40,19 @@ import GHC.IO.Handle (Handle)
 import Hedgehog (PropertyT, (===), property, forAll, MonadGen)
 import Language.Haskell.Unicode (type (≤))
 import System.Exit (ExitCode, exitWith)
-import System.Environment (setEnv, withArgs)
+import System.Environment (setEnv)
 import System.Hardware.Serialport
   ( SerialPortSettings(..), CommSpeed(..)
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
+import System.Process (readProcessWithExitCode)
 import Test.Tasty
   ( TestTree, DependencyType(..)
   , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
   )
 import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
-import Text.Read (readMaybe)
 
 import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
@@ -69,11 +69,6 @@ import Test.Clash.Crypto.Calculator.InverseModulo
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
 import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
-
-import Shake
-  ( ShakeOptions(..), Verbosity(..)
-  , shakeOptions, shakeBuild, configLookup
-  )
 
 import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
@@ -92,11 +87,9 @@ import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
 
 main ∷ IO ()
 main = do
-  lkup ← configLookup
-
-  let serialDev = lkup "HITLT_SERIAL_DEV"
-      serialSpeed = lkup "SERIAL_SPEED"
-      settings = defaultSerialSettings { commSpeed = parseCS serialSpeed }
+  serialDev   <- nixConfig "hitlt-serial-dev"
+  serialSpeed <- nixConfig "serial-speed"
+  let settings = defaultSerialSettings { commSpeed = parseCS serialSpeed }
 
   -- using only a single serial forces us to use single threaded test
   -- executation at this points
@@ -320,15 +313,28 @@ main = do
     = sequentialTestGroup name AllSucceed
         [ localOption (HedgehogTestLimit (Just 1))
             $ testProperty "build bitstream" $ property
-            $ liftIO $ shake [name <> ":bitstream"]
+            $ liftIO $ nixBuild name
         , withResource
-            (upload shake sem dev settings name)
+            (upload sem dev settings name)
             (const $ return ())
             $ const
             $ testProperty "run HITLT" $ property p
         ]
 
-  shake = withArgs [] . shakeBuild shakeOptions { shakeVerbosity = Silent }
+nixBuild ∷ String → IO ()
+nixBuild attr = void $ readProcessWithExitCode "nix" ["run", ".#realize", attr] ""
+
+nixRun ∷ String → IO ()
+nixRun attr = void $ readProcessWithExitCode "nix" ["run", attr] ""
+
+nixConfig ∷ String → IO String
+nixConfig key  = do
+  (_, stdout, _) <-
+    readProcessWithExitCode
+      "nix" ["eval", "--raw", "--file", "build-config.nix", key]
+      ""
+  return stdout
+
 
 runHitltCLU ∷
   ∀ (p ∷ Nat). (KnownNat p, 1 ≤ p, ModSize p ~ ModSize SecP256ModPrime) ⇒
@@ -529,18 +535,17 @@ runHitltHMACSHA alg sem dev settings key msg
     | otherwise            = error $ "Invalid key size: " <> show n
 
 upload ∷
-  ([String] → IO ()) →
   QSem →
   FilePath →
   SerialPortSettings →
   String →
   IO()
-upload shake sem dev settings name
+upload sem dev settings name
   = bracket_ (waitQSem sem) (signalQSem sem)
   $ hWithSerial dev settings $ \serial → do
       hSetBuffering serial NoBuffering
       -- upload the bitstream
-      shake [name <> ":upload"]
+      nixRun (".#hitlt." <> name <> ".upload")
       -- wait for the device ready indicator byte once
       TO.timeout hitltTimeoutTime (waitForReadyByte serial)
         >>= maybe (throw $ hitltTimeoutErr 1 BS.empty) return
@@ -676,9 +681,7 @@ parseCS = \case
   "38400"  → CS38400
   "57600"  → CS57600
   "115200" → CS115200
-  str      → case readMaybe str of
-    Nothing → error $ "Invalid baud: " <> str
-    Just cs → CS cs
+  str      → error $ "Invalid baud: " <> str
 
 newtype HitltTimeout = HitltTimeout String
 instance Show HitltTimeout where show (HitltTimeout msg) = msg

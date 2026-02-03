@@ -1,5 +1,5 @@
 name: "HITLT"
-description: "Run Synthesis, P&R, and the hardware-in-the-loop tests"
+description: "Run the hardware-in-the-loop tests"
 
 inputs:
   testcase:
@@ -15,24 +15,13 @@ runs:
       run: ls /dev/ttyPmodUSB0 > /dev/null
     - name: "Fix the interface to be used for testing"
       shell: bash
-      run: echo "HITLT_SERIAL_DEV=/dev/ttyPmodUSB0" > build.cfg.local
+      run: echo "{ hitlt-serial-dev = \"/dev/ttyPmodUSB0\"; }" > build-config-local.nix
     - name: "Pull the Nix devShell from the cache"
       shell: bash
-      run: nix build .#devShells.x86_64-linux.default
-    - name: "Build shake"
-      shell: bash
-      run: nix develop --command bash -c "cabal build clash-crypto:shake"
+      run: nix build --no-link .#devShells.x86_64-linux.default
     - name: "Run synthesis, P&R, and the test(s)"
       shell: bash
       run: |
         nix develop \
           --command bash \
           -c "cabal run -- hitlt -p ${{ inputs.testcase }}"
-    - name: "Upload Logs"
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: ${{ inputs.testcase }}-logs
-        path: |
-          _build/**/*.log
-        retention-days: 14
