@@ -46,7 +46,7 @@ import System.Hardware.Serialport
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
-import System.Process (callProcess, readProcess)
+import System.Process (callProcess, readProcess, readProcessWithExitCode)
 import Test.Tasty
   ( TestTree, DependencyType(..)
   , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
@@ -325,7 +325,7 @@ nixBuild ∷ String → IO ()
 nixBuild  attr = callProcess "nix" ["run", ".#realize", attr]
 
 nixRun ∷ String → IO ()
-nixRun    attr = void $ readProcess "nix" ["run", attr] ""
+nixRun    attr = void $ readProcessWithExitCode "nix" ["run", attr] ""
 
 nixConfig ∷ String → IO String
 nixConfig key  =
