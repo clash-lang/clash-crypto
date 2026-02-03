@@ -46,7 +46,7 @@ import System.Hardware.Serialport
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
-import System.Process (callProcess, readProcess, readProcessWithExitCode)
+import System.Process (readProcessWithExitCode)
 import Test.Tasty
   ( TestTree, DependencyType(..)
   , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
@@ -322,14 +322,18 @@ main = do
         ]
 
 nixBuild ∷ String → IO ()
-nixBuild  attr = callProcess "nix" ["run", ".#realize", attr]
+nixBuild attr = void $ readProcessWithExitCode "nix" ["run", ".#realize", attr] ""
 
 nixRun ∷ String → IO ()
-nixRun    attr = void $ readProcessWithExitCode "nix" ["run", attr] ""
+nixRun attr = void $ readProcessWithExitCode "nix" ["run", attr] ""
 
 nixConfig ∷ String → IO String
-nixConfig key  =
-  readProcess "nix" ["eval", "--raw", "--file", "build-config.nix", key] ""
+nixConfig key  = do
+  (_, stdout, _) <-
+    readProcessWithExitCode
+      "nix" ["eval", "--raw", "--file", "build-config.nix", key]
+      ""
+  return stdout
 
 
 runHitltCLU ∷
