@@ -260,7 +260,7 @@ data RIndex (main ∷ group) (subroutine ∷ group) = RIndex
 
 deriving instance
   ( KnownNat (InstructionCount subroutine)
-  , KnownNat (RepetitionBound# 0 (Instructions main))
+  , KnownNat (RepetitionBound# (Instructions main))
   , 1 ≤ InstructionCount subroutine
   ) ⇒ BitPack (RIndex main subroutine)
 
@@ -293,11 +293,10 @@ data RoutineFacts (routine ∷ group) (a ∷ Type) where
         a
         (Instructions routine)
     , InstanceAll (Routines routine) KnownInstructionCount
-    , InstanceAll (Routines routine) KnownSubRoutineCount
+    , InstanceAll (Routines routine) KnownCallDepth
     , InstanceAll (Routines routine) KnownArgCount
     , InstanceAll (Routines routine) KnownResultCount
     , InstanceAll (Routines routine) KnownRequiredStackSize
-    , InstanceAll (Routines routine) KnownInstructionBound
     , InstanceAll (Routines routine) KnownRepetitionBound
     ) ⇒ RoutineFacts routine a
 
@@ -306,6 +305,9 @@ instance KnownNat (InstructionCount r)  ⇒ KnownInstructionCount r
 
 class    KnownNat (SubRoutineCount r)   ⇒ KnownSubRoutineCount r
 instance KnownNat (SubRoutineCount r)   ⇒ KnownSubRoutineCount r
+
+class    KnownNat (CallDepth r)         ⇒ KnownCallDepth r
+instance KnownNat (CallDepth r)         ⇒ KnownCallDepth r
 
 class    KnownNat (ArgCount r)          ⇒ KnownArgCount r
 instance KnownNat (ArgCount r)          ⇒ KnownArgCount r
@@ -329,78 +331,93 @@ type InstructionCount routine = Length (Instructions routine)
 type SubRoutineCount routine = Length (SubRoutines routine)
 
 -- | Lists all the subroutines of a routine.
-type SubRoutines routine = SubRoutines# '[] (Instructions routine)
+type SubRoutines routine = SubRoutines# (Instructions routine)
 type SubRoutines# ∷
   ∀ routine group n m k p a.
-  SortedList routine →
   [Instruction group n m k p a] →
   SortedList routine
-type family SubRoutines# a xs
+type family SubRoutines# xs
  where
-  SubRoutines# a (RUN _ s : xr)
-    = SubRoutines# (SLInsert s (SLMerge a (SubRoutines s))) xr
-  SubRoutines# a (_ : xr) = SubRoutines# a xr
-  SubRoutines# a '[] = a
+  SubRoutines# (RUN _ r : xr)
+    = SLInsert r (SLMerge (SubRoutines r) (SubRoutines# xr))
+  SubRoutines# (_ : xr) = SubRoutines# xr
+  SubRoutines# '[] = '[]
 
 -- | Retrieves the maximum length of the instruction sequences
 -- utilized by a given routine.
-type InstructionBound routine = InstructionBound# 0 (Routines routine)
-type InstructionBound# ∷ ∀ routine. Nat → [routine] → Nat
-type family InstructionBound# n rs
+type InstructionBound routine = InstructionBound# (Routines routine)
+type InstructionBound# ∷ ∀ routine. [routine] → Nat
+type family InstructionBound# rs
  where
-  InstructionBound# n '[]      = n
-  InstructionBound# n (x : xr) =
-    InstructionBound# (Max n (InstructionCount x)) xr
+  InstructionBound# (x : xr) = Max (InstructionCount x) (InstructionBound# xr)
+  InstructionBound# '[] = 0
 
 -- | Retrieves the maximum number of iterations of all subroutines
 -- utilized by the given routine.
-type RepetitionBound routine = 1 + RepetitionBound# 0 (Instructions routine)
-type RepetitionBound# ∷ Nat → [Instruction group n m k p a] → Nat
-type family RepetitionBound# n rs
+type RepetitionBound routine = 1 + RepetitionBound# (Instructions routine)
+type RepetitionBound# ∷ [Instruction group n m k p a] → Nat
+type family RepetitionBound# is
  where
-  RepetitionBound# n '[] = n
-  RepetitionBound# n (RUN k r : xr) =
-    RepetitionBound# (RepetitionBound# (Max n k) (Instructions r)) xr
-  RepetitionBound# n (_: xr) =
-    RepetitionBound# n xr
+  RepetitionBound# (RUN k r : xr) =
+    Max k (Max (RepetitionBound# (Instructions r)) (RepetitionBound# xr))
+  RepetitionBound# (_ : xr) = RepetitionBound# xr
+  RepetitionBound# '[] = 0
+
+-- | Retrieves the depth of the call tree of a given routine.
+type CallDepth routine = 1 + CallDepth# (Instructions routine)
+type CallDepth# ∷ [Instruction group n m k p a] → Nat
+type family CallDepth# is
+ where
+  CallDepth# (RUN _ r : xr) =
+    Max (CallDepth r) (CallDepth# xr)
+  CallDepth# (_ : xr) = CallDepth# xr
+  CallDepth# '[] = 0
 
 --------------------------------------------------------------------------------
 
 -- | Stack Requirements Profile
 data StackProfile = StackProfile
-  { -- | relative pointer to the stack starting at zero
+  { -- | a relative pointer to the stack ending at zero
     stackPointer ∷ ℤ
-    -- | always positive, i.e., we don't need the sign
+    -- | the upper bound of stack positions accessed relative to zero;
+    -- always positive, i.e., it suffices to store the absolute value
   , upperBound ∷ Nat
-    -- | always negative, i.e., we don't need the sign
+    -- | the lower bound of stack positions accessed relative to zero;
+    -- always negative, i.e., it suffices to store the absolute value
   , lowerBound ∷ Nat
   }
 
 -- | Retrieves the stack requirement profile for a given routine.
-type GetProfile routine
-  = GetProfile# ('StackProfile (Toℤ 0) 0 0) (Instructions routine)
-type GetProfile# ∷
-  StackProfile →
-  [Instruction group Nat Nat Nat Nat a] →
-  StackProfile
-type family GetProfile# p is
+type GetProfile routine = GetProfile# (Instructions routine)
+type GetProfile# ∷ [Instruction group Nat Nat Nat Nat a] → StackProfile
+type family GetProfile# is
  where
-  GetProfile# p '[] = p
-  GetProfile# p (i : is) = GetProfile# (Requirements p i) is
+  GetProfile# '[] = 'StackProfile (Toℤ 0) 0 0
+  GetProfile# (i : is) = Requirements i (GetProfile# is)
 
 -- | The number of arguments being read from the stack.
 type ArgCount routine = ArgCount# (GetProfile routine)
 type ArgCount# ∷ StackProfile → Nat
 type family ArgCount# p
  where
-  ArgCount# ('StackProfile _ _ l) = l
+  -- The number of arguments is given by the number of stack addresses
+  -- accessed below the initial position of the stack pointer. The
+  -- initial position is stored in the profile after evaluating
+  -- 'GetProfile'. Hence, the number of arguments is given by the
+  -- distance of the initial stack pointer to the lower bound.
+  ArgCount# ('StackProfile p _ l) = Abs (p .+. Toℤ l)
 
 -- | The number of results remaining on the stack after execution.
 type ResultCount routine = ResultCount# (GetProfile routine)
 type ResultCount# ∷ StackProfile → Nat
 type family ResultCount# p
  where
-  ResultCount# ('StackProfile p _ l) = Abs (Toℤ l .+. p)
+  -- The remaining number of results on the stack after execution is
+  -- given by the distance of the final stack pointer to the lower
+  -- bound. However, the final stack pointer ends at zero by
+  -- definition. Hence, the remaining number of results on the stack
+  -- is given by the lower bound.
+  ResultCount# ('StackProfile _ _ l) = l
 
 -- | The maximum stack size needed to run a routine and all its
 -- subroutines.
@@ -408,40 +425,67 @@ type RequiredStackSize routine = RequiredStackSize# (GetProfile routine)
 type RequiredStackSize# ∷ StackProfile → Nat
 type family RequiredStackSize# p
  where
+  -- The distance between the lower and upper bounds determines the
+  -- required size of the stack.
   RequiredStackSize# ('StackProfile _ u l) = u + l
 
 -- | The folding function utilized by 'GetProfile'.
 type Requirements ∷
-  StackProfile →
   Instruction group Nat Nat Nat Nat a →
+  StackProfile →
   StackProfile
-type family Requirements p i
+type family Requirements i p
  where
-   Requirements ('StackProfile p u l) (PUT _) =
-     'StackProfile (Inc p) (Maxℤ u (Inc p)) l
+   -- Note that in all of the calculations below the upper and lower
+   -- bounds simply track the stack access maxima resulting from the
+   -- operations.
+   Requirements (PUT _) ('StackProfile p u l) =
+     -- Putting an element onto the stack will increase it by one.
+     -- Hence, the pointer before the operation must be one less.
+     'StackProfile (Dec p) u (Minℤ l (Dec p))
 
-   Requirements ('StackProfile p u l) (POP n) =
-     'StackProfile (p .-. Toℤ n) u (Minℤ l (p .-. Toℤ n))
+   Requirements (POP n) ('StackProfile p u l) =
+     -- Popping n elements from the stack will decrease it by n. Hence,
+     -- the pointer before the operation must be n elements larger.
+     'StackProfile (p .+. Toℤ n) (Maxℤ u (p .+. Toℤ n)) l
 
-   Requirements ('StackProfile p u l) (SWP n) =
+   Requirements (SWP n) ('StackProfile p u l) =
+     -- Swapping the n-th element does not change the pointer, but it
+     -- gives evidence about the existence of a swappable element at
+     -- the pointer position minus (n + 1), e.g., `SWP 0` is a no-op
+     -- while still giving evidence that there must be at least one
+     -- element on the stack.
      'StackProfile p u (Minℤ l (p .-. Toℤ (n + 1)))
 
-   Requirements ('StackProfile p u l) (CUP n) =
-     'StackProfile (Inc p) (Maxℤ u (Inc p)) (Minℤ l (p .-. Toℤ (n + 1)))
+   Requirements (CUP n) ('StackProfile p u l) =
+     -- Copying the n-th element to the top of the stack has the same
+     -- profile as first adding a dummy element to the stack [PUT _]
+     -- and then swapping the (n + 1)-th element instead [SWP (n + 1)].
+     'StackProfile (Dec p) u (Minℤ l (p .-. Toℤ (n + 2)))
 
-   Requirements ('StackProfile p u l) (CLU _ _) =
-     'StackProfile (Dec p) u (Minℤ l (p .-. Toℤ 2))
+   Requirements (CLU _ _) ('StackProfile p u l) =
+     -- Executing a CLU operation has the same stack profile as popping
+     -- two elements from the stack [POP 2] and then putting a result
+     -- afterwards [PUT _]. Note that `Minℤ l (Dec (p .+. Toℤ 2)) ≡ l`
+     -- by construction.
+     'StackProfile (Inc p) (Maxℤ u (p .+. Toℤ 2)) l
 
-   Requirements p (RUN k r) = Attach k p (GetProfile r)
+   Requirements (RUN k r) p =
+     -- See 'Attach'.
+     Attach k p (GetProfile r)
 
 -- | Combines the stack profile of a subroutine with the one of the
 -- calling routine.
 type Attach ∷ Nat → StackProfile → StackProfile → StackProfile
 type family Attach k a b
  where
+  -- Not running a routine will not change the stack profile.
   Attach 0 s _ = s
+  -- Running a routine k times will move the stack pointer k times
+  -- relatively to the stack profile of that routine. The same
+  -- principle applies for both extremes.
   Attach k ('StackProfile p0 u0 l0) ('StackProfile p1 u1 l1) =
     'StackProfile
       (p0 .+. (Toℤ k .*. p1))
-      (Maxℤ (Maxℤ u0 (Toℤ u1)) (p0 .+. ((Dec (Toℤ k)) .*. p1) .+. Toℤ u1))
-      (Minℤ (Minℤ l0 (Toℤ l1)) (p0 .+. ((Dec (Toℤ k)) .*. p1) .-. Toℤ l1))
+      (Maxℤ u0 (p0 .+. (Toℤ k .*. p1) .+. Toℤ u1))
+      (Minℤ l0 (p0 .+. (Toℤ k .*. p1) .-. Toℤ l1))
