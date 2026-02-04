@@ -23,7 +23,7 @@ import qualified Data.ByteArray as Memory
 import qualified Clash.Sized.Vector as Vec
 
 tastyTests ∷ TestTree
-tastyTests = testGroup "Test.Clash.Crypto.ECDSA.Nonce"
+tastyTests = testGroup "Test.Clash.Crypto.ECDSA.DeterministicNonce"
   [ testProperty "Nonce generation" $ property $ do
       message <- forAll $ Gen.bytes (Range.linear 1 1000)
       pK      <- forAll

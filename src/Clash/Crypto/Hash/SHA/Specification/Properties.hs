@@ -34,9 +34,11 @@ data SHAFacts (alg ∷ SHA) where
     , SHAHashCompute alg
     , 1 ≤ BlockSize alg
     , 1 ≤ BlockSize alg `Div` 8
+    , 8 ≤ BlockSize alg
     , 1 ≤ ScheduleCount alg
     , 1 ≤ WordSize alg
     , 1 ≤ MessageDigestSize alg
+    , 1 ≤ MessageDigestSize alg `Div` 8
     , 1 ≤ HashValueWords alg * WordSize alg
     , 2 ^ SizeBits alg
         ~ BlockSize alg * ((2 ^ SizeBits alg) `Div` BlockSize alg)
@@ -44,6 +46,7 @@ data SHAFacts (alg ∷ SHA) where
     , MessageDigestSize alg ≤ HashValueWords alg * WordSize alg
     , MessageDigestSize alg ≤ BlockSize alg
     , BlockSize alg ~ 16 * WordSize alg
+    , BlockSize alg `Mod` 8 ~ 0
     , MessageDigestSize alg `Mod` 8 ~ 0
     ) ⇒
     SHAFacts alg
