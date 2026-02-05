@@ -6,6 +6,7 @@ Stability   : experimental
 Portability : POSIX
 
 Some extra type families and properties for type level naturals.
+Rocq proofs require 8.20.0 or higher.
 -}
 
 {-# LANGUAGE UndecidableInstances #-}
@@ -18,7 +19,10 @@ module Data.Constraint.Nat.Extra
   ( -- * Type Families
     DDiv
     -- * Proven Evidience
+  , DivRuMulGE
+  , DivRuMulGeOne
   , TimesMod
+  , AddMod
   , LeTrans
   , ModBound
   , CondMonotoneGE
@@ -26,6 +30,7 @@ module Data.Constraint.Nat.Extra
   , CancelMultiple
   , CancelFactor
   , MinOverLE
+  , MaxOverLE
   , HalfIsLess
   , HalfIsLessInverse
   , CLog2KeepsPositive
@@ -60,6 +65,40 @@ type family DDiv n m where
           )
       )
 
+instance (1 <= b) ⇒ DivRuMulGE a b
+class (a <= (a + (b - 1)) `Div` b * b) ⇒ DivRuMulGE a b
+
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. 1 ≤ b → a ≤ ((a + (b - 1) / b) * b)
+--
+{-/ Proof (Coq): DivRuMulGE
+ Require Import Arith.
+ Require Import Lia.
+ intros.
+ specialize (Nat.div_mod (a + (b - 1)) b).
+ assert ((a + (b - 1)) mod b < b) by (apply Nat.mod_upper_bound; lia).
+ lia.
+/-}
+instance DivRuMulGE a b ⇒ QED (DivRuMulGE a b)
+
+instance (1 <= a, 1 <= b) ⇒ DivRuMulGeOne a b
+class (1 <= (a + (b - 1)) `Div` b) ⇒ DivRuMulGeOne a b
+
+-- ^ Evidence for
+--
+-- prop> ∀ a b ∈ ℕ. 1 ≤ a, 1 ≤ b → 1 ≤ ((a + (b - 1) / b) * b)
+--
+{-/ Proof (Coq): DivRuMulGeOne
+ Require Import Arith.
+ Require Import Lia.
+ intros.
+ specialize (Nat.div_mod (a + (b - 1)) b).
+ assert ((a + (b - 1)) mod b < b) by (apply Nat.mod_upper_bound; lia).
+ lia.
+/-}
+instance DivRuMulGeOne a b ⇒ QED (DivRuMulGeOne a b)
+
 instance
   ( 1 <= c
   ) ⇒ TimesMod a b c
@@ -80,6 +119,28 @@ class
   reflexivity.
 /-}
 instance TimesMod a b c ⇒ QED (TimesMod a b c)
+
+instance
+  ( 1 <= c
+  ) ⇒ AddMod a b c
+class
+  ( (a + b) `Mod` c ~ ((a `Mod` c) + (b `Mod` c)) `Mod` c
+  ) ⇒ AddMod a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. c > 0 → (a + b) mod c ≡ ((a mod c) + (b mod c)) mod c
+--
+{-/ Proof (Coq): AddMod
+  Require Import Arith.
+  Import Nat.
+  intros a b c cpos.
+  rewrite <- neq_0_le_1 in cpos.
+  Search "idemp".
+  rewrite Div0.add_mod_idemp_l.
+  rewrite Div0.add_mod_idemp_r.
+  reflexivity.
+/-}
+instance AddMod a b c ⇒ QED (AddMod a b c)
 
 instance
   ( a <= b, b <= c
@@ -159,7 +220,7 @@ class
   - apply Hb.
   - apply Hc.
 /-}
-instance CondMonotoneGE a b c x => QED (CondMonotoneGE a b c x)
+instance CondMonotoneGE a b c x ⇒ QED (CondMonotoneGE a b c x)
 
 instance
   ( 1 <= b, a `Mod` b ~ 0
@@ -228,6 +289,23 @@ class
 -- MinOverLE _ _ (suc _) = ⊓-pres-m<
 -- /-}
 instance MinOverLE a b c ⇒ QED (MinOverLE a b c)
+
+instance
+  ( c <= a, c <= b
+  ) ⇒ MaxOverLE a b c
+class
+  ( c <= Max a b
+  ) ⇒ MaxOverLE a b c
+-- ^ Evidence for
+--
+-- prop> ∀ a b c ∈ ℕ. c ≤ a ∧ c ≤ b → c ≤ max a b
+--
+{-/ Proof (Coq): MaxOverLE
+  Require Import Arith.
+  intros a b c H0 H1.
+  apply (Nat.max_le_iff a b c) ; auto.
+/-}
+instance MaxOverLE a b c ⇒ QED (MaxOverLE a b c)
 
 instance HalfIsLess n
 class

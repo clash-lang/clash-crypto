@@ -113,6 +113,7 @@ shakeRules cfgs wanted = do
 
   hitltRules "BEA" "BEA" []
   hitltRules "CLU" "CLU" []
+  hitltRules "DeterministicNonce" "DeterministicNonce" []
   hitltRules "FastGCD" "FastGCD" []
   hitltRules "FltCtmi" "FltCtmi" []
   hitltRules "Karatsuba" "Karatsuba" []

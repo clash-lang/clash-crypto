@@ -76,7 +76,7 @@ data Frame s e a where
   -- | The 'Middle' frame holds some intermediate data chunk of the
   -- message.
   Middle ∷ a → Frame s e a
-  -- | The 'End' frame completes the transfer of a message. It hold
+  -- | The 'End' frame completes the transfer of a message. It holds
   -- the final data chunk of the message and some additional data (if
   -- useful for the application). Choose @e@ to be an empty data type,
   -- if not required.

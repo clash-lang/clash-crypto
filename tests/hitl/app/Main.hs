@@ -56,7 +56,8 @@ import Text.Printf (printf)
 
 import Clash.Sized.Stack (StackAction(..), stack)
 import Clash.Crypto.Hash.SHA
-  ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA
+  ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA,
+  Digest
   )
 import Clash.Crypto.Calculator.ISA
   ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime
@@ -69,6 +70,9 @@ import Test.Clash.Crypto.Calculator.InverseModulo
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
 import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
+
+import Data.Constraint.Nat.Extra (CancelMultiple)
+import GHC.TypeNats.Proof (Rewrite(..), using)
 
 import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
@@ -84,6 +88,8 @@ import qualified Crypto.MAC.HMAC     as HMAC
 import Crypto.ECC (Curve_P256R1, EllipticCurve (..))
 import Crypto.Error (throwCryptoError)
 import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
+import qualified Crypto.PubKey.ECC.ECDSA as Spec
+import qualified Crypto.PubKey.ECC.Types as Spec
 
 main ∷ IO ()
 main = do
@@ -120,6 +126,10 @@ main = do
             ]
         , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
+            ]
+        , testGroup "Clash.Crypto.ECDSA.DeterministicNonce"
+            [ testDeterministicNonce SHA256 "DeterministicNonce" sem dev
+                                     settings
             ]
         , testGroup "Clash.Crypto.Calculator.Karatsuba"
             [ testKaratsuba "Karatsuba" sem dev settings
@@ -301,6 +311,21 @@ main = do
         key ← forAll $ Gen.bytes $ Range.linear 1 n
         msg ← forAll $ Gen.bytes $ Range.linear 1 499
         runHitltHMACSHA alg sem dev settings key msg
+
+  testDeterministicNonce ∷
+    ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
+             Hash.HashAlgorithm (CryptoToHash alg)) ⇒
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testDeterministicNonce alg name sem dev settings
+    = test sem dev settings name $ do
+        bs ← forAll $ Gen.bytes $ Range.linear 1 1000
+        pk ← forAll
+         $ Gen.integral (Range.linear 1 (natToNum @SecP256OrdPrime - 1))
+        runHitltDeterministicNonce alg sem dev settings bs pk
 
   test ∷
     QSem →
@@ -507,6 +532,29 @@ runHitltSHA alg sem dev settings input | SHAFacts ← knownSHA alg =
   bs = escapeAndTerminate input
   eq = cryptoHash alg input
  in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings bs eq
+
+runHitltDeterministicNonce ∷
+  ∀ (alg ∷ SHA) →
+  (KnownSHA alg, CryptoHash alg, Hash.HashAlgorithm (CryptoToHash alg)) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  Integer →
+  PropertyT IO ()
+runHitltDeterministicNonce alg sem dev settings message pk
+ | SHAFacts ← knownSHA alg
+ , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8) =
+ let
+  toBS   = pack . toList . bitCoerce . fromInteger @(Digest alg)
+  refDig = cryptoHash# (Proxy @alg) message
+  h = pack $ Memory.unpack refDig
+  p = pack $ Vec.toList $ bitCoerce
+    $ fromInteger @(Unsigned (MessageDigestSize SHA256)) pk
+  pKref  = Spec.PrivateKey (Spec.getCurveByName Spec.SEC_p256r1) pk
+  ref    = Spec.deterministicNonce Hash.SHA256 pKref refDig $ Just . toBS
+ in runHitlt (MessageDigestSize alg `Div` 8) sem dev settings
+   (escapeAndTerminate $ p `append` h) ref
 
 runHitltHMACSHA ∷
   ∀ (alg ∷ SHA) →
