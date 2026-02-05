@@ -156,8 +156,15 @@ deriveNonce p alg seedMaterial shaOutput
        res = getHighPart nS.resultAcc
    in case s.nonceStage of
     NonceLoopCheck i | res /= 0 && res < natToNum @p && i == maxBound ->
-     (initS, (baseOutput initS) { result = Fresh $ bitCoerce res })
-     where initS = initialState { isResult = True, resultAcc = nS.resultAcc }
+     ( initialState
+         { isResult = True
+         , resultAcc = nS.resultAcc
+         }
+     , NonceOutput
+         { result = Fresh $ bitCoerce res
+         , hmacInput = NoData
+         }
+     )
     _ -> (outS, (baseOutput outS) { hmacInput = firstByte outS } )
 
 
