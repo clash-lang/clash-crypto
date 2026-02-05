@@ -324,7 +324,7 @@ main = do
     = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 1 1000
         pk ← forAll
-         $ Gen.integral (Range.linear 1 (natToNum @SecP256ModPrime - 1))
+         $ Gen.integral (Range.linear 1 (natToNum @SecP256OrdPrime - 1))
         runHitltDeterministicNonce alg sem dev settings bs pk
 
   test ∷
