@@ -46,7 +46,9 @@ import System.Hardware.Serialport
   , defaultSerialSettings, hWithSerial
   )
 import System.IO (BufferMode(..), hSetBuffering)
-import System.Process (readProcessWithExitCode)
+import System.Process
+  ( readCreateProcess, CreateProcess(..), proc, StdStream(..)
+  )
 import Test.Tasty
   ( TestTree, DependencyType(..)
   , defaultMain, localOption, sequentialTestGroup, testGroup, withResource
@@ -321,19 +323,25 @@ main = do
             $ testProperty "run HITLT" $ property p
         ]
 
+readProcessSilently :: FilePath -> [String] -> IO String
+readProcessSilently path args = readCreateProcess silentProc ""
+ where
+  baseProc = proc path args
+  silentProc = baseProc { std_err = CreatePipe }
+
+callProcessSilently :: FilePath -> [String] -> IO ()
+callProcessSilently path args =
+  void $ readProcessSilently path args
+
 nixBuild ∷ String → IO ()
-nixBuild attr = void $ readProcessWithExitCode "nix" ["run", ".#realize", attr] ""
+nixBuild attr = callProcessSilently "nix" ["run", ".#realize", attr]
 
 nixRun ∷ String → IO ()
-nixRun attr = void $ readProcessWithExitCode "nix" ["run", attr] ""
+nixRun attr = callProcessSilently "nix" ["run", attr]
 
 nixConfig ∷ String → IO String
-nixConfig key  = do
-  (_, stdout, _) <-
-    readProcessWithExitCode
-      "nix" ["eval", "--raw", "--file", "build-config.nix", key]
-      ""
-  return stdout
+nixConfig key =
+  readProcessSilently "nix" ["eval", "--raw", "--file", "build-config.nix", key]
 
 
 runHitltCLU ∷
