@@ -74,11 +74,6 @@ import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)
 
-import Shake
-  ( ShakeOptions(..), Verbosity(..)
-  , shakeOptions, shakeBuild, configLookup
-  )
-
 import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
   ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate
