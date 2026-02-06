@@ -24,7 +24,7 @@ import Language.Haskell.Unicode (type (≤))
 import Clash.Crypto.Hash.SHA.Specification.Types
 import Clash.Crypto.Hash.SHA.Specification.Definitions
 
--- | We collect all required properties via the 'SHAFacts' class.
+-- | We collect all required properties via the t'SHAFacts' class.
 data SHAFacts (alg ∷ SHA) where
   SHAFacts ∷
     ( KnownNat (WordSize alg)
@@ -58,6 +58,7 @@ data SHAFacts (alg ∷ SHA) where
 -- instance of the class.
 class KnownSHA alg
  where
+  -- | Returns already proven evidence in form of a dictionary.
   knownSHA ∷ ∀ x → x ~ alg ⇒ SHAFacts alg
 
 instance

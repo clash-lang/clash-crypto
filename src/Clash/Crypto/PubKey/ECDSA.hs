@@ -27,7 +27,7 @@ import Clash.Prelude.Safe
 import Clash.Class.Counter (Counter(..))
 
 -- | Weierstrass elliptic curve of the form @y² = x³ + Ax + B@ over a Galois
--- field of a prime order, and a base point @G@ (loosely: generator) of prime
+-- field of a prime order and a base point @G@ (loosely: generator) of prime
 -- order in the elliptic curve.
 data Curve p a =
   Curve
@@ -39,14 +39,31 @@ data Curve p a =
   , curveBasePointOrder ∷ p
   }
 
+-- | A type family to access the 'curveFieldPrime' field.
 type family Q  c where Q  ('Curve q _ _ _ '(_, _) _) = q
+
+-- | A type family to access the 'curveFieldMsb' field.
 type family QL c where QL ('Curve _ l _ _ '(_, _) _) = l
+
+-- | A type family to access the 'curveParameterA' field.
 type family A  c where A  ('Curve _ _ a _ '(_, _) _) = a
+
+-- | A type family to access the 'curveParameterB' field.
 type family B  c where B  ('Curve _ _ _ b '(_, _) _) = b
+
+-- | A type family to access the x-coordinate of the 'curveBasePoint'
+-- field.
 type family GX c where GX ('Curve _ _ _ _ '(x, _) _) = x
+
+-- | A type family to access the y-coordinate of the 'curveBasePoint'
+-- field.
 type family GY c where GY ('Curve _ _ _ _ '(_, y) _) = y
+
+-- | A type family to access the 'curveBasePointOrder' field.
 type family N  c where N  ('Curve _ _ _ _ '(_, _) n) = n
 
+-- | A type alias collecting the 'KnownNat' constraints of all the
+-- fields of a t'Curve'.
 type KnownCurve c =
   ( KnownNat (QL c)
   , KnownNat (A c)
@@ -57,6 +74,7 @@ type KnownCurve c =
   , KnownNat (N c)
   )
 
+-- | The @SECP256R1@ elliptic curve.
 type SECP256R1 ∷ Curve Nat Nat
 type SECP256R1 =
   'Curve
@@ -74,6 +92,7 @@ type SECP256R1 =
   ) {- curveBasePointOrder -}
     0xffffffff_00000000_ffffffff_ffffffff_bce6faad_a7179e84_f3b9cac2_fc632551
 
+-- | The calculator routines for signing a payload using ECDSA.
 data Routine p a (c ∷ Curve p a)
   -- | Perform the elliptic curve digital signature algorithm on a hash value
   -- @h@ given a nonce @k@ and the private key @d@. The value returned is @r s@,
@@ -141,6 +160,7 @@ data Routine p a (c ∷ Curve p a)
   | IsZero
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Show)
 
+-- | A type family for easy comparison of 'Routine's via indicies.
 type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
   RoutineIndex SignHash           = 0
   RoutineIndex PointScalarMul     = 1
@@ -154,19 +174,31 @@ type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
 type instance Compare (r₁ ∷ Routine p a c) (r₂ ∷ Routine p a c) =
   Compare (RoutineIndex r₁) (RoutineIndex r₂)
 
+-- | Addition within the 'Q' field of 'SECP256R1'.
 type ADD_Q = ADD (Q SECP256R1)
+-- | Substraction within the 'Q' field of 'SECP256R1'.
 type SUB_Q = SUB (Q SECP256R1)
+-- | Multiplication within the 'Q' field of 'SECP256R1'.
 type MUL_Q = MUL (Q SECP256R1)
+-- | Modulo inverse within the 'Q' field of 'SECP256R1'.
 type INV_Q = INV (Q SECP256R1)
+-- | Bit test within the 'Q' field of 'SECP256R1'.
 type BIT_Q = BIT (Q SECP256R1)
 
+-- | Addition within the 'N' field of 'SECP256R1'.
 type ADD_N = ADD (N SECP256R1)
+-- | Multiplication within the 'N' field of 'SECP256R1'.
 type MUL_N = MUL (N SECP256R1)
+-- | Modulo inverse within the 'N' field of 'SECP256R1'.
 type INV_N = INV (N SECP256R1)
 
+-- | Puts the constant of the 'A' field of 'SECP256R1' on the stack.
 type PUT_A  = PUT (A SECP256R1)
+-- | Puts the constant of the 'QL' field of 'SECP256R1' on the stack.
 type PUT_QL = PUT (QL SECP256R1)
+-- | Puts the constant of the 'GX' field of 'SECP256R1' on the stack.
 type PUT_GX = PUT (GX SECP256R1)
+-- | Puts the constant of the 'GY' field of 'SECP256R1' on the stack.
 type PUT_GY = PUT (GY SECP256R1)
 
 instance KnownRoutine (IsZero ∷ Routine Nat Nat SECP256R1) where
@@ -443,9 +475,11 @@ instance KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
     -- r s
     ]
 
+-- | The t'RIndex' of the ECDSA signature generation routines.
 type SignHashRIndex (r ∷ Routine Nat Nat SECP256R1) =
   RIndex (SignHash ∷ Routine Nat Nat SECP256R1) r
 
+-- | The instruction pointer of the ECDSA signature generation routines.
 data EcdsaIP
   = IPSignHash           (SignHashRIndex SignHash)
   | IPPointScalarMul     (SignHashRIndex PointScalarMul)

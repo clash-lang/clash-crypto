@@ -79,7 +79,7 @@ type family Abs x
  where
   Abs '(_, x) = x
 
--- | Returns the 'signum' of a type level integer.
+-- | Returns the 'GHC.Num.signum' of a type level integer.
 type SigNum ∷ ℤ → ℤ
 type family SigNum x
  where

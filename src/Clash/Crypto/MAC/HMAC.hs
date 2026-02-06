@@ -91,6 +91,7 @@ hmac alg input
         digest = sha alg hashInput
      in result
 
+-- | A 'hmac' variant using shared SHA hash circuity.
 hmacE ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒

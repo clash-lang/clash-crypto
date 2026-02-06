@@ -31,24 +31,28 @@ import Clash.Crypto.Hash.SHA
   (SHA, BlockSize, MessageDigestSize, Digest, KnownSHA(..), SHAFacts(..))
 import Clash.Crypto.MAC.HMAC (hmacE)
 
--- | An implementation of the deterministic nonce generation for ECDSA described
--- in Appendix A.3.3. The result is outputted *before* computing its power (step
--- 4.4) since it makes sharing resources easier in the context of a circuit.
--- This implementation starts at step 1.4, triggers on complete reception of the
--- seed material and doesn't check the length of the seed. The provided
--- `seed_material` must be `ModSize p + MessageDigestSize alg` bits long.
+-- | An implementation of the deterministic nonce generation for ECDSA, as
+-- described in Appendix A.3.3. The result is outputted *before* computing its
+-- power (step 4.4) since it makes sharing resources easier in the context of a
+-- circuit. This implementation starts at step 1.4, triggers on complete
+-- reception of the seed material and doesn't check the length of the seed. The
+-- provided @seed_material@ must be @ModSize p + MessageDigestSize alg@ bits long.
 deriveNonce ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
-  ∀ (p ∷ Nat) → (KnownNat p, 1 ≤ p, 1 <= ModSize p `Div` 8, 1 <= ModSize p,
-                 ModSize p `Mod` 8 ~ 0) ⇒
+  ∀ (p ∷ Nat) → KnownNat p ⇒
+  ( 1 ≤ p
+  , 1 <= ModSize p `Div` 8
+  , 1 <= ModSize p
+  , ModSize p `Mod` 8 ~ 0
+  ) ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒
+  -- | the @seed_material@
   DataStream dom () () (BitVector 8) →
-  -- ^ seed_material
+  -- | output from the hash algorithm.
   Channel dom (Digest alg) →
-  -- ^ output from the hash algorithm.
+  -- | @k@ (the nonce to be multiplied afterwards, → k ^ 16)
+  -- and the data stream going to the hash algorithm
   (Channel dom (ℤₘ p), DataStream dom () (Index 8) (BitVector 8))
-  -- ^ k, the nonce to be multiplied afterwards (→ k ^ 16) and the data stream
-  -- going to the hash algorithm.
 deriveNonce p alg seedMaterial shaOutput
   = (Channel output.result, register NoData hmacOutput)
  where
@@ -289,7 +293,7 @@ data NonceStage alg bitsize
 data NonceInput alg = NonceInput
   { -- | The last digest produced by HMAC.
     inputLast ∷ Maybe (Digest alg)
-  , -- | `seed_material`, as byte-sized frames.
+  , -- | seed_material, as byte-sized frames.
     inputSeed ∷ Frame () () (BitVector 8)
   }
 
@@ -315,7 +319,7 @@ data NonceState alg p = NonceState
     currentKey ∷ Digest alg
   , -- | The current V.
     currentV ∷ Digest alg
-  , -- | `seed_material`
+  , -- | seed_material
     currentSeed ∷ (ℤₘ p, Digest alg)
   , -- | A counter tracking how many bytes have been processed for a
     -- given frame.

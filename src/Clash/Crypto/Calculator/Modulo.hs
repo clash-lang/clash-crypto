@@ -5,7 +5,7 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Types and algorithms for modulo integers.
+Types and operations for working with integers in a known modulo field.
 -}
 
 {-# LANGUAGE UndecidableInstances #-}
@@ -31,26 +31,36 @@ import Clash.Signal.Channel
 
 import Language.Haskell.Unicode (type (≤))
 
--- * Useful types
-
+-- | The amount of bits required to represent natruals in the range
+-- from @0@ to @m - 1@.
 type ModSize m = CLog 2 m
 
+-- | The ring of integers modulo @m@.
 type ℤₘ (m ∷ Nat) = Wrapping (Index m)
+
+-- | A non-Unicode alias for 'ℤₘ'.
 type Zm (m ∷ Nat) = ℤₘ m
+
+-- | A type alias to indicate the modulus being prime.
 type PrimeField m = ℤₘ m
 
-unMod ∷ ℤₘ n → Index n
+-- | Converts from a ring of integers modulo @m@ to an 'Index' of
+-- equal capacity.
+unMod ∷ ℤₘ m → Index m
 unMod = fromWrapping
 
-createMod ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ Index n → ℤₘ n
+-- | Converts from an 'Index' to a ring of integers modulo @m@ of equal
+-- capacity.
+createMod ∷ (KnownNat m, 1 ≤ m) ⇒ Index m → ℤₘ m
 createMod = toWrapping
 
--- |The number of cycles an instance of 'computeModuloUnsigned` takes to run.
+-- | The number of cycles an instance of 'computeModuloUnsigned' takes
+-- to run.
 type ComputeModuloUnsignedCycles m len = len - ModSize m
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on unsigned values.
--- This implementation is constant-time, as it runs in `shifts` operations.
+-- This implementation is constant-time, as it runs in @shifts@ operations.
 computeModuloUnsigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
@@ -85,7 +95,7 @@ computeUnsignedModuloUnsigned = enhance put get compute
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on signed values.
--- This implementation is constant-time, as it runs in `shifts` operations.
+-- This implementation is constant-time, as it runs in @shifts@ operations.
 computeModuloSigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
@@ -113,15 +123,15 @@ computeModuloSigned = enhance put get compute
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.
--- Runs in contant time, taking `shifts` cycles.
+-- Runs in contant time, taking @shifts@ cycles.
 -- That input will be constant for the max number of shifts.
 moduloShift ∷
   ∀ m shifts dom.
   ( KnownNat m, KnownNat shifts, HiddenClockResetEnable dom
   , 1 ≤ m, 1 ≤ shifts
   ) ⇒
+  -- | number to shift + number of shifts
   Channel dom (ℤₘ m, Index shifts) →
-  -- ^ Number to shift, number of shifts
   Channel dom (ℤₘ m)
 moduloShift = enhance put get compute
  where

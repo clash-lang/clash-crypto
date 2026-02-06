@@ -21,9 +21,9 @@ import Clash.Signal.Channel (Channel, delayC, guardC, unzipC, zipRecent)
 -- | The Cryptographic Logic Unit (CLU) executing the given operation
 -- on the provided operands.
 --
--- The `regBound` parameter fixes the size of the target dependent
+-- The @regBound@ parameter fixes the size of the target dependent
 -- multipliers, as utilized by the 'Inv' and 'Mul' operations. The
--- `stages` parameter fixes the recursion depth of the Karatsuba-based
+-- @stages@ parameter fixes the recursion depth of the Karatsuba-based
 -- multiplication unit.
 --
 -- The innermost tuple determines the two operands, paired with a

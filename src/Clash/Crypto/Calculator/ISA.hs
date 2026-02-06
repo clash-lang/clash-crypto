@@ -5,7 +5,7 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Instruction Set Architecture for the calculator.
+The Instruction Set Architecture of the calculator.
 -}
 
 {-# LANGUAGE MagicHash #-}
@@ -27,24 +27,24 @@ import Clash.Promoted.List
 
 --------------------------------------------------------------------------------
 
--- | Calculator Instructions
+-- | The instructions supported by the calculator.
 --
--- Requires the `n`, `m` and `k` parameters to all have 'Num' instances
--- and the `a` parameter to have both 'BitPack' and 'Num' instances.
+-- Requires the @n@, @m@ and @k@ parameters to all have 'Num' instances
+-- and the @a@ parameter to have both 'BitPack' and 'Num' instances.
 data Instruction r n m k p a
   = -- | pushes the given constant to the stack
     PUT a
-  | -- | pops n elements from the stack
+  | -- | pops @n@ elements from the stack
     POP n
-  | -- | swaps the n-th element on the stack with the top element
+  | -- | swaps the @m@-th element on the stack with the top element
     SWP m
-  | -- | pushes a copy of the n-th element on the stack to the top of
+  | -- | pushes a copy of the @m@-th element on the stack to the top of
     -- the stack
     CUP m
   | -- | runs a given subroutine consisting of a fixed finite sequence
-    -- of instructions `k` times
+    -- of instructions @k@ times
     RUN k r
-  | -- | runs the given CLU instruction in the prime field p
+  | -- | runs the given CLU instruction in the prime field @p@
     CLU p CluInstruction
   deriving
     ( Generic, NFDataX, Eq, Ord, Show )
@@ -54,7 +54,7 @@ deriving instance
   , 1 ≤ BitSize a
   ) ⇒ BitPack (Instruction r n m k p a)
 
--- | Crypto Logic Unit Instructions
+-- | The instructions supported by the Crypto Logic Unit (CLU).
 --
 -- All CLU instructions use the top two elements on the stack as
 -- operands and replace them by the result of the computation, i.e.,
@@ -72,9 +72,9 @@ data CluInstruction
   | Mul
     -- ^ multiplies the top two elements on the stack
   | Bit
-    -- ^ pushes the `n`-th bit of the below-top element onto the stack
-    -- using the top element as the index `n` with zero indexing the
-    -- least significant bit; pushes `0` if the given index points
+    -- ^ pushes the @n@-th bit of the below-top element onto the stack
+    -- using the top element as the index @n@ with zero indexing the
+    -- least significant bit; pushes @0@ if the given index points
     -- beyond the utilized bit width
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Enum, Bounded, Show)
 
@@ -91,27 +91,44 @@ instance KnownCluInstruction Inv where cluInstruction _ = Inv
 instance KnownCluInstruction Mul where cluInstruction _ = Mul
 instance KnownCluInstruction Bit where cluInstruction _ = Bit
 
+-- | The 'Add' instruction alias of the calculator.
 type ADD p = CLU p Add
+-- | The 'Sub' instruction alias of the calculator.
 type SUB p = CLU p Sub
+-- | The 'Mul' instruction alias of the calculator.
 type MUL p = CLU p Mul
+-- | The 'Inv' instruction alias of the calculator.
 type INV p = CLU p Inv
+-- | The 'Bit' instruction alias of the calculator.
 type BIT p = CLU p Bit
 
-pattern ADD ∷ p → Instruction r n m k p a ; pattern ADD p = CLU p Add
-pattern SUB ∷ p → Instruction r n m k p a ; pattern SUB p = CLU p Sub
-pattern MUL ∷ p → Instruction r n m k p a ; pattern MUL p = CLU p Mul
-pattern INV ∷ p → Instruction r n m k p a ; pattern INV p = CLU p Inv
-pattern BIT ∷ p → Instruction r n m k p a ; pattern BIT p = CLU p Bit
+-- | The 'Add' instruction pattern of the calculator.
+pattern ADD ∷ p → Instruction r n m k p a
+pattern ADD p = CLU p Add
+-- | The 'Sub' instruction pattern of the calculator.
+pattern SUB ∷ p → Instruction r n m k p a
+pattern SUB p = CLU p Sub
+-- | The 'Mul' instruction pattern of the calculator.
+pattern MUL ∷ p → Instruction r n m k p a
+pattern MUL p = CLU p Mul
+-- | The 'Inv' instruction pattern of the calculator.
+pattern INV ∷ p → Instruction r n m k p a
+pattern INV p = CLU p Inv
+-- | The 'Bit' instruction pattern of the calculator.
+pattern BIT ∷ p → Instruction r n m k p a
+pattern BIT p = CLU p Bit
 
 {-# COMPLETE PUT, POP, SWP, CUP, RUN, ADD, SUB, MUL, INV, BIT #-}
 
 --------------------------------------------------------------------------------
 
--- | 2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1
+-- | A type alias for
+-- @2 ^ 256 - 2 ^ 224 + 2 ^ 192 + 2 ^ 96 - 1@
 type SecP256ModPrime
   = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
 
--- | 2 ^ 256 - 2 ^ 224 + 2 ^ 192 - 0x4319055258E8617B0C46353D039CDAAF
+-- | A type alias for
+-- @2 ^ 256 - 2 ^ 224 + 2 ^ 192 - 0x4319055258E8617B0C46353D039CDAAF@
 type SecP256OrdPrime
   = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
 
@@ -127,7 +144,7 @@ type Instr group (rbound ∷ Nat) (stackSize ∷ Nat) (a ∷ Type) =
     a
     a
 
--- | Identifies all instruction sequences that can be reified.
+-- | Reification support for instruction sequences.
 class KnownInstructions
   (rbound ∷ Nat)
   (stackSize ∷ Nat)
@@ -149,6 +166,7 @@ instance
  where
   instructionVec _ = instruction i :> instructionVec is
 
+-- | Identifies all instructions that can be reified.
 class KnownInstruction
   (rbound ∷ Nat)
   (stackSize ∷ Nat)
@@ -232,7 +250,7 @@ class InstructionPointer (main ∷ group) ptr where
   start ∷ ∀ x → x ~ main ⇒ group → Index (RepetitionBound main) → ptr
 
   -- | A routine + instruction pointer determines the particular
-  -- instruction to be executed. Returns `Nothing` after reaching the
+  -- instruction to be executed. Returns @Nothing@ after reaching the
   -- end of the instruction sequence associated with the routine.
   instr ∷
     (Num a, BitPack a) ⇒
@@ -298,38 +316,54 @@ data RoutineFacts (routine ∷ group) (a ∷ Type) where
     , InstanceAll (Routines routine) KnownRepetitionBound
     ) ⇒ RoutineFacts routine a
 
-class    KnownNat (InstructionCount r)  ⇒ KnownInstructionCount r
-instance KnownNat (InstructionCount r)  ⇒ KnownInstructionCount r
+-- | A /class alias/ for @'KnownNat' ∘ 'InstructionCount'@.
+class    KnownNat (InstructionCount r) ⇒ KnownInstructionCount r
+instance KnownNat (InstructionCount r) ⇒ KnownInstructionCount r
 
-class    KnownNat (SubRoutineCount r)   ⇒ KnownSubRoutineCount r
-instance KnownNat (SubRoutineCount r)   ⇒ KnownSubRoutineCount r
+-- | A /class alias/ for @'KnownNat' ∘ 'SubRoutineCount'@.
+class    KnownNat (SubRoutineCount r) ⇒ KnownSubRoutineCount r
+instance KnownNat (SubRoutineCount r) ⇒ KnownSubRoutineCount r
 
-class    KnownNat (CallDepth r)         ⇒ KnownCallDepth r
-instance KnownNat (CallDepth r)         ⇒ KnownCallDepth r
+-- | A /class alias/ for @'KnownNat' ∘ 'CallDepth'@.
+class    KnownNat (CallDepth r) ⇒ KnownCallDepth r
+instance KnownNat (CallDepth r) ⇒ KnownCallDepth r
 
-class    KnownNat (ArgCount r)          ⇒ KnownArgCount r
-instance KnownNat (ArgCount r)          ⇒ KnownArgCount r
+-- | A /class alias/ for @'KnownNat' ∘ 'ArgCount'@.
+class    KnownNat (ArgCount r) ⇒ KnownArgCount r
+instance KnownNat (ArgCount r) ⇒ KnownArgCount r
 
-class    KnownNat (ResultCount r)       ⇒ KnownResultCount r
-instance KnownNat (ResultCount r)       ⇒ KnownResultCount r
+-- | A /class alias/ for @'KnownNat' ∘ 'ResultCount'@.
+class    KnownNat (ResultCount r) ⇒ KnownResultCount r
+instance KnownNat (ResultCount r) ⇒ KnownResultCount r
 
+-- | A /class alias/ for @'KnownNat' ∘ 'RequiredStackSize'@.
 class    KnownNat (RequiredStackSize r) ⇒ KnownRequiredStackSize r
 instance KnownNat (RequiredStackSize r) ⇒ KnownRequiredStackSize r
 
-class    KnownNat (InstructionBound r)  ⇒ KnownInstructionBound r
-instance KnownNat (InstructionBound r)  ⇒ KnownInstructionBound r
+-- | A /class alias/ for @'KnownNat' ∘ 'InstructionBound'@.
+class    KnownNat (InstructionBound r) ⇒ KnownInstructionBound r
+instance KnownNat (InstructionBound r) ⇒ KnownInstructionBound r
 
-class    KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
-instance KnownNat (RepetitionBound r)   ⇒ KnownRepetitionBound r
+-- | A /class alias/ for @'KnownNat' ∘ 'RepetitionBound'@.
+class    KnownNat (RepetitionBound r) ⇒ KnownRepetitionBound r
+instance KnownNat (RepetitionBound r) ⇒ KnownRepetitionBound r
 
 -- | Lists all the subroutines of a routine, along with the routine
 -- itself.
 type Routines routine = routine : SubRoutines routine
+
+-- | Counts the number of instructions of a routine (not traversing
+-- into the routine calls recursively).
 type InstructionCount routine = Length (Instructions routine)
+
+-- | Counts the number of different subroutines of a routine
+-- (traversing into the routine calls recursively).
 type SubRoutineCount routine = Length (SubRoutines routine)
 
 -- | Lists all the subroutines of a routine.
 type SubRoutines routine = SubRoutines# (Instructions routine)
+
+-- | Helper of 'SubRoutines'.
 type SubRoutines# ∷
   ∀ routine group n m k p a.
   [Instruction group n m k p a] →
@@ -344,6 +378,8 @@ type family SubRoutines# xs
 -- | Retrieves the maximum length of the instruction sequences
 -- utilized by a given routine.
 type InstructionBound routine = InstructionBound# (Routines routine)
+
+-- | Helper of 'InstructionBound'.
 type InstructionBound# ∷ ∀ routine. [routine] → Nat
 type family InstructionBound# rs
  where
@@ -353,6 +389,8 @@ type family InstructionBound# rs
 -- | Retrieves the maximum number of iterations of all subroutines
 -- utilized by the given routine.
 type RepetitionBound routine = 1 + RepetitionBound# (Instructions routine)
+
+-- | Helper of 'RepetitionBound'.
 type RepetitionBound# ∷ [Instruction group n m k p a] → Nat
 type family RepetitionBound# is
  where
@@ -363,6 +401,8 @@ type family RepetitionBound# is
 
 -- | Retrieves the depth of the call tree of a given routine.
 type CallDepth routine = 1 + CallDepth# (Instructions routine)
+
+-- | Helper of 'CallDepth'.
 type CallDepth# ∷ [Instruction group n m k p a] → Nat
 type family CallDepth# is
  where
@@ -387,6 +427,8 @@ data StackProfile = StackProfile
 
 -- | Retrieves the stack requirement profile for a given routine.
 type GetProfile routine = GetProfile# (Instructions routine)
+
+-- | Helper of 'GetProfile'.
 type GetProfile# ∷ [Instruction group Nat Nat Nat Nat a] → StackProfile
 type family GetProfile# is
  where
@@ -395,6 +437,8 @@ type family GetProfile# is
 
 -- | The number of arguments being read from the stack.
 type ArgCount routine = ArgCount# (GetProfile routine)
+
+-- | Helper of 'ArgCount'.
 type ArgCount# ∷ StackProfile → Nat
 type family ArgCount# p
  where
@@ -407,6 +451,8 @@ type family ArgCount# p
 
 -- | The number of results remaining on the stack after execution.
 type ResultCount routine = ResultCount# (GetProfile routine)
+
+-- | Helper of 'ResultCount'.
 type ResultCount# ∷ StackProfile → Nat
 type family ResultCount# p
  where
@@ -420,6 +466,8 @@ type family ResultCount# p
 -- | The maximum stack size needed to run a routine and all its
 -- subroutines.
 type RequiredStackSize routine = RequiredStackSize# (GetProfile routine)
+
+-- | Helper of 'RequiredStackSize'.
 type RequiredStackSize# ∷ StackProfile → Nat
 type family RequiredStackSize# p
  where
@@ -450,7 +498,7 @@ type family Requirements i p
    Requirements (SWP n) ('StackProfile p u l) =
      -- Swapping the n-th element does not change the pointer, but it
      -- gives evidence about the existence of a swappable element at
-     -- the pointer position minus (n + 1), e.g., `SWP 0` is a no-op
+     -- the pointer position minus (n + 1), e.g., @SWP 0@ is a no-op
      -- while still giving evidence that there must be at least one
      -- element on the stack.
      'StackProfile p u (Minℤ l (p .-. Toℤ (n + 1)))
@@ -464,7 +512,7 @@ type family Requirements i p
    Requirements (CLU _ _) ('StackProfile p u l) =
      -- Executing a CLU operation has the same stack profile as popping
      -- two elements from the stack [POP 2] and then putting a result
-     -- afterwards [PUT _]. Note that `Minℤ l (Dec (p .+. Toℤ 2)) ≡ l`
+     -- afterwards [PUT _]. Note that @Minℤ l (Dec (p .+. Toℤ 2)) ≡ l@
      -- by construction.
      'StackProfile (Inc p) (Maxℤ u (p .+. Toℤ 2)) l
 

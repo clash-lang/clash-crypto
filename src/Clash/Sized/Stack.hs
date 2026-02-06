@@ -61,18 +61,18 @@ deriving instance (KnownNat n, 1 ≤ n, BitPack a) ⇒ BitPack (StackAction n a)
 --   emptied, and the output is `Nothing`. Otherwise, the stack is non-empty
 --   after operation, and the output is `Just` the value of the top element.
 --
--- * INSPECT: inspects the n-th element on the stack. If `n` is strictly
+-- * INSPECT: inspects the n-th element on the stack. If @n@ is strictly
 --   less than the current charge, the output is `Just` the value of the
 --   n-th element (`0` being the top). Otherwise, the output is `Nothing`.
 --
 -- * COPYUP: pushes a copy of the n-th element to the top of the
---   stack. If the stack is not full and `n` is strictly less than the
+--   stack. If the stack is not full and @n@ is strictly less than the
 --   current charge, then the n-th element is copied to the top and
 --   the output is `Just` the value of this element. Otherwise, nothing
 --   happens and the output is `Nothing`.
 --
 -- * SWAP: swaps the n-th element on the stack with the top element.
---   If `n` is strictly less than the current charge, then the swap happens
+--   If @n@ is strictly less than the current charge, then the swap happens
 --   and the output is `Just` the value of the top of the stack after
 --   operation. Otherwise, nothing happens and the output is `Nothing`.
 stack ∷
