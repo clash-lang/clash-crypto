@@ -3,11 +3,11 @@
     "clash-compiler": {
       "flake": false,
       "locked": {
-        "lastModified": 1766926198,
-        "narHash": "sha256-Dt8EkrmRCpLAbrTwdyAqpmM7NaU1Suh9WFAhg5vZx/c=",
+        "lastModified": 1770431545,
+        "narHash": "sha256-G3kqahhbTgVDGnDL60rrE6gggDLICUSTo6zADA7pSvY=",
         "owner": "clash-lang",
         "repo": "clash-compiler",
-        "rev": "d0f65c47fe946699cb7818d24ae16dd8e7aff286",
+        "rev": "6fa2d7a581228a5663d157de2fc944f55e6bf68d",
         "type": "github"
       },
       "original": {
