@@ -1,6 +1,19 @@
+{-|
+Module      : Hitl.Clash.Cores.LatticeSemi.ECP5.Pll
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Some PLLs that are supported by Lattice's ECP5 FPGA.
+-}
+
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PostfixOperators #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Hitl.Clash.Cores.LatticeSemi.ECP5.Pll where
 
 import Prelude
@@ -27,12 +40,12 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc.Extra (Doc)
 import Text.Show.Pretty (ppShow)
 
-orangePll24 :: Clock Dom48 -> (Clock Dom24, Reset Dom24)
+orangePll24 ∷ Clock Dom48 → (Clock Dom24, Reset Dom24)
 orangePll24 clkIn =
   let (clkOut, lock) = orangePLL24# clkIn
    in (clkOut, unsafeFromActiveLow lock)
 
-orangePLL24# :: Clock Dom48 -> (Clock Dom24, Signal Dom24 Bool)
+orangePLL24# ∷ Clock Dom48 → (Clock Dom24, Signal Dom24 Bool)
 orangePLL24# Clock {} = (clockGen, unsafeToActiveLow resetGen)
 {-# OPAQUE orangePLL24# #-}
 {-# ANN orangePLL24# hasBlackBox #-}
@@ -48,31 +61,31 @@ orangePLL24# Clock {} = (clockGen, unsafeToActiveLow resetGen)
       templateFunction: #{tfName}
   |] #-}
 
-orangePLL24TF :: TemplateFunction
+orangePLL24TF ∷ TemplateFunction
 orangePLL24TF = TemplateFunction [clkSrc] (const True) orangePLL24TF#
  where
   clkSrc :< _ = (0...)
 
 -- | Output of @ecppll -i 48 -o 24@
-orangePLL24TF# :: Backend backend => BlackBoxContext -> State backend Doc
+orangePLL24TF# ∷ Backend backend ⇒ BlackBoxContext → State backend Doc
 orangePLL24TF# bbCtx
-  | [ srcClk ]  <- fst <$> DSL.tInputs bbCtx
-  , [ results ] <- DSL.tResults bbCtx
+  | [ srcClk ]  ← fst <$> DSL.tInputs bbCtx
+  , [ results ] ← DSL.tResults bbCtx
   = do
-    let componentName = ("EHXPLLL" :: Text)
+    let componentName = ("EHXPLLL" ∷ Text)
 
-    instanceName <- Id.make $ componentName <> "_inst"
+    instanceName ← Id.make $ componentName <> "_inst"
     DSL.declaration (componentName <> "_block") $ do
-      (dstClk, locked) <-
+      (dstClk, locked) ←
         DSL.untuple results ["pll_clk_out", "pll_lock_out"] >>= \case
-          [a, b] -> pure (a, b)
-          _ -> error $ ppShow bbCtx
+          [a, b] → pure (a, b)
+          _ → error $ ppShow bbCtx
 
-      cLow  <- DSL.assign "pll_cLow"  DSL.Low
-      cHigh <- DSL.assign "pll_cHigh" DSL.High
+      cLow  ← DSL.assign "pll_cLow"  DSL.Low
+      cHigh ← DSL.assign "pll_cHigh" DSL.High
 
       let
-        generics :: [(Text, DSL.TExpr)]
+        generics ∷ [(Text, DSL.TExpr)]
         generics = second DSL.litTExpr <$>
           [ ("PLLRST_ENA",      "DISABLED")
           , ("INTFB_WAKE",      "DISABLED")
@@ -91,7 +104,7 @@ orangePLL24TF# bbCtx
           , ("CLKFB_DIV",                1)
           ]
 
-        inPorts :: [(Text, DSL.TExpr)]
+        inPorts ∷ [(Text, DSL.TExpr)]
         inPorts =
           [ ("CLKI",         srcClk)
           , ("CLKFB",        dstClk)
@@ -106,7 +119,7 @@ orangePLL24TF# bbCtx
           , ("ENCLKOP",        cLow)
           ]
 
-        outPorts :: [(Text, DSL.TExpr)]
+        outPorts ∷ [(Text, DSL.TExpr)]
         outPorts =
           [ ("CLKOP", dstClk)
           , ("LOCK",  locked)
@@ -122,12 +135,12 @@ orangePLL24TF# bbCtx
 
 orangePLL24TF# bbCtx = error (ppShow bbCtx)
 
-orangePll12 :: Clock Dom48 -> (Clock Dom12, Reset Dom12)
+orangePll12 ∷ Clock Dom48 → (Clock Dom12, Reset Dom12)
 orangePll12 clkIn =
   let (clkOut, lock) = orangePLL12# clkIn
    in (clkOut, unsafeFromActiveLow lock)
 
-orangePLL12# :: Clock Dom48 -> (Clock Dom12, Signal Dom12 Bool)
+orangePLL12# ∷ Clock Dom48 → (Clock Dom12, Signal Dom12 Bool)
 orangePLL12# Clock {} = (clockGen, unsafeToActiveLow resetGen)
 {-# OPAQUE orangePLL12# #-}
 {-# ANN orangePLL12# hasBlackBox #-}
@@ -143,31 +156,31 @@ orangePLL12# Clock {} = (clockGen, unsafeToActiveLow resetGen)
       templateFunction: #{tfName}
   |] #-}
 
-orangePLL12TF :: TemplateFunction
+orangePLL12TF ∷ TemplateFunction
 orangePLL12TF = TemplateFunction [clkSrc] (const True) orangePLL12TF#
  where
   clkSrc :< _ = (0...)
 
 -- | Output of @ecppll -i 48 -o 12@
-orangePLL12TF# :: Backend backend => BlackBoxContext -> State backend Doc
+orangePLL12TF# ∷ Backend backend ⇒ BlackBoxContext → State backend Doc
 orangePLL12TF# bbCtx
-  | [ srcClk ]  <- fst <$> DSL.tInputs bbCtx
-  , [ results ] <- DSL.tResults bbCtx
+  | [ srcClk ]  ← fst <$> DSL.tInputs bbCtx
+  , [ results ] ← DSL.tResults bbCtx
   = do
-    let componentName = ("EHXPLLL" :: Text)
+    let componentName = ("EHXPLLL" ∷ Text)
 
-    instanceName <- Id.make $ componentName <> "_inst"
+    instanceName ← Id.make $ componentName <> "_inst"
     DSL.declaration (componentName <> "_block") $ do
-      (dstClk, locked) <-
+      (dstClk, locked) ←
         DSL.untuple results ["pll_clk_out", "pll_lock_out"] >>= \case
-          [a, b] -> pure (a, b)
-          _ -> error $ ppShow bbCtx
+          [a, b] → pure (a, b)
+          _ → error $ ppShow bbCtx
 
-      cLow  <- DSL.assign "pll_cLow"  DSL.Low
-      cHigh <- DSL.assign "pll_cHigh" DSL.High
+      cLow  ← DSL.assign "pll_cLow"  DSL.Low
+      cHigh ← DSL.assign "pll_cHigh" DSL.High
 
       let
-        generics :: [(Text, DSL.TExpr)]
+        generics ∷ [(Text, DSL.TExpr)]
         generics = second DSL.litTExpr <$>
           [ ("PLLRST_ENA",      "DISABLED")
           , ("INTFB_WAKE",      "DISABLED")
@@ -186,7 +199,7 @@ orangePLL12TF# bbCtx
           , ("CLKFB_DIV",                1)
           ]
 
-        inPorts :: [(Text, DSL.TExpr)]
+        inPorts ∷ [(Text, DSL.TExpr)]
         inPorts =
           [ ("CLKI",         srcClk)
           , ("CLKFB",        dstClk)
@@ -201,7 +214,7 @@ orangePLL12TF# bbCtx
           , ("ENCLKOP",        cLow)
           ]
 
-        outPorts :: [(Text, DSL.TExpr)]
+        outPorts ∷ [(Text, DSL.TExpr)]
         outPorts =
           [ ("CLKOP", dstClk)
           , ("LOCK",  locked)

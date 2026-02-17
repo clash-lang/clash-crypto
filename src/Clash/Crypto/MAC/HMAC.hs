@@ -1,6 +1,6 @@
 {-|
 Module      : Clash.Crypto.MAC.HMAC
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
@@ -20,7 +20,7 @@ module Clash.Crypto.MAC.HMAC
   , HmacStage(..)
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 import Clash.Signal.Extra (apWhen, regEnN)
@@ -43,15 +43,15 @@ type OPad = 0x5c ∷ Nat
 -- | The stages that are traversed during every 'hmac'
 -- request-response.
 data HmacStage
-  = InnerHash
-  -- ^ Calculation of the inner hash, where the input
-  -- @(K XOR ipad, text)@ is forwarded to the hashing component.
-  | OuterKey
-  -- ^ Calculation of the outer hash, where first the stored
-  -- @K XOR opad@ is passed to the hashing component.
-  | OuterDigest
-  -- ^ Calculation of the outer hash, where the previously computed
-  -- @H (K XOR ipad, text)@ is passed to the hashing component.
+  = -- | Calculation of the inner hash, where the input
+    -- @(K XOR ipad, text)@ is forwarded to the hashing component.
+    InnerHash
+  | -- | Calculation of the outer hash, where first the stored
+    -- @K XOR opad@ is passed to the hashing component.
+    OuterKey
+  | -- | Calculation of the outer hash, where the previously computed
+    -- @H (K XOR ipad, text)@ is passed to the hashing component.
+    OuterDigest
   deriving (Generic, NFDataX, ShowX)
 
 -- | A streaming implementation of HMAC according to
@@ -81,28 +81,28 @@ hmac ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
+  -- | input stream
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
-  -- ^ input stream
+  -- | response channel
   Channel dom (Digest alg)
-  -- ^ response channel
 hmac alg input
   | SHAFacts ← knownSHA alg
-  = let
-   (result, hashInput) = hmacE alg input digest
-   digest = sha alg hashInput
-  in result
+  = let (result, hashInput) = hmacE alg input digest
+        digest = sha alg hashInput
+     in result
 
+-- | A 'hmac' variant using shared SHA hash circuity.
 hmacE ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒
   (8 ≤ BlockSize alg, Mod (BlockSize alg) 8 ~ 0) ⇒
+  -- | input stream
   DataStream dom (Index ((BlockSize alg `Div` 8) + 1)) () (BitVector 8) →
-  -- ^ input stream
+  -- | hash output
   Channel dom (Digest alg) →
-  -- ^ hash output
+  -- | (response channel, hash input)
   (Channel dom (Digest alg), DataStream dom () (Index 8) (BitVector 8))
-  -- ^ (response channel, hash input)
-hmacE alg (mapEnd (const (0 :: Index 8)) → input) digest
+hmacE alg (mapEnd (const (0 ∷ Index 8)) → input) digest
   | SHAFacts ← knownSHA alg
   = let
       -- mark the input key frames via counting the received number of frames
@@ -163,7 +163,7 @@ hmacE alg (mapEnd (const (0 :: Index 8)) → input) digest
       -- the desired times
       stage = moore (~~>) fst istate digest.hasUpdates
        where
-        istate = (InnerHash, minBound :: Index (BlockSize alg `Div` 8))
+        istate = (InnerHash, minBound ∷ Index (BlockSize alg `Div` 8))
 
         (s, n) ~~> updated = case s of
           InnerHash   | updated   → (OuterKey   , maxBound)
@@ -191,10 +191,10 @@ serialize ∷
   , BitPack a, KnownNat (BitSize a), KnownNat n
   , 1 ≤ n, 1 ≤ BitSize a, BitSize a `Mod` n ~ 0
   ) ⇒
+  -- | input action
   Signal dom (SerializeAction a) →
-  -- ^ input action
+  -- | output stream
   DataStream dom () (Index n) (BitVector n)
-  -- ^ output stream
 serialize = mealy (~~>) istate
  where
   istate =
@@ -222,7 +222,7 @@ serialize = mealy (~~>) istate
     | otherwise     = End 0
 
   -- a value that should never be evaluated
-  neval = error "Clash.Crypto.MAC.HMAC.serializeEn: Mealy"
+  neval = error "Clash.Crypto.MAC.HMAC.serialize: Mealy"
 
 data SerializeAction a = Charge a | Hold | Discharge
   deriving (Generic, NFDataX)

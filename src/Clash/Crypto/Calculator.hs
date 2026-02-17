@@ -14,7 +14,9 @@ module Clash.Crypto.Calculator
   ( calculator
   ) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
+
+import Data.Kind (Type)
 
 import Clash.Crypto.Calculator.CLU
 import Clash.Crypto.Calculator.ISA

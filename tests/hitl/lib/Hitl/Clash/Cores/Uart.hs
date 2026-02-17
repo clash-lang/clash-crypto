@@ -1,15 +1,19 @@
 {-|
-  Copyright   :  (C) 2021, LUMI GUIDE FIETSDETECTIE B.V.
-                     2024, QBayLogic B.V.
-  License     :  BSD2 (see the file LICENSE)
-  Maintainer  :  QBayLogic B.V. <devops@qbaylogic.com>
+Module      : Hitl.Clash.Cores.Uart
+Copyright   : Copyright © 2021, LUMI GUIDE FIETSDETECTIE B.V.
+                          2024, QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
 
-  UART transmitter and receiver module.
+UART transmitter and receiver module.
 
-  Copy of https://github.com/clash-lang/clash-cores/blob/cf25e60518be173c42aae62271b2299aa5c3e078/src/Clash/Cores/UART.hs
+"Safe" copy of
+https://github.com/clash-lang/clash-cores/blob/cf25e60518be173c42aae62271b2299aa5c3e078/src/Clash/Cores/UART.hs
 -}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -38,7 +42,7 @@ module Hitl.Clash.Cores.Uart
   , BaudGenCounterWidth
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Data.Maybe (isJust)
 
 #if !MIN_VERSION_clash_prelude(1,9,0)

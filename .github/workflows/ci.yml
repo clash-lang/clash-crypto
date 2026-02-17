@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
 
 env:
   PROJECT: "clash-formal"
@@ -20,7 +23,7 @@ concurrency:
 
 jobs:
   nix-build:
-    name: Build & cache Nix devShell
+    name: "Cache Nix DevShell"
     runs-on: [self-hosted, compute]
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
@@ -28,7 +31,7 @@ jobs:
     needs: []
     steps:
       - name: "Checkout the repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Repository specific setup"
         run: |
           deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
@@ -53,33 +56,50 @@ jobs:
             "${{ env.PROJECT }}" \
             "$(nix path-info .#packages.x86_64-linux.hitltHsPkgs.clash-crypto)"
 
-  simulate:
-    name: Simulation Tests
+  pre-check:
+    name: "No Warnings"
+    runs-on: [self-hosted, compute]
+    timeout-minutes: 10
+    container:
+      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      options: --memory=30g
+    needs: [ nix-build ]
+    steps:
+      - name: "Checkout the repository"
+        uses: actions/checkout@v5
+      - name: "Repository specific setup"
+        run: |
+          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
+          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
+          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
+      - name: "Compile"
+        run: |
+          nix develop --command bash \
+            -c "cabal build --enable-tests --ghc-option -Werror"
+
+  Simulation-Tests:
+    name: "Sim: ${{ matrix.test.name }}"
     runs-on: [self-hosted, compute]
     timeout-minutes: 60
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=11g
-    needs: [nix-build]
+    needs: [ nix-build ]
     strategy:
       matrix:
         test:
-          - SHA-1
-          - SHA-224
-          - SHA-256
-          - SHA-512
-          - HMAC
-          - Stack
-          - Karatsuba
-          - Modulo.Eq
-          - InverseModulo
-          - CLU
-          - ECDSA
-          - DeterministicNonce
-
+          - { name: "SHA", pattern: SHA }
+          - { name: "HMAC", pattern: HMAC }
+          - { name: "Stack", pattern: Stack }
+          - { name: "Karatsuba", pattern: Karatsuba }
+          - { name: "Modulo", pattern: Modulo.Eq }
+          - { name: "Inverse Modulo", pattern: InverseModulo }
+          - { name: "CLU", pattern: CLU }
+          - { name: "ECDSA (Sign)", pattern: ECDSA }
+          - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic }
     steps:
       - name: "Checkout the repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Repository specific setup"
         run: |
           deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
@@ -88,32 +108,33 @@ jobs:
       - name: "Run Simulation"
         uses: "./.github/actions/simulate"
         with:
-          testcase: ${{ matrix.test }}
+          testcase: ${{ matrix.test.pattern }}
 
-  hitlt-bitstreams:
-    name: HITLT Bitstreams
+  HITLT-Bitstreams:
+    name: "Synth: ${{ matrix.test.name }}"
     runs-on: [self-hosted, compute]
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
-      options: --memory=11g
-    needs: [nix-build]
+      options: --memory=${{ matrix.test.memory }}
+    needs: [ nix-build ]
     strategy:
       matrix:
         test:
-          - SHA1
-          - SHA224
-          - SHA256
-          - HMACSHA256
-          - Stack
-          - Karatsuba
-          - KaratsubaModulo
-          - Modulo
-          - BEA
-          - FastGCD
-          - FltCtmi
-          - CLU
-          - Calculator
-
+          - { name: "SHA1", testcase: SHA1, memory: 11g  }
+          - { name: "SHA224", testcase: SHA224, memory: 11g }
+          - { name: "SHA256", testcase: SHA256, memory: 11g }
+          - { name: "HMAC (SHA256)", testcase: HMACSHA256, memory: 11g }
+          - { name: "Stack", testcase: Stack, memory: 11g }
+          - { name: "Karatsuba", testcase: Karatsuba, memory: 11g }
+          - { name: "Karatsuba (Modulo)", testcase: KaratsubaModulo, memory: 11g }
+          - { name: "Modulo", testcase: Modulo, memory: 11g }
+          - { name: "Inv. Mod. (BEA)", testcase: BEA, memory: 11g }
+          - { name: "Inv. Mod. (FastGCD)", testcase: FastGCD, memory: 11g }
+          - { name: "Inv. Mod. (FLT-CTMI)", testcase: FltCtmi, memory: 11g }
+          - { name: "CLU", testcase: CLU, memory: 11g }
+          - { name: "Calculator", testcase: Calculator, memory: 11g }
+          - { name: "ECDSA (Nonce)", testcase: DeterministicNonce, memory: 30g }
+          - { name: "ECDSA (Sign)", testcase: ECDSASign, memory: 30g }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4
@@ -132,71 +153,38 @@ jobs:
         uses: "./.github/actions/hitlt-bitstream"
         with:
           cache: ${{ env.PROJECT }}
-          testcase: ${{ matrix.test }}
+          testcase: ${{ matrix.test.testcase }}
 
-  hitlt-bitstreams-highmem:
-    name: HITLT Bitstreams (High Memory)
-    runs-on: [self-hosted, compute]
-    container:
-      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
-      options: --memory=20g
-    needs: [nix-build]
-    strategy:
-      matrix:
-        test:
-          - ECDSASign
-
-    steps:
-      - name: "Checkout the repository"
-        uses: actions/checkout@v4
-      - name: "Repository specific setup"
-        run: |
-          deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
-          echo "${{ env.NIX_CONFIG }}" >> /etc/nix/nix.conf && \
-          echo "${{ env.NETRC_FILE }}" > /etc/nix/netrc
-      - name: "Login to the local cache"
-        run: |
-          attic login \
-            --set-default "${{ env.PROJECT }}" \
-            "${{ env.ATTIC_CACHE }}" \
-            "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
-      - name: "Build HITLT Bitstreams"
-        uses: "./.github/actions/hitlt-bitstream"
-        with:
-          cache: ${{ env.PROJECT }}
-          testcase: ${{ matrix.test }}
-
-  hitlt:
-    name: HITL Tests
+  HITL-Tests:
+    name: "HITL: ${{ matrix.test.name }}"
     runs-on: [self-hosted, hardware-access, orangecrab]
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: >-
-        --memory=11g
+        --memory=${{ matrix.test.memory }}
         --device /dev/bus/usb
         --device /dev/ttyPmodUSB0
-    needs: [nix-build, hitlt-bitstreams, hitlt-bitstreams-highmem]
+    needs: [ HITLT-Bitstreams ]
     strategy:
       matrix:
         test:
-          - SHA.SHA1
-          - SHA.SHA224
-          - SHA.SHA256
-          - HMACSHA256
-          - Stack
-          - Karatsuba
-          - Modulo.Modulo
-          - BEA
-          - FastGCD
-          - FltCtmi
-          - CLU
-          - Calculator.Calculator
-          - DeterministicNonce
-          - ECDSASign
-
+          - { name: "SHA1", pattern: SHA.SHA1, memory: 11g  }
+          - { name: "SHA224", pattern: SHA.SHA224, memory: 11g }
+          - { name: "SHA256", pattern: SHA.SHA256, memory: 11g }
+          - { name: "HMAC (SHA256)", pattern: HMACSHA256, memory: 11g }
+          - { name: "Stack", pattern: Stack, memory: 11g }
+          - { name: "Karatsuba", pattern: Karatsuba, memory: 11g }
+          - { name: "Modulo", pattern: Modulo.Modulo, memory: 11g }
+          - { name: "Inv. Mod. (BEA)", pattern: BEA, memory: 11g }
+          - { name: "Inv. Mod. (FastGCD)", pattern: FastGCD, memory: 11g }
+          - { name: "Inv. Mod. (FLT-CTMI)", pattern: FltCtmi, memory: 11g }
+          - { name: "CLU", pattern: CLU, memory: 11g }
+          - { name: "Calculator", pattern: Calculator.Calculator, memory: 11g }
+          - { name: "ECDSA (Sign)", pattern: ECDSA.Sign, memory: 30g }
+          - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic, memory: 11g }
     steps:
       - name: "Checkout the repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: "Repository specific setup"
         run: |
           deploykey "${{ secrets.DEPLOY_KEY_PROOF_ASSIST_PLUGIN }}" && \
@@ -205,4 +193,32 @@ jobs:
       - name: "Run HITLT"
         uses: "./.github/actions/hitlt"
         with:
-          testcase: ${{ matrix.test }}
+          testcase: ${{ matrix.test.pattern }}
+
+  all:
+    name: All jobs finished
+    if: ${{ !cancelled() }}
+    needs: [ pre-check, Simulation-Tests, HITL-Tests ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check dependencies for failures
+        run: |
+          # Test all dependencies for success/failure
+          set -x
+          success="${{ contains(needs.*.result, 'success') }}"
+          fail="${{ contains(needs.*.result, 'failure') }}"
+          set +x
+
+          # Test whether success/fail variables contain sane values
+          if [[ "${success}" != "true" && "${success}" != "false" ]]; then exit 1; fi
+          if [[ "${fail}"    != "true" && "${fail}"    != "false" ]]; then exit 1; fi
+
+          # We want to fail if one or more dependencies fail. For safety, we introduce
+          # a second check: if no dependencies succeeded something weird is going on.
+          if [[ "${fail}" == "true" || "${success}" == "false" ]]; then
+            echo "One or more dependency failed, or no dependency succeeded."
+            exit 1
+          fi

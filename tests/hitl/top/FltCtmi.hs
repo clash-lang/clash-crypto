@@ -1,10 +1,20 @@
+{-|
+Module      : FltCtmi
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.Calculator.InverseModulo.fltCtmi'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
 
 module FltCtmi where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 

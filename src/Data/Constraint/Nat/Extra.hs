@@ -8,7 +8,7 @@ Portability : POSIX
 Some extra type families and properties for type level naturals.
 Rocq proofs require 8.20.0 or higher.
 -}
-
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 

@@ -5,19 +5,20 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Basic definitions covering the fundamentals of FIPS 180-4.
+The basic definitions covering the fundamentals of
+[FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4).
 -}
 
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 
 module Clash.Crypto.Hash.SHA.Specification.Definitions where
 
-import Clash.Prelude
-import Clash.Sized.Internal.BitVector
+import Clash.Prelude.Safe
 
 import Control.Arrow (first)
 import Data.Proxy (Proxy(..))
@@ -26,45 +27,61 @@ import Language.Haskell.Unicode (type (≤))
 
 import Clash.Crypto.Hash.SHA.Specification.Types
 
--------------------------------------------
--- Section 2.2.2: Symbols and Operations --
--------------------------------------------
+------------------------------------------
+-- * Section 2.2.2: Symbols and Operations
+------------------------------------------
 
+-- | Bitwise AND operation.
 infixl 8 ∧
 (∧) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(∧) = and#
+(∧) = (.&.)
 
+-- | Bitwise OR ("inclusive-OR") operation.
 infixl 5 ∨
 (∨) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(∨) = or#
+(∨) = (.|.)
 
+-- | Bitwise XOR ("exclusive-OR") operation.
 infixl 6 ⊕
 (⊕) ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w
-(⊕) = xor#
+(⊕) = xor
 
+-- | Bitwise complement operation.
 (¬) ∷ KnownNat w ⇒ BitVector w → BitVector w
-(¬) = complement#
+(¬) = complement
 
+-- | Left-shift operation, where @x ≪ n@ is obtained by discarding the
+-- left-most @n@ bits of the word @x@ and then padding the result with
+-- @n@ zeroes on the right.
 infixl 5 ≪
 (≪) ∷
   KnownNat w ⇒ BitVector w →
   ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
   BitVector w
-x ≪ n = shiftL# x $ snatToNum (SNat @n)
+x ≪ n = shiftL x $ snatToNum (SNat @n)
 
+-- | Right-shift operation, where @x ≫ n@ is obtained by discarding
+-- the right-most @n@ bits of the word @x@ and then padding the result
+-- with @n@ zeroes on the left.
 infixl 5 ≫
 (≫) ∷
   KnownNat w ⇒ BitVector w →
   ∀ (n ∷ Nat) → (KnownNat n, n ≤ w) ⇒
   BitVector w
-x ≫ n = shiftR# x $ snatToNum (SNat @n)
+x ≫ n = shiftR x $ snatToNum (SNat @n)
 
+-- | The /rotate left/ (circular left shift) operation, where @x@ is a
+-- @w@-bit word and @n@ is an integer with @0 ≤ n < w@, is defined by
+-- @ROTLⁿ(x) = (x ≪ n) ∨ (x ≫ w - n)@.
 _ROTL ∷
   ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
   BitVector w →
   BitVector w
 _ROTL n (x ∷ BitVector w) = (x ≪ n) ∨ (x ≫ (type (w - n)))
 
+-- | The /rotate right/ (circular right shift) operation, where @x@ is
+-- a @w@-bit word and @n@ is an integer with @0 ≤ n < w@, is defined
+-- by @ROTRⁿ(x) = (x ≫ n) ∨ (x ≪ w - n)@.
 _ROTR ∷
   ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
   BitVector w →
@@ -75,25 +92,31 @@ _ROTR n (x ∷ BitVector w) = (x ≫ n) ∨ (x ≪ (type (w - n)))
 --   ROTL (SNat @n) x ≡ ROTR (SNat @(w - n)) x
 --   ROTR (SNat @n) x ≡ ROTL (SNat @(w - n)) x
 
+-- | The /right shift/ operation, where @x@ is a @w@-bit word and @n@
+-- is an integer with @0 ≤ n < w@, is defined by @SHRⁿ(x) = x ≫ n@.
 _SHR ∷
   ∀ (n ∷ Nat) → (KnownNat n, KnownNat w, n ≤ w) ⇒
   BitVector w →
   BitVector w
 _SHR n x = x ≫ n
 
-----------------------------
--- Section 4.1: Functions --
-----------------------------
+---------------------------
+-- * Section 4.1: Functions
+---------------------------
 
+-- | The @Ch(x,y,z)@ function.
 _Ch ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w → BitVector w
 _Ch x y z = (x ∧ y) ⊕ ((¬) x ∧ z)
 
+-- | The @Parity(x,y,z)@ function.
 _Parity ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w → BitVector w
 _Parity x y z = x ⊕ y ⊕ z
 
+-- | The @Mai(x,y,z)@ function.
 _Mai ∷ KnownNat w ⇒ BitVector w → BitVector w → BitVector w → BitVector w
 _Mai x y z = (x ∧ y) ⊕ (x ∧ z) ⊕ (y ∧ z)
 
+-- | the @fₜ@ function according to Section 4.1.1.
 _f ∷ Index 80 → BitVector 32 → BitVector 32 → BitVector 32 → BitVector 32
 _f t
   | t <= 19   = _Ch
@@ -128,9 +151,9 @@ deriving via SHA384 instance SHAFunctions SHA512
 deriving via SHA384 instance SHAFunctions SHA512224
 deriving via SHA384 instance SHAFunctions SHA512256
 
-----------------------------
--- Section 4.2: Constants --
-----------------------------
+---------------------------
+-- * Section 4.2: Constants
+---------------------------
 
 -- | All algorithms define some constants @K@, which are different for
 -- each algorithm. We use the 'SHAConstants' class to capture the
@@ -198,9 +221,9 @@ deriving via SHA384 instance SHAConstants SHA512
 deriving via SHA384 instance SHAConstants SHA512224
 deriving via SHA384 instance SHAConstants SHA512256
 
---------------------------------------
--- Section 5.1: Padding the Message --
---------------------------------------
+-------------------------------------
+-- * Section 5.1: Padding the Message
+-------------------------------------
 
 -- | The number of bits required to store the size of a message at the
 -- end of the padding.
@@ -223,9 +246,9 @@ type PaddedMsgBits (alg ∷ SHA) (ℓ ∷ Nat) =
 type RequiredBlocks (alg ∷ SHA) (ℓ ∷ Nat) =
   If (1 + SizeBits alg <=? BlockSize alg - ℓ `Mod` BlockSize alg) 1 2
 
--------------------------------------------------
--- Section 5.3: Setting the Initial Hash Value --
--------------------------------------------------
+------------------------------------------------
+-- * Section 5.3: Setting the Initial Hash Value
+------------------------------------------------
 
 -- | All algorithms define an initial hash value H⁰, which is different
 -- for each algorithm. We use the 'SHAInitials' class to capture the
@@ -315,15 +338,15 @@ instance SHAInitials SHA512256 where
    :> 0x0EB72DDC81C52CA2
    :> Nil
 
----------------------------------------
--- Section 6: SECURE HASH ALGORITHMS --
----------------------------------------
+--------------------------------------
+-- * Section 6: SECURE HASH ALGORITHMS
+--------------------------------------
 
 -- | All of the algorithms defined in FIPS 180-4 share some similar
 -- computation scheme, which is formalized using the 'SHAHashCompute'
 -- class. It covers the following phases of the standard:
 --
---  - Step "/1. Prepare the message schedule/": via '_W'
+--  - Step "/1. Prepare the message schedule/": via @_W@
 --  - Step "/3. For t=0 to .../": via 'computeCycle' (a single iteration only)
 --
 -- The remaining steps are formalized separately.
@@ -446,36 +469,40 @@ deriving via SHA512 instance SHAHashCompute SHA384
 deriving via SHA512 instance SHAHashCompute SHA512224
 deriving via SHA512 instance SHAHashCompute SHA512256
 
+-- | A single iteration of the main hashing algorithm.
+--
+-- Let @n@ be the number of words in a message block, then the second
+-- argument is given as a slicing window ranging over @W@ from
+-- @(Max n t) - n@ to @(Max n t) - 1@ initially holding M⁽ⁱ⁾, which
+-- shifts to the right with every increment of @t@. Respectively, the
+-- content inside the window shifts to the left. The window's size
+-- implicitly follows from the message schedule preparation definition
+-- in FIPS 180-4, since every Wₜ only depends on smaller Wⱼ that
+-- satisfy @j ≥ 0 ∧ t - n ≤ j < t@.
+--
+-- The working are initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
 computeCycle ∷
+  -- | the SHA variant
   ∀ (alg ∷ SHA) → SHAHashCompute alg ⇒
+  -- | the @t@ parameter
   Index (ScheduleCount alg) →
-  -- ^ t
+  -- | a slicing window over W
   Vec MessageBlockWords (SHAWord alg) →
-  -- ^ A slicing window over W from @Max MessageBlockWords t -
-  -- MessageBlockWords@ to @Max MessageBlockWords t - 1@ initially
-  -- holding M⁽ⁱ⁾, which shifts to the right with every increment of
-  -- @t@. Respectively, the content inside the window shifts to the
-  -- left. The window's size implicitly follows from the message
-  -- schedule preparation definition in FIPS 180-4, since every Wₜ
-  -- only depends on smaller Wⱼ that satisfy @j ≥ 0 @ and @t -
-  -- MessageBlockWords ≤ j < t@.
+  -- | the working variables @a@, @b@, ... before the tᵗʰ iteration
   HashValue alg →
-  -- ^ The working variables @a@, @b@, ... before the tᵗʰ
-  -- iteration, initially set to H⁽ⁱ⁻¹⁾ for t equals zero.
-  ( SHAWord alg
-    -- ^ Wₜ
-  , HashValue alg
-    -- ^ The working variables @a@, @b@, ... after the tᵗʰ
-    -- iteration.
-  )
+  -- | Wₜ and the working variables @a@, @b@, ... after the tᵗʰ iteration
+  (SHAWord alg, HashValue alg)
 computeCycle alg = computeCycle# (Proxy @alg)
 
 -- | Extends 'computeCycle' with a sliding window for W, as it
 -- implicitly follows from the definition in FIPS 180-4.
 slidingWindowCycle ∷
   ∀ (alg ∷ SHA) → SHAHashCompute alg ⇒
+  -- | the @t@ parameter
   Index (ScheduleCount alg) →
+  -- | a slicing window over W
   (Vec MessageBlockWords (SHAWord alg), HashValue alg) →
+  -- | the resulting slicing window
   (Vec MessageBlockWords (SHAWord alg), HashValue alg)
 slidingWindowCycle alg t (w, h)
   = first (fst . shiftInAtN w . singleton)

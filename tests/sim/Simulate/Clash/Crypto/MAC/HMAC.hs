@@ -10,9 +10,9 @@ Simulation tests for 'Clash.Crypto.MAC.HMAC'.
 
 {-# LANGUAGE MagicHash #-}
 
-module Simulate.Clash.Crypto.MAC.HMAC where
+module Simulate.Clash.Crypto.MAC.HMAC (tastyTests) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 
@@ -24,11 +24,10 @@ import Language.Haskell.Unicode (type (≤))
 
 import Test.Tasty
 import Test.Tasty.Hedgehog
+import Test.Clash.Crypto.Hash.SHA
 
 import Clash.Crypto.MAC.HMAC
 import Clash.Crypto.Hash.SHA
-
-import Simulate.Clash.Crypto.Hash.SHA
 
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -70,9 +69,6 @@ testHmacHedgehog alg contiguous
         ref = hmacRefImpl alg testInput
         dut = hmacImpl alg (keySpacings, msgSpacings) testInput
     ref === dut
-
-showLn ∷ ShowX a ⇒ [a] → String
-showLn = List.concatMap ((<> "\n") . showX)
 
 hmacImpl ∷
   ∀ (alg ∷ SHA) → (KnownSHA alg, CryptoHash alg) ⇒
@@ -144,10 +140,10 @@ hmacImpl alg (keySpacings, msgSpacings) (keyData, msgData)
       BS.pack $ toList $ unpack <$> output
 
 hmacRefImpl ∷
-  ∀ (alg ∷ SHA) ->
+  ∀ (alg ∷ SHA) →
   (KnownSHA alg, CryptoHash alg, Spec.HashAlgorithm (CryptoToHash alg)) ⇒
   (ByteString, ByteString) → ByteString
 hmacRefImpl alg
-  | SHAFacts <- knownSHA alg
+  | SHAFacts ← knownSHA alg
   = BS.pack . Memory.unpack . Spec.hmacGetDigest
   . uncurry (Spec.hmac @_ @_ @(CryptoToHash alg))

@@ -10,6 +10,7 @@ actions besides the usual push and pop, all of which run in a
 single cycle.
 -}
 
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Clash.Sized.Stack
@@ -17,10 +18,12 @@ module Clash.Sized.Stack
   , stack
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
+import Clash.Explicit.BlockRam (ResetStrategy(..), blockRamU)
 
 import Control.Monad (guard)
 import Data.Maybe (fromMaybe, isJust)
+import Language.Haskell.Unicode (type (≤))
 
 -- | The possible actions for manipulating the stack.
 data StackAction n a
@@ -38,7 +41,7 @@ data StackAction n a
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
 
-deriving instance (KnownNat n, 1 <= n, BitPack a) ⇒ BitPack (StackAction n a)
+deriving instance (KnownNat n, 1 ≤ n, BitPack a) ⇒ BitPack (StackAction n a)
 
 -- | A block RAM based stack supporting the given list of actions,
 -- each always requiring a single cycle until its result appears on
@@ -58,18 +61,18 @@ deriving instance (KnownNat n, 1 <= n, BitPack a) ⇒ BitPack (StackAction n a)
 --   emptied, and the output is `Nothing`. Otherwise, the stack is non-empty
 --   after operation, and the output is `Just` the value of the top element.
 --
--- * INSPECT: inspects the n-th element on the stack. If `n` is strictly
+-- * INSPECT: inspects the n-th element on the stack. If @n@ is strictly
 --   less than the current charge, the output is `Just` the value of the
 --   n-th element (`0` being the top). Otherwise, the output is `Nothing`.
 --
 -- * COPYUP: pushes a copy of the n-th element to the top of the
---   stack. If the stack is not full and `n` is strictly less than the
+--   stack. If the stack is not full and @n@ is strictly less than the
 --   current charge, then the n-th element is copied to the top and
 --   the output is `Just` the value of this element. Otherwise, nothing
 --   happens and the output is `Nothing`.
 --
 -- * SWAP: swaps the n-th element on the stack with the top element.
---   If `n` is strictly less than the current charge, then the swap happens
+--   If @n@ is strictly less than the current charge, then the swap happens
 --   and the output is `Just` the value of the top of the stack after
 --   operation. Otherwise, nothing happens and the output is `Nothing`.
 stack ∷
@@ -104,7 +107,10 @@ stack stackAction = case toUNat (SNat @n) of
   USucc un@(USucc _) → result
    where
     (raddr, writeAct, result) = mealyB (~~>) (Nothing, 0, False, False)
-      (stackAction, blockRamU NoClearOnReset (fromUNat un) raddr writeAct)
+      ( stackAction
+      , (hideClockResetEnable blockRamU)
+          NoClearOnReset (fromUNat un) raddr writeAct
+      )
 
     (top, charge0, success0, wasInspect0) ~~> (action, val) =
       let
@@ -133,7 +139,7 @@ stack stackAction = case toUNat (SNat @n) of
           CopyUp{}             → Just (toAddr @n 0, top0)
           _                    → Nothing
 
-        readAddr :: Index (n - 1)
+        readAddr ∷ Index (n - 1)
         readAddr = case action of
           Push{}    → toAddr @n 0
           Pop n     → toAddr n

@@ -11,6 +11,7 @@ with the input rate resulting from the chosen input frame size.
 
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE TypeAbstractions #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -22,9 +23,10 @@ module Clash.Crypto.Hash.SHA.Streaming.Stages
   , mealyStages
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import Data.Constraint.Nat.Extra (LeTrans, MinOverLE)
+import Data.Kind (Type)
 import Data.Proxy (Proxy(..))
 import Data.Type.Bool (type (&&), If)
 import Data.Type.Equality (type (==))
@@ -32,7 +34,6 @@ import GHC.TypeLits.KnownNat (KnownNat3(..), SNatKn(..), nameToSymbol)
 import GHC.TypeNats.Proof (Rewrite(..), using)
 import Language.Haskell.Unicode (type (≤))
 import Unsafe.Coerce (unsafeCoerce)
-
 
 import qualified GHC.TypeNats as GHC (natVal)
 
@@ -232,7 +233,7 @@ placeRegister n m = do
     | m >= n    = (0, False) : (( , True) <$> [1..n-1])
     | otherwise =
         [ (i, i > 0 && cond)
-        | i <- [0..n-1]
+        | i ← [0..n-1]
         , let cond = if i <= b
                      then i `mod` (k + 1) == 0
                      else (i - b) `mod` k == 0

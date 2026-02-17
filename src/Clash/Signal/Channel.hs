@@ -5,7 +5,7 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-A 'Channel' is a special purpose 'Signal' additionally keeping track
+A t'Channel' is a special purpose 'Signal' additionally keeping track
 of the availability and temporal stability of the data it
 captures. On the one hand, a channel makes it more comfortable for the
 data provider to release and maintain the provided data over time. On
@@ -142,11 +142,11 @@ instance Foldable (Channel dom) where
 instance Traversable (Channel dom) where
   traverse f = fmap Channel . traverse (traverse f) . getContent
 
--- | A safe control interface for maintaining a 'Channel'.
+-- | A safe control interface for maintaining a t'Channel'.
 data ProviderAction = Keep | Release | Clear
   deriving (Show, Eq, Ord, Bounded, Enum, Generic, NFDataX, BitPack, ShowX)
 
--- | Returns the content of the channel wrapped into a 'Maybe`.
+-- | Returns the content of the channel wrapped into a 'Data.Maybe.Maybe`.
 content ∷ ∀ a dom. Channel dom a → Signal dom (Maybe a)
 content c = getContent c <&> \case
   None    → Nothing
@@ -194,7 +194,7 @@ isNonEmpty = fmap not . isEmpty
 instance HasField "isNonEmpty" (Channel dom a) (Signal dom Bool) where
   getField = isNonEmpty
 
--- | Turns a 'Signal' into a 'Channel' via adding a 'ProviderAction'
+-- | Turns a 'Signal' into a t'Channel' via adding a 'ProviderAction'
 -- with the assumption that the data from the input stays stable after
 -- being released until being cleared or released again.
 --
@@ -211,7 +211,7 @@ channel = Channel . mealy (~~>) False
   True ~~> (x, Keep   ) = (True,  Old x  )
   _    ~~> _            = (False, None   )
 
--- | Turns a 'Signal' into a 'Channel' via adding a 'ProviderAction',
+-- | Turns a 'Signal' into a t'Channel' via adding a 'ProviderAction',
 -- where data from the input is only read at points in time at which
 -- the 'Release' action is selected. This particular input then is
 -- latched until the provider chooses to 'Release' some other data or
@@ -231,9 +231,9 @@ cachedChannel = Channel . mealy (~~>) None
   _ ~~> (x, Release) = (Old x, Fresh x)
   c ~~> (_, Keep)    = (c,     c      )
 
--- | Turns a signal of 'Maybe'-wrapped values into a cached channel
--- that releases every 'Just'-wrapped input and holds it until the
--- next 'Just'-wrapped input is fed in.
+-- | Turns a signal of 'Data.Maybe.Maybe'-wrapped values into a cached
+-- channel that releases every 'Just'-wrapped input and holds it until
+-- the next 'Just'-wrapped input is fed in.
 cachedFromMaybe ∷
   ∀ a dom.
   (NFDataX a, HiddenClockResetEnable dom) ⇒

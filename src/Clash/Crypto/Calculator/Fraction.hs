@@ -5,43 +5,43 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Hardware representation for fractions where the denominator is a power of 2.
+Data types for fractions whose denominator is some power of
+a constant related to the type.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
-module Clash.Crypto.Calculator.Fraction where
+module Clash.Crypto.Calculator.Fraction
+  ( Frac2(..)
+  , shiftRFrac2
+  ) where
 
 import Clash.Prelude.Safe
 
--- * Fractions of the form n/2^m.
+-- | Fractions of the form @n / 2ᵐ@. Only supporting division by two
+-- via shifting.
+data Frac2 (m ∷ Nat) (n ∷ Nat) = Frac2 (Index m) (Signed (n + 1))
+  deriving (Show, Eq, Generic, NFDataX)
 
--- Used in the FastGCD algorithm.
+-- | Doubles the denominator.
+shiftRFrac2 ∷
+  (KnownNat m, KnownNat n) ⇒
+  Frac2 m n →
+  Frac2 m n
+shiftRFrac2 (Frac2 m s) = Frac2 (m + 1) s
 
--- Only supports division by two (shifting).
--- The Index tracks where we are in the number (number of shifts to the right,
--- max of len + 1).
-data HWFraction denMax len = HWFraction (Index denMax) (Signed (len + 1))
- deriving (Show, Eq, Generic, NFDataX)
+instance Resize (Frac2 m) where
+  resize (Frac2 n s) = Frac2 n $ resize s
+  zeroExtend (Frac2 n s) = Frac2 n $ zeroExtend s
+  truncateB (Frac2 n s) = Frac2 n $ truncateB s
 
-shiftRFraction :: (KnownNat denMax, KnownNat len) =>
- HWFraction denMax len -> HWFraction denMax len
-shiftRFraction (HWFraction n s) = HWFraction (n + 1) s
-
-instance Resize (HWFraction denMax) where
-  resize (HWFraction n s) = HWFraction n (resize s)
-  zeroExtend (HWFraction n s) = HWFraction n (zeroExtend s)
-  truncateB (HWFraction n s) = HWFraction n (truncateB s)
-
-instance (KnownNat denMax, KnownNat len) => Num (HWFraction denMax len) where
-  (HWFraction n s) + (HWFraction m t) =
+instance (KnownNat n, KnownNat m) ⇒ Num (Frac2 n m) where
+  (Frac2 n s) + (Frac2 m t) =
    if n >= m -- First number has a bigger denominator
-    then HWFraction n (s + shiftL t (fromEnum $ n - m))
-    else HWFraction m (t + shiftL s (fromEnum $ m - n))
-  (HWFraction n s) * (HWFraction m t) = HWFraction (n + m) (s * t)
-  abs (HWFraction n s) = HWFraction n (abs s)
-  signum (HWFraction _ s) = HWFraction 0 (signum s)
-  fromInteger = HWFraction 0 . fromInteger
-  negate (HWFraction n s) = HWFraction n (negate s)
+    then Frac2 n (s + shiftL t (fromEnum $ n - m))
+    else Frac2 m (t + shiftL s (fromEnum $ m - n))
+  (Frac2 n s) * (Frac2 m t) = Frac2 (n + m) (s * t)
+  abs (Frac2 n s) = Frac2 n (abs s)
+  signum (Frac2 _ s) = Frac2 0 (signum s)
+  fromInteger = Frac2 0 . fromInteger
+  negate (Frac2 n s) = Frac2 n (negate s)

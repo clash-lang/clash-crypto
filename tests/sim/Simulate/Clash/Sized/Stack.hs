@@ -1,3 +1,13 @@
+{-|
+Module      : Simulate.Clash.Sized.Stack
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Simulation tests for 'Clash.Sized.Stack'.
+-}
+
 module Simulate.Clash.Sized.Stack (tastyTests) where
 
 import Clash.Sized.Stack
@@ -5,7 +15,7 @@ import Clash.Sized.Stack
 import Hedgehog
 import Test.Tasty
 import Test.Tasty.Hedgehog
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 import qualified Data.List as L
 import qualified Hedgehog.Range as Range

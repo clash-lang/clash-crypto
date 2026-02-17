@@ -1,13 +1,14 @@
 cabal-version:       3.4
 name:                clash-crypto
 synopsis:            Cryptographic hardware in Clash
-description:         Cryptographic hardware that is implemented in the functional hardware description language Clash
+description:         Cryptographic hardware that is implemented in the
+                     functional hardware description language Clash
 version:             0.1
 license:             CERN-OHL-P-2.0
 license-file:        LICENSE
 author:              QBayLogic B.V.
 maintainer:          devops@qbaylogic.com
-Copyright:           Copyright © 2024-2025 QBayLogic B.V.
+Copyright:           Copyright © 2024-2026 QBayLogic B.V.
 Category:            Hardware
 
 common common-options
@@ -17,20 +18,15 @@ common common-options
     DeriveAnyClass
     DerivingStrategies
     LambdaCase
+    NoAllowAmbiguousTypes
+    NoGeneralizedNewtypeDeriving
+    NoImplicitPrelude
     NoStarIsType
     OverloadedRecordDot
     RequiredTypeArguments
     TypeFamilies
     UnicodeSyntax
     ViewPatterns
-
-    -- TemplateHaskell is used to support convenience functions such as
-    -- 'listToVecTH' and 'bLit'.
-    TemplateHaskell
-    QuasiQuotes
-
-    -- Prelude isn't imported by default as Clash offers Clash.Prelude
-    NoImplicitPrelude
   ghc-options:
     -Wall -Wcompat
     -- Plugins to support type-level constraint solving on naturals
@@ -57,19 +53,19 @@ common common-options
     -fno-unbox-strict-fields
   default-language: GHC2021
   build-depends:
-    , base
-    , clash-prelude
-    , ghc-typelits-extra >= 0.5.2
-    , ghc-typelits-knownnat >= 0.8.2
-    , ghc-typelits-natnormalise >= 0.9.3
+    , base                                   >= 4.20   && < 4.21
+    , clash-prelude                          >= 1.9    && < 2
+    , ghc-typelits-extra                     >= 0.5.2  && < 0.6
+    , ghc-typelits-knownnat                  >= 0.8.2  && < 0.9
+    , ghc-typelits-natnormalise              >= 0.9.3  && < 0.10
 
 library
   import: common-options
   hs-source-dirs: src
   build-depends:
-    , clash-lib
-    , ghc-typelits-proof-assist
-    , template-haskell
+    , clash-lib                              >= 1.9    && < 2
+    , ghc-typelits-proof-assist              >= 0.1    && < 0.2
+    , template-haskell                       >= 2.22   && < 2.23
   exposed-modules:
     Clash.Crypto.Calculator
     Clash.Crypto.Calculator.CLU
@@ -78,9 +74,8 @@ library
     Clash.Crypto.Calculator.ISA
     Clash.Crypto.Calculator.Karatsuba
     Clash.Crypto.Calculator.Modulo
-    Clash.Crypto.Calculator.Utils
     Clash.Crypto.PubKey.ECDSA
-    Clash.Crypto.ECDSA.DeterministicNonce
+    Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic
     Clash.Crypto.Hash.SHA
     Clash.Crypto.Hash.SHA.Specification
     Clash.Crypto.Hash.SHA.Specification.Types
@@ -106,14 +101,18 @@ library test
   hs-source-dirs: tests/lib
   build-depends:
     , clash-crypto
-    , clash-lib
-    , deepseq
-    , ghc-typelits-proof-assist
-    , modular-arithmetic
+    , bytestring                             >= 0.12   && < 0.13
+    , clash-lib                              >= 1.9    && < 2
+    , crypton                                >= 1.0.4  && < 1.1
+    , deepseq                                >= 1.5    && < 1.6
+    , ghc-typelits-proof-assist              >= 0.1    && < 0.2
+    , memory                                 >= 0.18   && < 0.19
+    , modular-arithmetic                     >= 2.0    && < 2.1
   exposed-modules:
     Test.Clash.Crypto.Calculator
     Test.Clash.Crypto.Calculator.InverseModulo
     Test.Clash.Crypto.Calculator.Simulate
+    Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.PubKey.ECDSA.Simulate
 
 test-suite simulation
@@ -123,44 +122,42 @@ test-suite simulation
   ghc-options: -threaded
   main-is: Main.hs
   other-modules:
-    Simulate.Clash.Crypto.Hash.SHA
-    Simulate.Clash.Crypto.MAC.HMAC
     Simulate.Clash.Crypto.Calculator
     Simulate.Clash.Crypto.Calculator.CLU
     Simulate.Clash.Crypto.Calculator.InverseModulo
     Simulate.Clash.Crypto.Calculator.Karatsuba
     Simulate.Clash.Crypto.Calculator.Modulo
+    Simulate.Clash.Crypto.Hash.SHA
+    Simulate.Clash.Crypto.MAC.HMAC
     Simulate.Clash.Crypto.PubKey.ECDSA
-    Simulate.Clash.Crypto.ECDSA.DeterministicNonce
+    Simulate.Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic
     Simulate.Clash.Sized.Stack
   build-depends:
-    , bytestring
     , clash-crypto
     , clash-crypto:test
-    , clash-prelude-hedgehog
-    , crypton
-    , ghc-typelits-proof-assist
-    , hedgehog >= 1.0
-    , memory
-    , modular-arithmetic
-    , tasty >= 1.5
-    , tasty-hedgehog >= 1.2 && < 1.5
-    , tasty-hunit
-    , typelits-witnesses
+    , bytestring                             >= 0.12   && < 0.13
+    , clash-prelude-hedgehog                 >= 1.9    && < 2
+    , crypton                                >= 1.0.4  && < 1.1
+    , ghc-typelits-proof-assist              >= 0.1    && < 0.2
+    , hedgehog                               >= 1.0.3  && < 1.8
+    , memory                                 >= 0.18   && < 0.19
+    , tasty                                  >= 1.5    && < 1.6
+    , tasty-hedgehog                         >= 1.2    && < 1.5
+    , tasty-hunit                            >= 0.10   && < 0.11
+    , typelits-witnesses                     >= 0.4    && < 0.5
 
 library hitl
   import: common-options
   hs-source-dirs: tests/hitl/lib
   build-depends:
     , clash-crypto
-    , clash-lib
-    , ghc-typelits-proof-assist
-    , infinite-list
-    , modular-arithmetic
-    , mtl
-    , pretty-show
-    , string-interpolate
-    , text
+    , clash-lib                              >= 1.9    && < 2
+    , ghc-typelits-proof-assist              >= 0.1    && < 0.2
+    , infinite-list                          >= 0.1.2  && < 0.2
+    , mtl                                    >= 2.3.1  && < 2.4
+    , pretty-show                            >= 1.10   && < 1.11
+    , string-interpolate                     >= 0.3.4  && < 0.4
+    , text                                   >= 2.1    && < 2.2
   exposed-modules:
     Hitl.Clash.Cores.LatticeSemi.ECP5.Domain
     Hitl.Clash.Cores.LatticeSemi.ECP5.Pll
@@ -172,6 +169,7 @@ library hitl
 
 library hitlt-instances
   import: common-options
+  default-extensions: TemplateHaskell
   hs-source-dirs: tests/hitl/top
   build-depends:
     , clash-crypto
@@ -200,20 +198,20 @@ test-suite hitlt
   ghc-options: -single-threaded
   main-is: Main.hs
   build-depends:
-    , bytestring
     , clash-crypto
     , clash-crypto:hitl
     , clash-crypto:test
-    , clash-prelude-hedgehog
-    , crypton
-    , ghc-typelits-proof-assist
-    , hedgehog >= 1.0
-    , memory
-    , modular-arithmetic
-    , serialport >= 0.6.0
-    , process
-    , tasty >= 1.5
-    , tasty-hedgehog >= 1.2 && < 1.5
+    , bytestring                             >= 0.12   && < 0.13
+    , clash-prelude-hedgehog                 >= 1.9    && < 2
+    , crypton                                >= 1.0.4  && < 1.1
+    , ghc-typelits-proof-assist              >= 0.1    && < 0.2
+    , hedgehog                               >= 1.0.3  && < 1.8
+    , memory                                 >= 0.18   && < 0.19
+    , modular-arithmetic                     >= 2.0    && < 2.1
+    , process                                >= 1.6    && < 1.7
+    , serialport                             >= 0.6    && < 0.7
+    , tasty                                  >= 1.5    && < 1.6
+    , tasty-hedgehog                         >= 1.2    && < 1.5
 
 executable clash
   import: common-options
@@ -223,7 +221,7 @@ executable clash
   build-depends:
     , clash-crypto
     , clash-crypto:hitl
-    , clash-ghc
+    , clash-ghc                              >= 1.9    && < 2
 
 common shake-options
   default-language: GHC2021
@@ -234,13 +232,13 @@ common shake-options
     TypeFamilies
   hs-source-dirs: app/shake
   build-depends:
-    , base
     , clash-crypto
-    , directory
-    , filepath
-    , shake
-    , unordered-containers
-    , utf8-string
+    , base                                   >= 4.20   && < 4.21
+    , directory                              >= 1.3    && < 1.4
+    , filepath                               >= 1.5    && < 1.6
+    , shake                                  >= 0.19   && < 0.20
+    , unordered-containers                   >= 0.2.20 && < 0.3
+    , utf8-string                            >= 1.0.2  && < 1.1
 
 library shake-rules
   import: shake-options

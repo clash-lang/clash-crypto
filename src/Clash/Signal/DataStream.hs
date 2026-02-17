@@ -30,8 +30,6 @@ additional data, that may be useful for the particular application for
 reassembling the message.
 -}
 
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 
 module Clash.Signal.DataStream

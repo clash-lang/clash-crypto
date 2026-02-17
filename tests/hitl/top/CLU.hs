@@ -1,10 +1,20 @@
+{-|
+Module      : CLU
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.Calculator.CLU.clu'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
 
 module CLU where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 

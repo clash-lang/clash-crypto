@@ -3,11 +3,11 @@
     "clash-compiler": {
       "flake": false,
       "locked": {
-        "lastModified": 1766926198,
-        "narHash": "sha256-Dt8EkrmRCpLAbrTwdyAqpmM7NaU1Suh9WFAhg5vZx/c=",
+        "lastModified": 1770431545,
+        "narHash": "sha256-G3kqahhbTgVDGnDL60rrE6gggDLICUSTo6zADA7pSvY=",
         "owner": "clash-lang",
         "repo": "clash-compiler",
-        "rev": "d0f65c47fe946699cb7818d24ae16dd8e7aff286",
+        "rev": "6fa2d7a581228a5663d157de2fc944f55e6bf68d",
         "type": "github"
       },
       "original": {
@@ -159,17 +159,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1761554814,
-        "narHash": "sha256-n80z/7Da2+UKFzyhbncgztZtiHY6C3YkeY1JaRD73hQ=",
-        "ref": "refs/heads/main",
-        "rev": "b747bbf319a17ca329292bf3f08089477d493446",
-        "revCount": 11,
-        "type": "git",
-        "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
+        "lastModified": 1771271490,
+        "narHash": "sha256-c+nMU3q1ISjvzwig//znUAmd8VfTRftUbx4XSOT1buU=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-proof-assist",
+        "rev": "815587778f6375f4a9df74be8c63615300c5c26c",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist"
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-proof-assist",
+        "type": "github"
       }
     },
     "nix-filter": {
@@ -205,11 +205,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1743814133,
-        "narHash": "sha256-drDyYyUmjeYGiHmwB9eOPTQRjmrq3Yz26knwmMPLZFk=",
+        "lastModified": 1768875095,
+        "narHash": "sha256-dYP3DjiL7oIiiq3H65tGIXXIT1Waiadmv93JS0sS+8A=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "250b695f41e0e2f5afbf15c6b12480de1fe0001b",
+        "rev": "ed142ab1b3a092c4d149245d0c4126a5d7ea00b0",
         "type": "github"
       },
       "original": {

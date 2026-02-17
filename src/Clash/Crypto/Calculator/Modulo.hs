@@ -5,15 +5,16 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Types and algorithms for modulo integers.
+Types and operations for working with integers in a known modulo field.
 -}
 
 {-# LANGUAGE UndecidableInstances #-}
 
 module Clash.Crypto.Calculator.Modulo
-  ( Mod(..)
-  , Prime
+  ( ℤₘ
+  , Zm
   , ModSize
+  , PrimeField
   , ComputeModuloUnsignedCycles
   , unMod
   , createMod
@@ -23,53 +24,54 @@ module Clash.Crypto.Calculator.Modulo
   , moduloShift
   ) where
 
-import Clash.Crypto.Calculator.Utils
-import Clash.Num.Wrapping (Wrapping (Wrapping))
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
+
+import Clash.Num.Wrapping (Wrapping(..), toWrapping)
 import Clash.Signal.Channel
 
-import Data.Coerce (coerce)
 import Language.Haskell.Unicode (type (≤))
 
--- * Useful types
+-- | The amount of bits required to represent natruals in the range
+-- from @0@ to @m - 1@.
+type ModSize m = CLog 2 m
 
-type ModSize n = CLog 2 n
+-- | The ring of integers modulo @m@.
+type ℤₘ (m ∷ Nat) = Wrapping (Index m)
 
-newtype Mod (n ∷ Nat) = Mod (Wrapping (Index n))
- deriving (Eq, Generic, Ord, Bounded) deriving newtype (NFDataX, Show)
+-- | A non-Unicode alias for 'ℤₘ'.
+type Zm (m ∷ Nat) = ℤₘ m
 
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Num (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Enum (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Real (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Integral (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ Bits (Mod n)
-deriving newtype instance (KnownNat n, 1 ≤ n) ⇒ BitPack (Mod n)
+-- | A type alias to indicate the modulus being prime.
+type PrimeField m = ℤₘ m
 
-type Prime n = Mod n
+-- | Converts from a ring of integers modulo @m@ to an 'Index' of
+-- equal capacity.
+unMod ∷ ℤₘ m → Index m
+unMod = fromWrapping
 
-unMod ∷ Mod n → Index n
-unMod = coerce
+-- | Converts from an 'Index' to a ring of integers modulo @m@ of equal
+-- capacity.
+createMod ∷ (KnownNat m, 1 ≤ m) ⇒ Index m → ℤₘ m
+createMod = toWrapping
 
-createMod ∷ ∀ n. (KnownNat n, 1 ≤ n) ⇒ Index n → Mod n
-createMod = coerce
-
--- |The number of cycles an instance of 'computeModuloUnsigned` takes to run.
+-- | The number of cycles an instance of 'computeModuloUnsigned' takes
+-- to run.
 type ComputeModuloUnsignedCycles m len = len - ModSize m
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on unsigned values.
--- This implementation is constant-time, as it runs in `shifts` operations.
+-- This implementation is constant-time, as it runs in @shifts@ operations.
 computeModuloUnsigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
   , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Unsigned len) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m)
 computeModuloUnsigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (len + 1 - ModSize m))
-  get _ = Mod @m . bitCoerce . resize . fst
+  get _ = createMod @m . bitCoerce . resize . fst
   compute _ (n, j) = ((subIfGE n $ shiftedm j, satPred SatBound j), j > 0)
   shiftedm = shiftL (natToNum @m) . fromEnum
 
@@ -93,18 +95,23 @@ computeUnsignedModuloUnsigned = enhance put get compute
 
 -- | A streaming implementation of the modulo operation using long division
 -- in a binary base. Works on signed values.
--- This implementation is constant-time, as it runs in `shifts` operations.
+-- This implementation is constant-time, as it runs in @shifts@ operations.
 computeModuloSigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
   , 1 ≤ m, ModSize m ≤ len
   ) ⇒
   Channel dom (Signed (len + 1)) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m)
 computeModuloSigned = enhance put get compute
  where
   put n = (n, maxBound ∷ Index (len + 2 - ModSize m))
-  get _ = Mod @m . bitCoerce . resize . signedToUnsigned . fst
+  get _ = createMod @m
+        . bitCoerce @(Unsigned (ModSize m))
+        . checkedTruncateB @_ @(len + 1 - ModSize m)
+        . bitCoerce
+        . abs
+        . fst
   compute _ (n, j) = ((next n j, if j > 0 then j - 1 else j), j > 0)
   -- ^ using `satPred SatBound j` instead does not work here because of
   -- https://github.com/clash-lang/ghc-typelits-natnormalise/issues/94
@@ -116,16 +123,16 @@ computeModuloSigned = enhance put get compute
 
 -- | Shifts a number to the left and computes the modulo as it shifts it.
 -- Used by FastGCD.
--- Runs in contant time, taking `shifts` cycles.
+-- Runs in contant time, taking @shifts@ cycles.
 -- That input will be constant for the max number of shifts.
 moduloShift ∷
   ∀ m shifts dom.
   ( KnownNat m, KnownNat shifts, HiddenClockResetEnable dom
   , 1 ≤ m, 1 ≤ shifts
   ) ⇒
-  Channel dom (Mod m, Index shifts) →
-  -- ^ Number to shift, number of shifts
-  Channel dom (Mod m)
+  -- | number to shift + number of shifts
+  Channel dom (ℤₘ m, Index shifts) →
+  Channel dom (ℤₘ m)
 moduloShift = enhance put get compute
  where
   put (n, _) = (extend $ bitCoerce n, maxBound ∷ Index shifts)

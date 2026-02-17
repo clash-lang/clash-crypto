@@ -17,7 +17,8 @@ module Clash.Crypto.Calculator.Karatsuba
   , karatsubaSequentialModulo
   ) where
 
-import Clash.Prelude.Safe hiding (Mod)
+import Clash.Prelude.Safe
+
 import Clash.Signal.Channel
 import Clash.Signal.Extra (apWhen)
 
@@ -26,7 +27,7 @@ import Data.Constraint.Nat.Extra
   )
 import GHC.TypeNats.Proof (Rewrite(..), using)
 
-import Clash.Crypto.Calculator.Modulo
+import Clash.Crypto.Calculator.Modulo (computeUnsignedModuloUnsigned)
 
 -- * Combinatorial implementations
 
@@ -76,23 +77,23 @@ karatsuba regBound x y
 
 -- -- * Sequential implementations
 
--- |The number of cycles an instance of 'karatsubaSequential` takes to run.
+-- | The number of cycles an instance of 'karatsubaSequential' takes to run.
 type KaratsubaCycles stages = 2 * (3 ^ stages - 1)
 
 -- |A sequential implementation of the Karatsuba algorithm for multiplication.
 -- It supports recursion on the size of its arguments, dividing the length
 -- by 2 each time it recurs, relying on both sequential and combinatorial
--- subcircuits, which depths are configurable at type-level.  'regSize' gives
+-- subcircuits, which depths are configurable at type-level. @regSize@ gives
 -- the size of the multiplication units of the board, that will enable the
 -- algorithm to compute the appropriate depth.
 -- This algorithm uses two-step semantics with a toggle line that starts on
--- `False`.
+-- @False@.
 --
 -- __Example:__
 -- @
--- karatsubaSequential @3 @36 @256 @256
+-- karatsubaSequential \@3 \@36 \@256 \@256
 -- @
--- will produce a sequential circuit with latency '52 = 2 * (3 ^ cycles - 1)'
+-- will produce a sequential circuit with latency @52 = 2 * (3 ^ cycles - 1)@
 -- that is able to multiply two 256-bit unsigned numbers.
 karatsubaSequential ∷
   ∀ (n ∷ Nat) (m ∷ Nat) (dom ∷ Domain).

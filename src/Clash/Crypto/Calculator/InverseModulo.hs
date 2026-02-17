@@ -1,31 +1,40 @@
 {-|
 Module      : Clash.Crypto.Calculator.InverseModulo
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Implementations of inverse modulo algorithms.
+Various implementations of the inverse modulo operation over prime
+fields.
 -}
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Clash.Crypto.Calculator.InverseModulo
-  ( Precomp
-  , bea
+  ( -- * BEA
+    bea
+    -- * FastGCD
+  , Precomp
   , fastGcdSequential
+    -- * FLT-CTMI
   , fltCtmi
   , fltCtmiE
+    -- * SICT-MI
+  , SictPrecomp
   , sictMiSequential
   ) where
 
-import Clash.Prelude hiding (Mod)
+import Clash.Prelude.Safe
+
+import Clash.Class.NumConvert
 import Clash.Signal.Channel
 
 import Data.Constraint.Nat.Extra (CLog2KeepsPositive)
@@ -34,40 +43,37 @@ import GHC.TypeLits.KnownNat (KnownNat1(..), SNatKn(..), nameToSymbol)
 import GHC.TypeNats.Proof (Rewrite(..), using, If)
 import Language.Haskell.Unicode (type (≤))
 
-import qualified GHC.TypeLits as P (Mod)
-
-import Clash.Crypto.Calculator.Fraction (HWFraction (HWFraction), shiftRFraction)
+import Clash.Crypto.Calculator.Fraction (Frac2(..), shiftRFrac2)
 import Clash.Crypto.Calculator.Karatsuba
   (karatsubaSequential, karatsubaSequentialModulo)
 import Clash.Crypto.Calculator.Modulo
-  (ModSize, Mod (..), moduloShift, computeModuloUnsigned, computeModuloSigned)
-import Clash.Crypto.Calculator.Utils (unsignedToSigned, signedToUnsigned)
+  (ℤₘ, ModSize, moduloShift, computeModuloUnsigned, computeModuloSigned)
 
--- * Binary Euclidean Algorithm
-
--- | A streaming implementation of the Binary Euclidean Algorithm.
+-- | A hardware implementation of the /Binary Euclidean Algorithm/.
 -- It computes the inverse of a positive integer modulo m.
 --
--- prop> forall n. (bea @m n * n) `mod` (natToNum @m) == 1
+-- prop> ∀ n. (bea @m n * n) `mod` (natToNum @m) == 1
 --
--- Note that the algorithm currently won't terminate when providing
--- zero as input.
+-- (Note that the algorithm currently will not terminate when providing
+-- zero as the input.)
 bea ∷
   ∀ m dom. (KnownNat m, HiddenClockResetEnable dom, 2 ≤ m) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 bea = enhance put get compute
  where
   put n
     | Rewrite ← using @(CLog2KeepsPositive m)
-    = ( ( extend @_ @_ @(ModSize m - 1) $ unsignedToSigned $ bitCoerce n
-        , m, 1, 0)
+    = ( (numConvert $ bitCoerce @_ @(Unsigned _) n, m, 1, 0)
       , BeaStart
       )
 
   get _ ((_, _, _, y), _)
     | Rewrite ← using @(CLog2KeepsPositive m)
-    = bitCoerce $ truncateB @_ @_ @(ModSize m - 1) $ signedToUnsigned y
+    = bitCoerce @(Unsigned (ModSize m))
+    $ checkedTruncateB
+    $ bitCoerce @(Signed (ModSize m + ModSize m))
+    $ abs y
 
   compute _ (s0@(u, v, x, y), mode0) = (, mode0 /= BeaEnd) $ case mode0 of
     BeaEnd                          → (s0,                   mode0    )
@@ -114,17 +120,15 @@ data BeaMode
   = BeaStart | BeaMod2 (Index 2) | BeaCmp | BeaMod (Index 4) | BeaFin | BeaEnd
   deriving (Generic, NFDataX, Show, Eq)
 
--- * FastGCD
-
 -- | Number of iterations for FastGCD based on the bitlength.
 type Iterations (d ∷ Nat) =
   1 + If (d <=? 45) (Div (49 * d + 80 - 17) 17) (Div (49 * d + 57 - 17) 17)
 
 type FastGCDIterations d = Iterations (ModSize d)
 
--- | Precomputed value used by FastGCD.
+-- | The precomputed value used by FastGCD.
 type Precomp (f ∷ Nat) =
-  P.Mod (Div (f + 1) 2 ^ (FastGCDIterations f - 1)) f
+  (((f + 1) `Div` 2) ^ (FastGCDIterations f - 1)) `Mod` f
 
 type MulRegisterSize = 36
 type GCDStreamingStages = 3
@@ -136,13 +140,13 @@ data FastGCDRecord len = FastGCD
  , delta     ∷ Signed (ModSize len + 1)
  , f         ∷ Signed (len + 1)
  , g         ∷ Signed (len + 1)
- , v         ∷ HWFraction (len + 1) len
- , r         ∷ HWFraction (len + 1) len
+ , v         ∷ Frac2 (len + 1) len
+ , r         ∷ Frac2 (len + 1) len
  } deriving (Generic, NFDataX)
 
 type FastGCDState m = FastGCDRecord (FastGCDIterations m)
 
--- | A sequential implementation of the divSteps2 function described in
+-- | A hardware implementation of the divSteps2 function described in
 -- Bernstein/Yang's paper Fast constant-time gcd computation and modular
 -- inversion.
 divSteps ∷
@@ -160,13 +164,13 @@ divSteps m = enhance put get compute
     { remaining = maxBound
     , delta = 1
     , f = natToNum @m
-    , g = unsignedToSigned $ resize x
+    , g = numConvert @(Unsigned (FastGCDIterations m)) $ resize x
     , v = 0
     , r = 1
     } ∷ FastGCDState m
 
   get _ FastGCD{..}
-    | HWFraction n x ← v
+    | Frac2 n x ← v
     = (maxBound - n - 1, if f < 0 then negate x else x)
 
   compute _ s@FastGCD{..}
@@ -187,7 +191,7 @@ divSteps m = enhance put get compute
     { remaining = remaining - 1
     , delta = delta + 1
     , g = shiftR g1 1
-    , r = shiftRFraction r1
+    , r = shiftRFrac2 r1
     }
    where
     (g1, r1) =
@@ -195,15 +199,17 @@ divSteps m = enhance put get compute
       then (g + f, r + v)
       else (g, r)
 
--- | A sequential implementation for FastGCD. It shouldn't be used directly,
--- because better resource usage could be achieved by sharing subcomponents.
+-- | A hardware implementation of Bernstein's
+-- [FastGCD](https://doi.org/10.13154/tches.v2019.i3.340-398)
+-- algorithm. It should not be used directly, because better resource
+-- usage can be achieved by sharing subcomponents.
 fastGcdSequential ∷
   ∀ m dom.
   ( KnownNat m, 1 ≤ m, HiddenClockResetEnable dom
   , 1 ≤ Iterations m, ModSize m ≤ FastGCDIterations m
   ) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 fastGcdSequential (divSteps m . fmap bitCoerce → divResult)
   = computeModuloUnsigned @m
   $ karatsubaSequential GCDStreamingStages MulRegisterSize
@@ -217,12 +223,14 @@ pattern FLTMul, FLTSquare ∷ Bool
 pattern FLTSquare = False
 pattern FLTMul = True
 
--- | A working implementation of Inverse Modulo based on Fermat's Little
--- Theorem. Fine up to 256 bits, and only works with prime moduli.
+-- | A hardware implementation of the
+-- [FLT-CTMI](https://doi.org/10.1007/978-3-031-25319-5_5) algorithm
+-- based on Fermat's Little Theorem. Fine up to 256 bits, and only
+-- works with prime moduli.
 fltCtmi ∷
   ∀ p dom. (KnownNat p, HiddenClockResetEnable dom, 3 ≤ p) ⇒
-  Channel dom (Mod p) →
-  Channel dom (Mod p)
+  Channel dom (ℤₘ p) →
+  Channel dom (ℤₘ p)
 fltCtmi (fmap bitCoerce → input) = fmap bitCoerce output
  where
   (output, s)
@@ -280,25 +288,25 @@ fltCtmiE (unzipC → (input, p)) smmOut =
 
   done = stage .== (FLTSquare, (False, minBound))
 
--- * SictMi
-
--- This algorithm comes from Jin and Miyaji's paper Short-Iteration
--- Constant-Time GCD and Modular inversion.
-
+-- | The number of iterations of the main loop from the SICT-MI
+-- algorithm.
 type SictIterations m = 2 * ModSize m
 
+-- | A type family for calculating the precomputed constant of the
+-- SICT-MI algorithm.
 type family SictPrecomp (m ∷ Nat) ∷ Nat where
   SictPrecomp 0 = 1
   SictPrecomp m = SictPrecomp# m (m - SictIterations m - 1) 2 1
 
+-- | Helper of 'SictPrecomp'.
 type family SictPrecomp# (m ∷ Nat) (pow ∷ Nat) (val ∷ Nat) (tmp ∷ Nat)  ∷ Nat where
   SictPrecomp# _ 0 _   _   = 1
-  SictPrecomp# m 1 val tmp = (val * tmp) `P.Mod` m
+  SictPrecomp# m 1 val tmp = (val * tmp) `Mod` m
   SictPrecomp# m n val tmp = SictPrecomp# m
-                             -- even --              -- odd --
-      (If (n `P.Mod` 2 == 0) (n `Div` 2)             (n - 1)                )
-      (If (n `P.Mod` 2 == 0) ((val * val) `P.Mod` m) val                    )
-      (If (n `P.Mod` 2 == 0) (tmp `P.Mod` m)         ((tmp * val) `P.Mod` m))
+                           -- even --          -- odd --
+      (If (n `Mod` 2 == 0) (n `Div` 2)         (n - 1)            )
+      (If (n `Mod` 2 == 0) (val * val `Mod` m) val                )
+      (If (n `Mod` 2 == 0) (tmp `Mod` m)       (tmp * val `Mod` m))
 
 instance (KnownNat m, 1 ≤ m) => KnownNat1 $(nameToSymbol ''SictPrecomp) m where
   natSing1 =
@@ -330,7 +338,7 @@ sictMiLoop m = enhance put get compute
  where
   put input = SictMi
     { remaining = maxBound
-    , u = unsignedToSigned input
+    , u = numConvert input
     , v = natToNum @m
     , q = 0
     , r = 1
@@ -362,14 +370,16 @@ sictMiLoop m = enhance put get compute
     secondOp True  False x _ = x
     secondOp True  True  x y = x - y
 
+-- | A hardware implementation of Jin and Miyaji's
+-- [SICT-MI](https://doi.org/10.1007/978-3-031-25319-5_5) algorithm.
 sictMiSequential ∷
   ∀ m dom.
   ( KnownNat m, HiddenClockResetEnable dom
   , 1 ≤ m - 2 * ModSize m, 1 <= m, 1 <= SictPrecomp m
   , 2 * ModSize m ≤ m, 1 ≤ 2 * ModSize m * (m - 1)
   ) ⇒
-  Channel dom (Mod m) →
-  Channel dom (Mod m)
+  Channel dom (ℤₘ m) →
+  Channel dom (ℤₘ m)
 sictMiSequential
   = fmap bitCoerce
   . karatsubaSequentialModulo GCDStreamingStages MulRegisterSize

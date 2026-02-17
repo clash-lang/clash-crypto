@@ -1,9 +1,21 @@
+{-|
+Module      : Hitl.Clash.Cores.LatticeSemi.ECP5.Domain
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Some clock domains that are supported by Lattice's ECP5 FPGA.
+-}
+
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+
 module Hitl.Clash.Cores.LatticeSemi.ECP5.Domain where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 
 -- | 48 MHz oscillator clock of the OrangeCrab board.
 createDomain vSystem

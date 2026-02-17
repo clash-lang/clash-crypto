@@ -1,12 +1,22 @@
+{-|
+Module      : SictMi
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.Calculator.InverseModulo.sictMiSequential'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
 
 {-# OPTIONS_GHC -freduction-depth=400 #-}
 
 module SictMi where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 

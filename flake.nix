@@ -14,8 +14,7 @@
       url = "github:clash-lang/clash-compiler";
       flake = false;
     };
-    ghc-typelits-proof-assist.url =
-      "git+ssh://git@github.com/QBayLogic/ghc-typelits-proof-assist";
+    ghc-typelits-proof-assist.url = "github:clash-lang/ghc-typelits-proof-assist";
     ghc-tcplugin-api = { url = "github:sheaf/ghc-tcplugin-api"; flake = false; };
     ghc-typelits-natnormalise = { url = "github:clash-lang/ghc-typelits-natnormalise"; flake = false; };
     ghc-typelits-knownnat = { url = "github:clash-lang/ghc-typelits-knownnat"; flake = false; };

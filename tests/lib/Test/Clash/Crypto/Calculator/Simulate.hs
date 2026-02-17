@@ -1,5 +1,13 @@
--- | Routines to simulate and trace a routine, by recursively executing the
--- required instructions. Also offers types to support symbolic execution.
+{-|
+Module      : Test.Clash.Crypto.Calculator.Simulate
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Routines to simulate and trace a routine, by recursively executing the
+required instructions. Also offers types to support symbolic execution.
+-}
 
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -269,7 +277,7 @@ simplifyFix f x0
   | otherwise = simplifyFix f x'
  where
   x = f x0
-  x' | Fix fix <- x = Fix $ fmap (simplifyFix f) fix
+  x' | Fix fix ← x = Fix $ fmap (simplifyFix f) fix
 
 -- | Apply a given function at all recursion points of a fixpoint until
 -- exhaustion, i.e. until the result no longer changes.
@@ -285,8 +293,8 @@ simplifyFixChoice f x0
   | otherwise = simplifyFixChoice f x'
  where
   x = f x0
-  x' | FixLeft  l <- x = FixLeft  $ fmap (simplifyFixChoice f) l
-     | FixRight r <- x = FixRight $ fmap (simplifyFixChoice f) r
+  x' | FixLeft  l ← x = FixLeft  $ fmap (simplifyFixChoice f) l
+     | FixRight r ← x = FixRight $ fmap (simplifyFixChoice f) r
 
 instance (Show l, Show r) ⇒ Show (SymbolicNum l r) where
   showsPrec p = \case

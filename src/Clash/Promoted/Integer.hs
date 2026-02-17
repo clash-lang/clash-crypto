@@ -5,13 +5,10 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Recreates type level integers from type-level naturals via adding a
-sign.
+Recreates type level integers from type-level naturals via adding a sign.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE NoTemplateHaskell #-}
-{-# LANGUAGE NoGeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -82,7 +79,7 @@ type family Abs x
  where
   Abs '(_, x) = x
 
--- | Returns the 'signum' of a type level integer.
+-- | Returns the 'GHC.Num.signum' of a type level integer.
 type SigNum ∷ ℤ → ℤ
 type family SigNum x
  where

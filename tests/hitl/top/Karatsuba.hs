@@ -1,9 +1,20 @@
+{-|
+Module      : Karatsuba
+Copyright   : Copyright © 2025 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+HITLT instance for 'Clash.Crypto.Calculator.Karatsuba.karatsubaSequential'.
+-}
+
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE CPP #-}
+
 module Karatsuba (topEntity) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Clash.Signal.Channel (cachedFromMaybe, newsfeed)
 

@@ -21,7 +21,7 @@ module Clash.Crypto.Hash.SHA
   , KnownSHA(..), SHAFacts(..)
   ) where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 

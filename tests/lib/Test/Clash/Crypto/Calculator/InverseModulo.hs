@@ -1,19 +1,31 @@
+{-|
+Module      : Test.Clash.Crypto.Calculator.InverseModulo
+Copyright   : Copyright © 2025-2026 QBayLogic B.V.
+Maintainer  : QBayLogic B.V.
+Stability   : experimental
+Portability : POSIX
+
+Test specifics for 'Clash.Crypto.Calculator.InverseModulo'.
+-}
+
 module Test.Clash.Crypto.Calculator.InverseModulo where
 
-import Clash.Prelude
+import Clash.Prelude.Safe
+
 import Data.Maybe (fromMaybe)
 
-import qualified Clash.Crypto.Calculator.Modulo as Crypto
-import qualified Data.Modular as Modular
+import Clash.Crypto.Calculator.Modulo (PrimeField)
+import Data.Modular (Modulus, inv, toMod, unMod)
 
-invMod ∷ ∀ p. Modular.Modulus p ⇒ Crypto.Mod p → Crypto.Mod p
+-- | Golden reference for inverse modulo operations over prime fields.
+invMod ∷ ∀ p. Modulus p ⇒ PrimeField p → PrimeField p
 invMod 0 = 0
 invMod x
   = fromInteger
-  $ Modular.unMod
+  $ unMod
   $ fromMaybe moduloError
-  $ Modular.inv
-  $ Modular.toMod @p
+  $ inv
+  $ toMod @p
   $ toInteger x
  where
   moduloError =
