@@ -23,7 +23,6 @@ import Clash.Explicit.BlockRam (ResetStrategy(..), blockRamU)
 
 import Control.Monad (guard)
 import Data.Maybe (fromMaybe, isJust)
-import Language.Haskell.Unicode (type (≤))
 
 -- | The possible actions for manipulating the stack.
 data StackAction n a
@@ -41,7 +40,7 @@ data StackAction n a
   -- ^ swaps the n-th element on the stack with the top element
    deriving (Generic, NFDataX, Show)
 
-deriving instance (KnownNat n, 1 ≤ n, BitPack a) ⇒ BitPack (StackAction n a)
+deriving instance (KnownNat n, BitPack a) ⇒ BitPack (StackAction n a)
 
 -- | A block RAM based stack supporting the given list of actions,
 -- each always requiring a single cycle until its result appears on
@@ -56,10 +55,11 @@ deriving instance (KnownNat n, 1 ≤ n, BitPack a) ⇒ BitPack (StackAction n a)
 --   full. After a successful push, the output is `Just` the pushed
 --   element. On failure, it is `Nothing`.
 --
--- * POP: removes a given number of elements from the top of the stack.
---   If the argument is greater than the charge of the stack, the stack is
---   emptied, and the output is `Nothing`. Otherwise, the stack is non-empty
---   after operation, and the output is `Just` the value of the top element.
+-- * POP: removes a given number of elements from the top of the
+--   stack. If the argument is greater than or equal to the charge of
+--   the stack, then the stack is emptied and the output is `Nothing`.
+--   Otherwise, the stack is non-empty after the operation, and the
+--   output is `Just` the value of the top element.
 --
 -- * INSPECT: inspects the n-th element on the stack. If @n@ is strictly
 --   less than the current charge, the output is `Just` the value of the

@@ -56,9 +56,7 @@ data MsgBits alg n =
   deriving (Generic, NFDataX)
 
 deriving instance
-  ( KnownNat n, 1 ≤ n, KnownNat ((2 ^ SizeBits alg) `DDiv` n)
-  , 1 <= (2 ^ SizeBits alg) `DDiv` n
-  ) ⇒
+  (KnownNat n, KnownNat ((2 ^ SizeBits alg) `DDiv` n)) ⇒
   BitPack (MsgBits alg n)
 
 -- | All information necessary for filling the message padding in a
@@ -81,14 +79,12 @@ data MsgPad alg n =
   deriving (Generic)
 
 deriving instance
-  ( KnownNat n, KnownNat (WordSize alg)
-  , 1 ≤ n, 1 ≤ SizeBits alg
-  ) ⇒
+  (KnownNat n, KnownNat (WordSize alg), 1 ≤ n, 1 ≤ SizeBits alg) ⇒
   NFDataX (MsgPad alg n)
 
 deriving instance
   ( KnownNat n, KnownNat (WordSize alg), KnownNat (BlockSize alg)
-  , 1 ≤ n, 1 ≤ SizeBits alg, 1 ≤ 2 * BlockSize alg
+  , 1 ≤ n, 1 ≤ SizeBits alg
   ) ⇒
   BitPack (MsgPad alg n)
 

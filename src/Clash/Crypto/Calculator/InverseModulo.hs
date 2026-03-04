@@ -64,6 +64,7 @@ bea = enhance put get compute
  where
   put n
     | Rewrite ← using @(CLog2KeepsPositive m)
+    , Rewrite ← Rewrite @(CLog 2 m ~ CLogWZ 2 m 0)
     = ( (numConvert $ bitCoerce @_ @(Unsigned _) n, m, 1, 0)
       , BeaStart
       )
@@ -375,7 +376,7 @@ sictMiLoop m = enhance put get compute
 sictMiSequential ∷
   ∀ m dom.
   ( KnownNat m, HiddenClockResetEnable dom
-  , 1 ≤ m - 2 * ModSize m, 1 <= m, 1 <= SictPrecomp m
+  , 1 ≤ m - 2 * ModSize m, 1 ≤ SictPrecomp m
   , 2 * ModSize m ≤ m, 1 ≤ 2 * ModSize m * (m - 1)
   ) ⇒
   Channel dom (ℤₘ m) →
