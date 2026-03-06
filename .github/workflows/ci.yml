@@ -61,7 +61,7 @@ jobs:
     runs-on: [self-hosted, compute]
     timeout-minutes: 10
     container:
-      image: ghcr.io/qbaylogic/nix-attic:687dd7d-20251030
+      image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
       options: --memory=30g
     needs: [ nix-build ]
     steps:
