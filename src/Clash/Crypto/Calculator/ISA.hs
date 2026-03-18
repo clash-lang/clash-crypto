@@ -528,10 +528,26 @@ type family Attach k a b
   -- Not running a routine will not change the stack profile.
   Attach 0 s _ = s
   -- Running a routine k times will move the stack pointer k times
-  -- relatively to the stack profile of that routine. The same
-  -- principle applies for both extremes.
+  -- relatively to the stack profile of that routine.
+  --
+  -- The new upper bound is the maximum of the following three cases,
+  -- as either of them may be dominating depending on the given routine:
+  --   * the old upper bound u0
+  --   * the upper bound u1 (of the routine to be run) added to the
+  --     pointer p0 (the position before running the given routine);
+  --     this bound may be reached by the first invocation of the
+  --     routine only, while repeated invocations move the
+  --     pointer further and further into the opposite direction
+  --   * the upper bound u1 (of the routine to be run) added to
+  --     p0 + (k - 1) * p1, which is the pointer position before the
+  --     last invocation of the routine. Note that upper bound is
+  --     relative to zero and not to the resulting pointer. Hence, we
+  --     need to add it before running the routine for the last time.
+  --
+  -- The new lower bound is calculated in a similar way as the new
+  -- upper bound, just with the direction reversed.
   Attach k ('StackProfile p0 u0 l0) ('StackProfile p1 u1 l1) =
     'StackProfile
       (p0 .+. (Toℤ k .*. p1))
-      (Maxℤ u0 (p0 .+. (Toℤ k .*. p1) .+. Toℤ u1))
-      (Minℤ l0 (p0 .+. (Toℤ k .*. p1) .-. Toℤ l1))
+      (Maxℤ (Maxℤ u0 (p0 .+. Toℤ u1)) (p0 .+. (Dec (Toℤ k) .*. p1) .+. Toℤ u1))
+      (Minℤ (Minℤ l0 (p0 .-. Toℤ l1)) (p0 .+. (Dec (Toℤ k) .*. p1) .-. Toℤ l1))
