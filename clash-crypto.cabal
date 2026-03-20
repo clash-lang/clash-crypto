@@ -165,6 +165,7 @@ library hitl
     Hitl.Clash.Cores.Uart.Extra
     Hitl.Clash.Crypto.Calculator.CLU
     Hitl.Clash.Crypto.Hash.Escape
+    Hitl.Clash.Crypto.PubKey.ECDSA
     Hitl.Clash.Sized.Stack
 
 library hitlt-instances
@@ -180,6 +181,7 @@ library hitlt-instances
     Calculator
     CLU
     DeterministicNonce
+    ECDSADerivePublicKey
     ECDSASign
     FastGCD
     FltCtmi

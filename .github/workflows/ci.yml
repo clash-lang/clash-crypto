@@ -83,7 +83,7 @@ jobs:
     timeout-minutes: 60
     container:
       image: ghcr.io/qbaylogic/clash-crypto-ci:20260130-687dd7d
-      options: --memory=11g
+      options: --memory=16g
     needs: [ nix-build ]
     strategy:
       matrix:
@@ -95,7 +95,7 @@ jobs:
           - { name: "Modulo", pattern: Modulo.Eq }
           - { name: "Inverse Modulo", pattern: InverseModulo }
           - { name: "CLU", pattern: CLU }
-          - { name: "ECDSA (Sign)", pattern: ECDSA }
+          - { name: "ECDSA", pattern: ECDSA }
           - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic }
     steps:
       - name: "Checkout the repository"
@@ -135,6 +135,7 @@ jobs:
           - { name: "Calculator", testcase: Calculator, memory: 11g }
           - { name: "ECDSA (Nonce)", testcase: DeterministicNonce, memory: 30g }
           - { name: "ECDSA (Sign)", testcase: ECDSASign, memory: 30g }
+          - { name: "ECDSA (Public Key Derivation)", testcase: ECDSADerivePublicKey, memory: 30g }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4
@@ -182,6 +183,7 @@ jobs:
           - { name: "Calculator", pattern: Calculator.Calculator, memory: 11g }
           - { name: "ECDSA (Sign)", pattern: ECDSA.Sign, memory: 30g }
           - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic, memory: 11g }
+          - { name: "ECDSA (Public Key Derivation)", pattern: ECDSADerivePublicKey, memory: 30g }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v5

@@ -123,6 +123,7 @@ shakeRules cfgs wanted = do
   hitltRules "Stack" "Stack" []
   hitltRules "Calculator" "Calculator" []
   hitltRules "ECDSASign" "ECDSASign" []
+  hitltRules "ECDSADerivePublicKey" "ECDSADerivePublicKey" []
 
   -- project apps
 

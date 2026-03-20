@@ -1,18 +1,18 @@
 {-|
-Module      : ECDSASign
-Copyright   : Copyright © 2025 QBayLogic B.V.
+Module      : DerivePublicKey
+Copyright   : Copyright © 2026 QBayLogic B.V.
 Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-HITLT instance for 'Clash.Crypto.PubKey.ECDSA.SignHash'.
+HITLT instance for 'Clash.Crypto.PubKey.ECDSA.DerivePublicKey'.
 -}
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module ECDSASign where
+module ECDSADerivePublicKey where
 
 import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
@@ -41,9 +41,10 @@ topEntity ∷
   "PMOD1_5" ::: Signal Dom12 Bit
 topEntity (orangePll12 → (clk, rst))
   = withUartRequestResponseHandler clk rst (SNat @BAUD)
-  $ newsfeed @(HitlCalculatorOutput SignHashTest _)
-      . calculator SignHashTest SignHashIP 2 72
+  $ newsfeed @(HitlCalculatorOutput DerivePublicKeyTest _)
+      . fmap reverse
+      . calculator DerivePublicKeyTest DerivePublicKeyIP 2 72
       . cachedFromMaybe
-      . bulkRead @(HitlCalculatorInput SignHashTest (ModSize SecP256ModPrime))
+      . bulkRead @(HitlCalculatorInput DerivePublicKeyTest (ModSize SecP256ModPrime))
 
 makeTopEntity 'topEntity
