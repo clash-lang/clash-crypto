@@ -26,7 +26,7 @@ DATE=$(date +%Y%m%d)
   cd ../..
   $DOCKER build . -f .github/setup/Dockerfile \
     --build-arg ATTIC_VERSION="$ATTIC_VERSION" \
-    -t ghcr.io/qbaylogic/clash-crypto-ci:latest \
-    -t ghcr.io/qbaylogic/clash-crypto-ci:$DATE-$ATTIC_VERSION_TAG \
+    -t ghcr.io/qbaylogic/clash-formal-ci:latest \
+    -t ghcr.io/qbaylogic/clash-formal-ci:$DATE-$ATTIC_VERSION_TAG \
     $DOCKER_ARGS
 )

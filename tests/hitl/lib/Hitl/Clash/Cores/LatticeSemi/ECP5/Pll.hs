@@ -12,7 +12,7 @@ Some PLLs that are supported by Lattice's ECP5 FPGA.
 {-# LANGUAGE PostfixOperators #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 
 module Hitl.Clash.Cores.LatticeSemi.ECP5.Pll where
 

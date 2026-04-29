@@ -161,9 +161,7 @@ main = do
             [ testInverseModulo "BEA" sem dev settings
             , testInverseModulo "FastGCD" sem dev settings
             , testInverseModulo "FltCtmi" sem dev settings
-            -- The SictMi test has been disabled due to a bug in nextpnr
-            -- cf. https://github.com/clash-lang/clash-crypto/issues/65
-            --, testInverseModulo "SictMi" sem dev settings
+            , testInverseModulo "SictMi" sem dev settings
             ]
         , testGroup "Clash.Crypto.Calculator.CLU"
             [ testCLU "CLU" sem dev settings

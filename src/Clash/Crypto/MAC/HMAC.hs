@@ -10,7 +10,6 @@ A streaming implementation of HMAC according to
 -}
 
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE MagicHash #-}
 
 module Clash.Crypto.MAC.HMAC
   ( hmac

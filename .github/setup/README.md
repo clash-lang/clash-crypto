@@ -11,8 +11,8 @@ Build and push the image via
 cd .github/setup
 ./build.sh
 docker login ghcr.io/qbaylogic
-docker push ghcr.io/qbaylogic/nix-attic:latest
-docker push ghcr.io/qbaylogic/nix-attic:<today>-<commit>
+docker push ghcr.io/qbaylogic/clash-formal-ci:latest
+docker push ghcr.io/qbaylogic/clash-formal-ci:<today>-<commit>
 ```
 
 where `<today>` must be replaced by the docker build date (`YYYYMMDD`

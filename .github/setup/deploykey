@@ -1,10 +1,14 @@
 #!/bin/bash
 
 mkdir -p /root/.ssh
-echo -e "${*}" > /root/.ssh/deploykey && chmod 600 /root/.ssh/deploykey
+echo -e "${2}" > /root/.ssh/${1} && chmod 600 /root/.ssh/${1}
 echo -e "\
-host github.com\n\
+\nhost github.com-${1}\n\
   User git\n\
   Hostname github.com\n\
-  IdentityFile /root/.ssh/deploykey\n\
-" > /root/.ssh/config
+  IdentityFile /root/.ssh/${1}\n\
+" >> /root/.ssh/config
+
+if [ -f "flake.nix" ] && [ -f "flake.lock" ]; then
+  sed -i "s!github.com/QBayLogic/${1}!github.com-${1}/QBayLogic/${1}!g" flake.lock flake.nix
+fi

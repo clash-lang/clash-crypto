@@ -272,7 +272,7 @@ fltCtmiE (unzipC → (input, p)) smmOut =
   stage = register (FLTSquare, (False, minBound ∷ Index n))
     $ mux input.hasUpdates (pure (FLTSquare, (True, maxBound)))
     $ mux cur.hasUpdates
-       (nextStage <$> (fmap (\x → x - 2) <$> p.content) <*> stage)
+       (liftA2 nextStage (fmap (\x → x - 2) <$> p.content) stage)
        stage
    where
     nextStage Nothing  _ = (FLTSquare, (False, minBound ∷ Index n))

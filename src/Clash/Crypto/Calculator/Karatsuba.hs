@@ -294,7 +294,7 @@ karatsubaSequentialModulo stages regBound (unzipC → (input, k))
         u1 act i v n d = case act of
           InitR1  → i  ;  KeepR1 → v  ;  FromR0 → n
           PlusR0  → toU $ addMod d (toM v) (toM n)
-          Negate  → toU $ d - (toM v)
+          Negate  → toU $ d - toM v
 
         u2 act i v n o = case act of
           InitR2  → i  ;  KeepR2 → v  ;  FromR1 → n

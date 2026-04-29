@@ -76,14 +76,10 @@ tastyTests
         $ testProperty "Inverse" $ property $ do
           a ∷ PrimeField SecP256ModPrime ← genMod
           b ∷ PrimeField SecP256ModPrime ← genMod
-          testCLU Inv a b $ if
-            | a == 0    → b
-            | otherwise → invMod a
+          testCLU Inv a b $ if a == 0 then b else invMod a
           c ∷ PrimeField SecP256OrdPrime ← genMod
           d ∷ PrimeField SecP256OrdPrime ← genMod
-          testCLU Inv c d $ if
-            | c == 0    → d
-            | otherwise → invMod c
+          testCLU Inv c d $ if c == 0 then d else invMod c
       ]
  where
   genMod ∷ ∀ p m. (Monad m, KnownNat p, 3 ≤ p) ⇒ PropertyT m (ℤₘ p)

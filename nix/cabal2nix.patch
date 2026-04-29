@@ -1,0 +1,10 @@
+--- a/src/Distribution/Nixpkgs/Haskell/FromCabal/License.hs
++++ b/src/Distribution/Nixpkgs/Haskell/FromCabal/License.hs
+@@ -53,6 +53,7 @@ fromSPDXLicense (SPDX.License expr) =
+     SPDX.ELicense simpl Nothing ->
+       -- Not handled: license exceptions
+       case simpl of
++        SPDX.ELicenseId SPDX.CERN_OHL_P_2_0 -> Unknown (Just $ prettyShow expr)
+         SPDX.ELicenseId lid -> Known ("lib.licensesSpdx.\"" ++ prettyShow lid ++ "\"")
+         _ ->
+           -- Not handed: the '+' suffix and user-defined licences references.
