@@ -13,7 +13,7 @@ import Control.Monad.IO.Class (liftIO)
 
 import Development.Shake
   (RuleResult, Rules, Action, newCache, need, addOracle, askOracle)
-import Development.Shake.Classes (Typeable, Hashable, Binary, NFData)
+import Development.Shake.Classes (Hashable, Binary, NFData)
 import Development.Shake.Config (readConfigFile, readConfigFileWithEnv)
 
 import System.Directory (doesFileExist, getCurrentDirectory)
@@ -22,9 +22,9 @@ import System.FilePath ((</>), isDrive, takeDirectory)
 import qualified Data.HashMap.Strict as HashMap (lookup)
 
 newtype Config = Config String
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+  deriving (Show, Eq, Hashable, Binary, NFData)
 newtype ConfigFile = ConfigFile String
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+  deriving (Show, Eq, Hashable, Binary, NFData)
 
 type instance RuleResult Config = Maybe String
 type instance RuleResult ConfigFile = Maybe String

@@ -22,7 +22,6 @@ module Clash.Crypto.MAC.HMAC
 import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
-import Clash.Signal.Extra (apWhen, regEnN)
 
 import Data.Constraint.Nat.Extra (CancelMultiple, KeepsPositiveIfMultiple)
 import Data.Functor ((<&>))
@@ -121,14 +120,14 @@ hmacE alg (mapEnd (const (0 ∷ Index 8)) → input) digest
        where
         count = register (0 ∷ Index (BlockSize alg `Div` 8))
           $ mux input.atStartFrame (pure maxBound)
-          $ apWhen input.hasData (satPred SatBound)
+          $ apEn input.hasData (satPred SatBound)
             count
 
       -- zero everything behind the actual key and xor the key frames
       -- with the provided pad
       xorpad pad
-        = apWhen isPaddedKeyFrame (xor pad <$>)
-        $ apWhen (isPaddedKeyFrame .&&. not <$> isInputKeyFrame) (0x00 <$)
+        = apEn isPaddedKeyFrame (xor pad <$>)
+        $ apEn (isPaddedKeyFrame .&&. not <$> isInputKeyFrame) (0x00 <$)
         $ mapStart (const ()) input
 
       -- the output of the hashing function

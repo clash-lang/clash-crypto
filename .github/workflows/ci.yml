@@ -59,7 +59,7 @@ jobs:
   pre-check:
     name: "No Warnings"
     runs-on: [self-hosted, compute]
-    timeout-minutes: 10
+    timeout-minutes: 20
     container:
       image: ghcr.io/qbaylogic/clash-formal-ci:20260326-687dd7d
       options: --memory=30g

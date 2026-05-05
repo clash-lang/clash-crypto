@@ -408,13 +408,13 @@ instance Show ShakeOutOfDate where
     ]
 
 newtype CabalApp = CabalApp ()
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+  deriving (Show, Eq, Hashable, Binary, NFData)
 type instance RuleResult CabalApp = String
 
 newtype CabalBinPath = AppName String
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+  deriving (Show, Eq, Hashable, Binary, NFData)
 type instance RuleResult CabalBinPath = String
 
 newtype CabalSDistSources = CabalSDistSources String
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+  deriving (Show, Eq, Hashable, Binary, NFData)
 type instance RuleResult CabalSDistSources = [String]

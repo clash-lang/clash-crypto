@@ -17,7 +17,6 @@ import Clash.Prelude.Safe
 import Clash.Signal.Channel
 import Clash.Signal.DataStream
 import Clash.Signal.Delayed.Extra
-import Clash.Signal.Extra (apWhen)
 
 import Data.Constraint.Nat.Extra (DDiv, CancelMultiple, KeepsPositiveIfMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)
@@ -92,8 +91,8 @@ hashStream alg input
     proceed = stepCount .== Just 0
      where
       stepCount = register (Nothing ∷ Maybe (Index (DDiv (BlockSize alg) n)))
-        $ apWhen blockComplete (const $ pure maxBound)
-        $ apWhen (maybe False (> 0) <$> stepCount) (satPred SatBound <$>)
+        $ apEn blockComplete (const $ pure maxBound)
+        $ apEn (maybe False (> 0) <$> stepCount) (satPred SatBound <$>)
           stepCount
 
     -- marks the time after the input has been received and
