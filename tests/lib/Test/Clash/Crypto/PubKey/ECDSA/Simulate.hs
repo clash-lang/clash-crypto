@@ -6,10 +6,12 @@ Stability   : experimental
 Portability : POSIX
 
 Types and a simplification procedure to facilitate symbolic execution of
-the ECDSA signing algorithm. 'EcdsaSymbol' contains constructors that
-represent intermediate values in the calculation of point addition, scalar
-multiplication and signing. 'simp' detects the structure of the intermediate
-values and translates them to instances of 'EcdsaSymbol'.
+the ECDSA signing algorithm:
+
+* 'EcdsaSymbol' contains constructors that represent intermediate values
+  in the calculation of point addition, scalar multiplication and signing.
+* 'simp' detects the structure of the intermediate values and translates
+  them to instances of 'EcdsaSymbol'.
 -}
 
 {-# LANGUAGE PatternSynonyms #-}
@@ -23,15 +25,9 @@ import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 import GHC.TypeNats (Nat)
 
--- | Choice fixpoint of 'SymbolicNum' and 'EcdsaSymbol'.
-type Sym = FixChoice (SymbolicNum Nat) EcdsaSymbol
+-- * ECDSA Symbols
 
-var ∷ String → Sym
-var = FixRight . Var_
-
-vars ∷ String → [Sym]
-vars = fmap var . words
-
+-- | The parameters of a symbolic binary point operation.
 data Point2 r = Point2
   { x₁ ∷ r
   , y₁ ∷ r
@@ -40,6 +36,7 @@ data Point2 r = Point2
   }
   deriving (Eq, Show, Functor, Generic, NFData)
 
+-- | The parameters of a symbolic multiplication step.
 data MulStep r = MulStep
   { step ∷ r
   , x ∷ r
@@ -47,37 +44,67 @@ data MulStep r = MulStep
   }
   deriving (Eq, Show, Functor, Generic, NFData)
 
+-- | Symbols for different structures of ECDSA.
 data EcdsaSymbol r
-  = Var_ String
-  | Not_ r
-  | IsZero_ r
-  | IsInfinite_ r r
-  | Equals_ r r
-  | PointEquals_ (Point2 r)
-  | SlopeDiv_ (Point2 r)
-  | Square_ r
-  | SlopeNum_ (Point2 r)
-  | Slope_ (Point2 r)
-  | Valid_ (Point2 r)
-  | ValidAddX_ (Point2 r)
-  | ValidAddY_ (Point2 r)
-  | AddX_ (Point2 r)
-  | AddY_ (Point2 r)
-  | MulStepPointX_ (MulStep r)
-  | MulStepPointY_ (MulStep r)
-  | MulStepAccX_ r (MulStep r)
-  | MulStepAccY_ r (MulStep r)
-  | MulX_ r r r
-  | MulY_ r r r
-  | Hash_
-  | Nonce_
-  | PrivKey_
-  | GX_
-  | GY_
-  | R_
-  | S_
+  = -- | variables
+    Var_ String
+  | -- | negation
+    Not_ r
+  | -- | zero check
+    IsZero_ r
+  | -- | infinity check
+    IsInfinite_ r r
+  | -- | equality
+    Equals_ r r
+  | -- | point equality
+    PointEquals_ (Point2 r)
+  | -- | slope div calculation
+    SlopeDiv_ (Point2 r)
+  | -- | square calculation
+    Square_ r
+  | -- | slope num calculation
+    SlopeNum_ (Point2 r)
+  | -- | slope calculation
+    Slope_ (Point2 r)
+  | -- | point validation
+    Valid_ (Point2 r)
+  | -- | validated point x addition
+    ValidAddX_ (Point2 r)
+  | -- | validated point y addition
+    ValidAddY_ (Point2 r)
+  | -- | point x addition
+    AddX_ (Point2 r)
+  | -- | point y addition
+    AddY_ (Point2 r)
+  | -- | point x multiplication step
+    MulStepPointX_ (MulStep r)
+  | -- | point y multiplication step
+    MulStepPointY_ (MulStep r)
+  | -- | point x multiplication step with accumulator
+    MulStepAccX_ r (MulStep r)
+  | -- | point x multiplication step with accumulator
+    MulStepAccY_ r (MulStep r)
+  | -- | point x multiplication
+    MulX_ r r r
+  | -- | point y multiplication
+    MulY_ r r r
+  | -- | hash calculation
+    Hash_
+  | -- | nonce calculation
+    Nonce_
+  | -- | private key generation
+    PrivKey_
+  | -- | x-coordinate of the curveBasePoint field
+    GX_
+  | -- | y-coordinate of the curveBasePoint field
+    GY_
+  | -- | some intermediate result
+    R_
+  | -- | some intermediate result
+    S_
   deriving (Eq, Show, Functor, Generic, NFData)
 
+-- | Symbolic numeric literals.
 pattern Lit ∷ l → FixChoice (SymbolicNum l) r
 pattern Lit l = FixLeft (Sim.Lit l)
 
@@ -86,12 +113,18 @@ pattern Add, Sub, Mul, Inv, Bit ∷
   FixChoice (SymbolicNum l) r →
   FixChoice (SymbolicNum l) r
 
+-- | Symbolic addition.
 pattern Add x y = FixLeft (Sim.Add x y)
+-- | Symbolic substraction.
 pattern Sub x y = FixLeft (Sim.Sub x y)
+-- | Symbolic multiplication.
 pattern Mul x y = FixLeft (Sim.Mul x y)
+-- | Symbolic modulo inverse.
 pattern Inv x z = FixLeft (Sim.Inv x z)
+-- | Symbolic bit check.
 pattern Bit x b = FixLeft (Sim.Bit x b)
 
+-- | Symbolic variables.
 pattern Var ∷ String → FixChoice l EcdsaSymbol
 pattern Var s = FixRight (Var_ s)
 
@@ -99,8 +132,11 @@ pattern Not, IsZero, Square ∷
   FixChoice l EcdsaSymbol →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic negation.
 pattern Not x = FixRight (Not_ x)
+-- | Symbolic zero check.
 pattern IsZero x = FixRight (IsZero_ x)
+-- | Symbolic square calculation.
 pattern Square x = FixRight (Square_ x)
 
 pattern IsInfinite, Equals ∷
@@ -108,7 +144,9 @@ pattern IsInfinite, Equals ∷
   FixChoice l EcdsaSymbol →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic infinity check.
 pattern IsInfinite x y = FixRight (IsInfinite_ x y)
+-- | Symbolic equality check.
 pattern Equals x y = FixRight (Equals_ x y)
 
 pattern PointEquals, SlopeDiv, SlopeNum, Slope,
@@ -116,14 +154,23 @@ pattern PointEquals, SlopeDiv, SlopeNum, Slope,
   Point2 (FixChoice l EcdsaSymbol) →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic point equality check.
 pattern PointEquals p = FixRight (PointEquals_ p)
+-- | Symbolic slope div calculation.
 pattern SlopeDiv p = FixRight (SlopeDiv_ p)
+-- | Symbolic slope num calculation.
 pattern SlopeNum p = FixRight (SlopeNum_ p)
+-- | Symbolic slope calculation.
 pattern Slope p = FixRight (Slope_ p)
+-- | Symbolically validated point.
 pattern Valid x = FixRight (Valid_ x)
+-- | Symbolically validated point x addition.
 pattern ValidAddX x = FixRight (ValidAddX_ x)
+-- | Symbolically validated point y addition.
 pattern ValidAddY x = FixRight (ValidAddY_ x)
+-- | Symbolic point x addition.
 pattern AddX x = FixRight (AddX_ x)
+-- | Symbolic point y addition.
 pattern AddY x = FixRight (AddY_ x)
 
 pattern MulX, MulY ∷
@@ -132,14 +179,18 @@ pattern MulX, MulY ∷
   FixChoice l EcdsaSymbol →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic point x multiplication.
 pattern MulX s x y = FixRight (MulX_ s x y)
+-- | Symbolic point y multiplication.
 pattern MulY s x y = FixRight (MulY_ s x y)
 
 pattern MulStepPointX, MulStepPointY ∷
   MulStep (FixChoice l EcdsaSymbol) →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic point x multiplication step.
 pattern MulStepPointX p = FixRight (MulStepPointX_ p)
+-- | Symbolic point y multiplication step.
 pattern MulStepPointY p = FixRight (MulStepPointY_ p)
 
 pattern MulStepAccX, MulStepAccY ∷
@@ -147,22 +198,33 @@ pattern MulStepAccX, MulStepAccY ∷
   MulStep (FixChoice l EcdsaSymbol) →
   FixChoice l EcdsaSymbol
 
+-- | Symbolic point x multiplication step with accumulator.
 pattern MulStepAccX s p = FixRight (MulStepAccX_ s p)
+-- | Symbolic point y multiplication step with accumulator.
 pattern MulStepAccY s p = FixRight (MulStepAccY_ s p)
 
 pattern Hash, Nonce, PrivKey, GX, GY, R, S ∷
   FixChoice l EcdsaSymbol
 
+-- | Symbolic hash calculation.
 pattern Hash = FixRight Hash_
+-- | Symbolic nonce calculation.
 pattern Nonce = FixRight Nonce_
+-- | Symbolic private key generation.
 pattern PrivKey = FixRight PrivKey_
+-- | Symbolic x-coordinate of the curve's base point field.
 pattern GX = FixRight GX_
+-- | Symbolic x-coordinate of the curve's base point field.
 pattern GY = FixRight GY_
+-- | Symbolic intermediate result.
 pattern R = FixRight R_
+-- | Symbolic intermediate result.
 pattern S = FixRight S_
 
+-- * Symbolic Simplification
+
 -- | Detect structures that represent an intermediate value in the computation
--- of point addition, scalar multiplication and ecdsa signing, and compress them
+-- of point addition, scalar multiplication and ECDSA signing, and compress them
 -- into an 'EcdsaSymbol'.
 simp ∷ Sym → Sym
 
@@ -380,3 +442,17 @@ simp ((MulX Nonce GX GY) `Add` 0) = R
 simp (((PrivKey `Mul` R) `Add` Hash) `Mul` (Inv Nonce 0)) = S
 
 simp x = x
+
+-- * Utility Functions
+
+-- | Choice fixpoint of 'SymbolicNum' and 'EcdsaSymbol'.
+type Sym = FixChoice (SymbolicNum Nat) EcdsaSymbol
+
+-- | Symbolic variable constructor.
+var ∷ String → Sym
+var = FixRight . Var_
+
+-- | Constructs multiple symbolic variables at once using a space
+-- separated string of variable names.
+vars ∷ String → [Sym]
+vars = fmap var . words

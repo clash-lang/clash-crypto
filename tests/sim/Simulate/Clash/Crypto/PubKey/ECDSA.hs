@@ -14,7 +14,6 @@ Simulation tests for 'Clash.Crypto.PubKey.ECDSA'.
 
 module Simulate.Clash.Crypto.PubKey.ECDSA (tastyTests) where
 
-import Prelude (even)
 import Clash.Prelude.Safe
 
 import Clash.Crypto.PubKey.ECDSA
@@ -173,43 +172,3 @@ runIsZero = run (IsZero ∷ Routine Nat Nat SECP256R1)
 
 runDerivePublicKey ∷ [CurveNum] → Maybe [CurveNum]
 runDerivePublicKey = run (DerivePublicKey ∷ Routine Nat Nat SECP256R1)
-
-instance CalculatorNum (Unsigned 256) where
-  add p x y
-   | p - x > y = x + y
-   | otherwise = y - (p - x)
-  sub p x y
-   | x >= y    = x - y
-   | otherwise = p - (y - x)
-  mul p x y = truncateB $ bigR `mod` extend p
-   where
-    bigR ∷ Unsigned 512
-    bigR = extend x * extend y
-  inv p a b =
-   if a == 0 then b
-   else moduloPower p (p - 2) a 1
-  bit a j
-   | j < 256, testBit a (fromEnum j) = 1
-   | otherwise = 0
-
-moduloPower ∷
-  ∀ p. KnownNat p ⇒
-  Unsigned p →
-  Unsigned p →
-  Unsigned p →
-  Unsigned p →
-  Unsigned p
-moduloPower _ 0 _   _   = 1
-moduloPower p 1 val tmp = truncateB $ r `mod` extend p
- where
-  r ∷ Unsigned (p * 2)
-  r = extend val * extend tmp
-moduloPower p n val tmp =
- if even n then
-  moduloPower p (n `div` 2) (truncateB $ r1 `mod` extend p) (tmp `mod` p)
- else
-  moduloPower p (n - 1) val (truncateB $ r2 `mod` extend p)
- where
-  r1, r2 ∷ Unsigned (p * 2)
-  r1 = extend val * extend val
-  r2 = extend tmp * extend val

@@ -5,7 +5,8 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Test specifics for 'Clash.Crypto.Calculator.InverseModulo'.
+Shared test infrastructure for
+'Clash.Crypto.Calculator.InverseModulo'.
 -}
 
 module Test.Clash.Crypto.Calculator.InverseModulo where
@@ -17,7 +18,8 @@ import Data.Maybe (fromMaybe)
 import Clash.Crypto.Calculator.Modulo (PrimeField)
 import Data.Modular (Modulus, inv, toMod, unMod)
 
--- | Golden reference for inverse modulo operations over prime fields.
+-- | A golden reference from 'Data.Modular' for the inverse modulo
+-- operation over different prime fields.
 invMod ∷ ∀ p. Modulus p ⇒ PrimeField p → PrimeField p
 invMod 0 = 0
 invMod x

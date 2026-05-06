@@ -5,14 +5,16 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Test specifics for 'Clash.Crypto.Hash.SHA'.
+Shared test infrastructure for 'Clash.Crypto.Hash.SHA'.
 -}
 
 {-# LANGUAGE MagicHash #-}
 
 module Test.Clash.Crypto.Hash.SHA
-  ( CryptoHash(..)
-  , cryptoHash
+  ( -- * Utility Functions
+    cryptoHash
+    -- * Internal
+  , CryptoHash(..)
   ) where
 
 import Prelude
@@ -24,6 +26,8 @@ import Data.ByteArray (unpack)
 import Clash.Crypto.Hash.SHA
 import qualified Crypto.Hash
 
+-- | Utility wrapper to instantiate the secure hashing implementations in
+-- 'Crypto.Hash' using the 'SHA' selector of this package.
 class CryptoHash (alg ∷ SHA) where
   type CryptoToHash (alg ∷ SHA)
   cryptoHash# ∷ Proxy alg → ByteString → Crypto.Hash.Digest (CryptoToHash alg)
@@ -50,6 +54,8 @@ instance CryptoHash SHA512256 where
   type CryptoToHash SHA512256 = Crypto.Hash.SHA512t_256
   cryptoHash# _ = Crypto.Hash.hash
 
+-- | Hashes a bytestring according to the selected algorithm of type
+-- 'SHA' using the primitives in 'Crypto.Hash'.
 cryptoHash ∷
- ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
+  ∀ (alg ∷ SHA) → CryptoHash alg ⇒ ByteString → ByteString
 cryptoHash alg = pack . unpack . cryptoHash# (Proxy @alg)
