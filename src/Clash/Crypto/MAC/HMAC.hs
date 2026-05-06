@@ -112,7 +112,7 @@ hmacE alg (mapEnd (const (0 ∷ Index 8)) → input) digest
           return $ case frame of
             Idle      → minBound
             Start s _ → s
-            NoData    → c
+            Stretch   → c
             _         → satPred SatBound c
 
       -- mark the padded key frames via counting the received number of bytes
@@ -208,7 +208,7 @@ serialize = mealy (~~>) istate
     = ((bitCoerce x, maxBound), Idle)
 
   (buf, n) ~~> _ =
-    ((buf, n), if n > 0 then NoData else Idle)
+    ((buf, n), if n > 0 then Stretch else Idle)
 
   bufHead
     | Rewrite ← using @(KeepsPositiveIfMultiple (BitSize a) n)

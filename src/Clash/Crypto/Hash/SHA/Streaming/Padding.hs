@@ -112,8 +112,8 @@ padMessageStream alg
   Left mbs ~~> Idle
     = (Left mbs, Idle)
 
-  Left mbs ~~> NoData
-    = (Left mbs, NoData)
+  Left mbs ~~> Stretch
+    = (Left mbs, Stretch)
 
   -- non-terminal frames
   Left (MsgBits s r) ~~> Start () d

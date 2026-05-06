@@ -53,13 +53,13 @@ deriveNonce ∷
   -- and the data stream going to the hash algorithm
   (Channel dom (ℤₘ p), DataStream dom () (Index 8) (BitVector 8))
 deriveNonce p alg seedMaterial shaOutput
-  = (Channel output.result, register NoData hmacOutput)
+  = (Channel output.result, register Stretch hmacOutput)
  where
   lastRes ∷ Channel dom (Digest alg)
   hmacOutput ∷ DataStream dom () (Index 8) (BitVector 8)
   (lastRes, hmacOutput)
     | SHAFacts ← knownSHA alg
-    = hmacE alg (register NoData output.hmacInput) shaOutput
+    = hmacE alg (register Stretch output.hmacInput) shaOutput
 
   output ∷ Signal dom (NonceOutput alg p)
   output | SHAFacts ← knownSHA alg = mealy (~~>) initialState
@@ -121,7 +121,7 @@ deriveNonce p alg seedMaterial shaOutput
       | SHAFacts ← knownSHA alg
       , res /= 0 && res < natToNum @p && i == maxBound
       → ( initialState { isResult = True , resultAcc = s1.resultAcc }
-        , NonceOutput { result = Fresh $ bitCoerce res , hmacInput = NoData }
+        , NonceOutput { result = Fresh $ bitCoerce res , hmacInput = Stretch }
         )
     _ → ( outS
         , (baseOutput outS) { hmacInput = firstByte outS }
@@ -239,7 +239,7 @@ deriveNonce p alg seedMaterial shaOutput
   baseResult x = (x, baseOutput x)
 
   baseOutput ∷ NonceState alg p → NonceOutput alg p
-  baseOutput s = NonceOutput { result = r, hmacInput = NoData }
+  baseOutput s = NonceOutput { result = r, hmacInput = Stretch }
    where
     r = if s.isResult then Old $ bitCoerce $ getHighPart s.resultAcc else None
 

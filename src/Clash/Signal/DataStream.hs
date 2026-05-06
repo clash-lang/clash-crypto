@@ -5,29 +5,29 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-A 'DataStream' is a 'Signal' over 'Frame's, which allows to transfer
-data messages over multiple cycles, where we use the term "message" to
+A 'DataStream' is a 'Signal' over 'Frame's and allows the transfer of
+data messages over multiple cycles. We use the term "message" to
 denote a well-defined unit of data that can be separated into multiple
-data pieces ("chunks"), while the term "frame" denotes the data that
-is sent per cycle. Hence, a frame not necessarily needs to hold some
-data of the message. In that regard, the interface also supports data
-to be transferred non-contiguously over time.
+data pieces ("chunks") and the term "frame" to denote the data that is
+sent per cycle. A frame not necessarily needs to hold any data of the
+message. Hence, the interface also supports data to be transferred
+non-contiguously over time.
 
-Every data stream ships an 'Idle' frame, whenever no message gets
-transferred, while the transfer of a message is initiated via a single
-'Start' frame, followed by an arbitrary number of 'Middle' frames,
-finally ending with a single 'End' frame, where every of these three
-frame types holds a single data chunk. In addition to that, any number
-of 'NoData' frames can appear between a 'Start' the next later 'End'
+Whenever no message is transferred, then a data stream shall ship an
+'Idle' frame. A message transfer is initiated with a single 'Start'
+frame, followed by an arbitrary number of 'Middle' frames, and finally
+terminated by a single 'End' frame. All of these three frame types
+hold exactly one data chunk. In addition to that, any number of
+'Stretch' frames can appear between a 'Start' and the later 'End'
 frame, which enables the possibility of non-contiguous data
-transfer. The use of the special purpose 'NoData' frame during a
-message transfer makes it easy to observe that the transfer is
-currently in progress although no data is currently available. If a
+transfers. The use of the special purpose 'Stretch' frame during a
+message transfer makes it easy to observe that a transfer is currently
+in progress although no data is available at the given cycle. If a
 message fits into a single frame, then only a single 'End' frame is
-used to transfer the whole message, i.e., no 'Start' frame needs
+used to transfer the whole message, i.e., no 'Start' frame needs to
 appear before. The 'Start' and 'End' frames also can hold some
-additional data, that may be useful for the particular application for
-reassembling the message.
+additional information, that may be useful for an application to
+reassemble the message at the receiving side.
 -}
 
 {-# LANGUAGE Safe #-}
@@ -58,33 +58,32 @@ import GHC.Generics (Generic)
 import GHC.Records (HasField(..))
 import GHC.Show (Show)
 
--- | A frame, as it is transferred with every cycle.
+-- | A frame, as it is transferred at every cycle.
 data Frame s e a where
-  -- | The 'Idle' frame indicates that there is currently no message
+  -- | 'Idle' frames indicate that there currently is no message
   -- being transferred.
   Idle ∷ Frame s e a
-  -- | The 'NoData' frame indicates that a message transfer is
-  -- currently in progress, but no data is currently available.
-  NoData ∷ Frame s e a
-  -- | The 'Start' frame initiates the transfer of a new message. It
-  -- holds the first data chunk of the message and some additional data
-  -- (if useful for the application). Choose @s@ to be an empty data
-  -- type, if not required.
-  Start  ∷ s → a → Frame s e a
-  -- | The 'Middle' frame holds some intermediate data chunk of the
-  -- message.
+  -- | 'Stretch' frames indicate an in-progress message transfer,
+  -- but with no data currently available.
+  Stretch ∷ Frame s e a
+  -- | 'Start' frames initiate a message transfer. They hold the first
+  -- data chunk of the message and some additional data (if useful for
+  -- the application). Choose @s@ to be an empty data type, if not
+  -- required.
+  Start ∷ s → a → Frame s e a
+  -- | 'Middle' frames hold intermediate data chunks of a message.
   Middle ∷ a → Frame s e a
-  -- | The 'End' frame completes the transfer of a message. It holds
-  -- the final data chunk of the message and some additional data (if
-  -- useful for the application). Choose @e@ to be an empty data type,
-  -- if not required.
+  -- | 'End' frames terminate a message transfer. They hold the final
+  -- data chunk of the message and some additional data (if useful for
+  -- the application). Choose @e@ to be an empty data type, if not
+  -- required.
   End ∷ e → a → Frame s e a
   deriving (Show, Eq, Ord, Generic, NFDataX, BitPack, ShowX)
 
 instance Functor (Frame s e) where
   fmap f = \case
     Idle      → Idle
-    NoData    → NoData
+    Stretch   → Stretch
     Start s a → Start s $ f a
     Middle  a → Middle  $ f a
     End   e a → End   e $ f a
@@ -95,9 +94,9 @@ type DataStream dom s e a = Signal dom (Frame s e a)
 -- | Checks whether the given frame contains any message data.
 isDataFrame ∷ Frame s e a → Bool
 isDataFrame = \case
-  Idle   → False
-  NoData → False
-  _      → True
+  Idle    → False
+  Stretch → False
+  _       → True
 
 instance HasField "isDataFrame" (Frame s e a) Bool where
   getField = isDataFrame
@@ -151,7 +150,7 @@ instance HasField "atEndFrame" (Frame s e a) Bool where
 mayD ∷ b → (a → b) → Frame s e a → b
 mayD x f = \case
   Idle      → x
-  NoData    → x
+  Stretch   → x
   Start _ a → f a
   Middle  a → f a
   End   _ a → f a
@@ -174,7 +173,7 @@ regMayD i s = r
 mapStart ∷ (b → c) → DataStream dom b e a → DataStream dom c e a
 mapStart f = (<$>) $ \case
   Idle      → Idle
-  NoData    → NoData
+  Stretch   → Stretch
   Start s x → Start (f s) x
   Middle x  → Middle x
   End e x   → End e x
@@ -184,7 +183,7 @@ mapStart f = (<$>) $ \case
 mapEnd ∷ (b → c) → DataStream dom s b a → DataStream dom s c a
 mapEnd f = (<$>) $ \case
   Idle      → Idle
-  NoData    → NoData
+  Stretch   → Stretch
   Start s x → Start s x
   Middle x  → Middle x
   End e x   → End (f e) x

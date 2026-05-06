@@ -179,7 +179,7 @@ testHashNCStream alg xs
   | SHAFacts ← knownSHA alg
   , Rewrite ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
-      upd f (x, j) = f x : List.replicate j NoData
+      upd f (x, j) = f x : List.replicate j Stretch
 
       ncMessage = case List.unsnoc xs of
         Nothing           → []

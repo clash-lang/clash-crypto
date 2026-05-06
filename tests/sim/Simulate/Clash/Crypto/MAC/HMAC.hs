@@ -81,7 +81,7 @@ hmacImpl alg (keySpacings, msgSpacings) (keyData, msgData)
   , Rewrite  ← using @(CancelMultiple (MessageDigestSize alg) 8)
   = let
       addSpacings xs
-        = List.concatMap (\(j, x) → x : List.replicate j NoData)
+        = List.concatMap (\(j, x) → x : List.replicate j Stretch)
         . List.zip xs
 
       restructure = (Middle . bitCoerce <$>) . BS.unpack
