@@ -35,12 +35,15 @@ reassemble the message at the receiving side.
 module Clash.Signal.DataStream
   ( DataStream
   , Frame(..)
+  , isIdleFrame
+  , isStretchFrame
   , isDataFrame
   , isStartFrame
   , isMiddleFrame
   , isEndFrame
   , mayD
   , regMayD
+  , fromFrame
   , mapStart
   , mapEnd
   ) where
@@ -53,6 +56,7 @@ import Clash.XException (NFDataX, ShowX)
 import Data.Bool (Bool(..))
 import Data.Eq (Eq)
 import Data.Functor (Functor(..))
+import Data.Maybe (Maybe(..))
 import Data.Ord (Ord)
 import GHC.Generics (Generic)
 import GHC.Records (HasField(..))
@@ -90,6 +94,30 @@ instance Functor (Frame s e) where
 
 -- | A data stream is a 'Signal' of 'Frame's.
 type DataStream dom s e a = Signal dom (Frame s e a)
+
+-- | Checks whether the given frame is an 'Idle' frame.
+isIdleFrame ∷ Frame s e a → Bool
+isIdleFrame = \case
+  Idle → True
+  _    → False
+
+instance HasField "isIdleFrame" (Frame s e a) Bool where
+  getField = isIdleFrame
+
+instance HasField "atIdleFrame" (Frame s e a) Bool where
+  getField = isIdleFrame
+
+-- | Checks whether the given frame is a 'Stretch' frame.
+isStretchFrame ∷ Frame s e a → Bool
+isStretchFrame = \case
+  Stretch → True
+  _       → False
+
+instance HasField "isStretchFrame" (Frame s e a) Bool where
+  getField = isStretchFrame
+
+instance HasField "atStretchFrame" (Frame s e a) Bool where
+  getField = isStretchFrame
 
 -- | Checks whether the given frame contains any message data.
 isDataFrame ∷ Frame s e a → Bool
@@ -167,6 +195,11 @@ regMayD ∷
 regMayD i s = r
   where
    r = register i $ (`mayD` id) <$> r <*> s
+
+-- | Extract the data chunk when given a data frame, otherwise return
+-- 'Nothing'.
+fromFrame :: Frame s e a -> Maybe a
+fromFrame = mayD Nothing Just
 
 -- | Maps the provided function only over the additional data shipped
 -- with the 'Start' frames.
