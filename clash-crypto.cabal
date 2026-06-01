@@ -54,16 +54,16 @@ common common-options
   default-language: GHC2021
   build-depends:
     , base                                   >= 4.20   && < 4.21
-    , clash-prelude                          >= 1.9    && < 2
-    , ghc-typelits-extra                     >= 0.5.2  && < 0.6
-    , ghc-typelits-knownnat                  >= 0.8.2  && < 0.9
-    , ghc-typelits-natnormalise              >= 0.9.3  && < 0.10
+    , clash-prelude                          >= 1.10   && < 2
+    , ghc-typelits-extra                     >= 0.5.3  && < 0.6
+    , ghc-typelits-knownnat                  >= 0.8.3  && < 0.9
+    , ghc-typelits-natnormalise              >= 0.9.5  && < 0.10
 
 library
   import: common-options
   hs-source-dirs: src
   build-depends:
-    , clash-lib                              >= 1.9    && < 2
+    , clash-lib                              >= 1.10   && < 2
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
     , template-haskell                       >= 2.22   && < 2.23
   exposed-modules:
@@ -91,7 +91,6 @@ library
     Clash.Signal.Channel
     Clash.Signal.Delayed.Extra
     Clash.Signal.DataStream
-    Clash.Signal.Extra
     Clash.Sized.Stack
     Data.Constraint.Nat.Extra
     Language.Haskell.Unicode
@@ -102,7 +101,7 @@ library test
   build-depends:
     , clash-crypto
     , bytestring                             >= 0.12   && < 0.13
-    , clash-lib                              >= 1.9    && < 2
+    , clash-lib                              >= 1.10   && < 2
     , crypton                                >= 1.0.4  && < 1.1
     , deepseq                                >= 1.5    && < 1.6
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
@@ -136,7 +135,7 @@ test-suite simulation
     , clash-crypto
     , clash-crypto:test
     , bytestring                             >= 0.12   && < 0.13
-    , clash-prelude-hedgehog                 >= 1.9    && < 2
+    , clash-prelude-hedgehog                 >= 1.10   && < 2
     , crypton                                >= 1.0.4  && < 1.1
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
     , hedgehog                               >= 1.0.3  && < 1.8
@@ -151,7 +150,7 @@ library hitl
   hs-source-dirs: tests/hitl/lib
   build-depends:
     , clash-crypto
-    , clash-lib                              >= 1.9    && < 2
+    , clash-lib                              >= 1.10   && < 2
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
     , infinite-list                          >= 0.1.2  && < 0.2
     , mtl                                    >= 2.3.1  && < 2.4
@@ -204,7 +203,7 @@ test-suite hitlt
     , clash-crypto:hitl
     , clash-crypto:test
     , bytestring                             >= 0.12   && < 0.13
-    , clash-prelude-hedgehog                 >= 1.9    && < 2
+    , clash-prelude-hedgehog                 >= 1.10   && < 2
     , crypton                                >= 1.0.4  && < 1.1
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
     , hedgehog                               >= 1.0.3  && < 1.8
@@ -223,7 +222,7 @@ executable clash
   build-depends:
     , clash-crypto
     , clash-crypto:hitl
-    , clash-ghc                              >= 1.9    && < 2
+    , clash-ghc                              >= 1.10   && < 2
 
 common shake-options
   default-language: GHC2021

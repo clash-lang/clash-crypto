@@ -20,7 +20,6 @@ import Data.Eq (Eq)
 import Data.Enum (Enum, Bounded)
 import Data.Kind (Type)
 import Data.Ord (Ord)
-import Data.Typeable (Typeable)
 import GHC.Show (Show)
 import GHC.TypeNats (Nat)
 import GHC.Generics (Generic)
@@ -44,7 +43,6 @@ data SHA =
     , Show
     , Enum
     , Bounded
-    , Typeable
     )
 
 -- | Word size in bits (defined in Figure 1).

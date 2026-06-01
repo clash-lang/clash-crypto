@@ -20,7 +20,6 @@ module Clash.Crypto.Calculator.Karatsuba
 import Clash.Prelude.Safe
 
 import Clash.Signal.Channel
-import Clash.Signal.Extra (apWhen)
 
 import Data.Constraint.Nat.Extra
   ( Div2RoundsDown, HalfIsLess, HalfIsLessInverse, HalfLowerBound
@@ -126,8 +125,8 @@ karatsubaSequential stages k input
         done = iteration .== 0
          where
           iteration = register (minBound ∷ Index 4)
-            $ apWhen input.hasUpdates (const maxBound)
-            $ apWhen next.hasUpdates (satPred SatBound)
+            $ apEn input.hasUpdates (const maxBound)
+            $ apEn next.hasUpdates (satPred SatBound)
               iteration
 
         -- Separate the two numbers into a high part and a low part and
@@ -203,8 +202,8 @@ karatsubaSequentialModulo stages regBound (unzipC → (input, k))
              )
 
         mslIndex = register (maxBound ∷ Index (2 * lo))
-          $ apWhen input.hasUpdates (const maxBound)
-          $ apWhen mslOut.hasUpdates (const (natToNum @(lo - 1)))
+          $ apEn input.hasUpdates (const maxBound)
+          $ apEn mslOut.hasUpdates (const (natToNum @(lo - 1)))
             mslIndex
 
         r0i, r1i, r2i ∷ Signal dom (Unsigned (2 * (hi + 1)))

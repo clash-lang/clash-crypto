@@ -127,7 +127,7 @@ hash alg msg
     ∀ alg' n →
     Rewrite (SizeBits alg'
             ≤ RequiredBlocks alg' n * BlockSize alg' - n `Mod` BlockSize alg' - 1)
-  lemma₃ __ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
+  lemma₃ _ _ = unsafeCoerce (Rewrite ∷ Rewrite (0 ≤ 0))
 
 -- | Truncates the resulting hash value to the left-most @n@ bits,
 -- where @n@ is defined by the returned 'MessageDigestSize'.
