@@ -73,7 +73,7 @@ import Clash.Crypto.Hash.SHA
   Digest
   )
 import Clash.Crypto.Calculator.ISA
-  ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime
+  ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime, ArgCount, ResultCount
   )
 import Clash.Crypto.Calculator.Modulo (ℤₘ, PrimeField, ModSize, createMod)
 
@@ -84,13 +84,14 @@ import Test.Clash.Crypto.Hash.SHA
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
 import Hitl.Clash.Cores.Uart.Extra (ByteSize, isReadyIndicator)
+import Hitl.Clash.Crypto.PubKey.ECDSA
 
 import Data.Constraint.Nat.Extra (CancelMultiple)
 import GHC.TypeNats.Proof (Rewrite(..), using)
 
 import qualified Data.ByteArray      as Memory (unpack)
 import qualified Data.ByteString     as BS
-  ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate
+  ( concatMap, empty, null, uncons, unsnoc, pack, length, replicate, tail
   )
 import qualified Data.List           as List
 import qualified System.Timeout      as TO (timeout)
@@ -101,7 +102,9 @@ import qualified Crypto.Hash         as Hash
 import qualified Crypto.MAC.HMAC     as HMAC
 import Crypto.ECC (Curve_P256R1, EllipticCurve (..))
 import Crypto.Error (throwCryptoError)
-import Crypto.PubKey.ECDSA (signDigestWith, decodePrivate, signatureToIntegers)
+import Crypto.PubKey.ECDSA
+  ( signDigestWith, decodePrivate, signatureToIntegers, toPublic, encodePublic
+  )
 import qualified Crypto.PubKey.ECC.ECDSA as Spec
 import qualified Crypto.PubKey.ECC.Types as Spec
 
@@ -175,6 +178,7 @@ main = do
         , localOption (HedgehogTestLimit (Just 5))
         $ testGroup "Clash.Crypto.PubKey.ECDSA"
             [ testPubKeyAlgorithm "ECDSASign" sem dev settings
+            , testDerivePublicKey "ECDSADerivePublicKey" sem dev settings
             ]
         ]
 
@@ -221,6 +225,17 @@ main = do
         d ∷ PrimeField SecP256ModPrime ← genModBounded 1 maxBound
         runHitltPubKeyAlgorithm sem dev settings
          (bitCoerce h) (bitCoerce k) (bitCoerce d)
+
+  testDerivePublicKey ∷
+    String →
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testDerivePublicKey name sem dev settings
+    = test sem dev settings name $ do
+        d ∷ PrimeField SecP256ModPrime ← genModBounded 1 maxBound
+        runHitltDerivePublicKey sem dev settings $ bitCoerce d
 
   genStackAction ∷
     ∀ n size m.
@@ -383,6 +398,7 @@ runHitltCLU sem dev settings (op, (x, y)) =
   pV = natToNum @(p - 1) + 1
 
 runHitltCalculator ∷
+  (ArgCount Main ~ 2, ResultCount Main ~ 1) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
@@ -390,27 +406,30 @@ runHitltCalculator ∷
   PrimeField SecP256ModPrime →
   PropertyT IO ()
 runHitltCalculator sem dev settings a b =
-  runHitlt (ByteSize (PrimeField SecP256ModPrime)) sem dev settings bs eq
+  runHitlt (type (ResultCount Main * ByteSize (PrimeField SecP256ModPrime)))
+           sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(ByteVec (2 * ByteSize (PrimeField SecP256ModPrime)))
+     $ bitCoerce @_ @(ByteVec (ArgCount Main * ByteSize (PrimeField SecP256ModPrime)))
        (a, b)
   eq = pack
      $ toList
-     $ bitCoerce @_ @(ByteVec (ByteSize (PrimeField SecP256ModPrime)))
+     $ bitCoerce @_ @(ByteVec (ResultCount Main * ByteSize (PrimeField SecP256ModPrime)))
      $ goldenRoutine a b
 
 runHitltPubKeyAlgorithm ∷
+  (ArgCount SignHashTest ~ 3, ResultCount SignHashTest ~ 2) ⇒
   QSem →
   FilePath →
   SerialPortSettings →
   Unsigned 256 → Unsigned 256 → Unsigned 256 →
   PropertyT IO ()
 runHitltPubKeyAlgorithm sem dev settings h k d =
-  runHitlt (type (ByteSize (Unsigned 256) * 2)) sem dev settings bs eq
+  runHitlt (type (ByteSize (Unsigned 256) * ResultCount SignHashTest))
+           sem dev settings bs eq
  where
   bs = pack $ toList
-     $ bitCoerce @_ @(ByteVec (3 * ByteSize (Unsigned 256)))
+     $ bitCoerce @_ @(ByteVec (ArgCount SignHashTest * ByteSize (Unsigned 256)))
        (d, k, h)
 
   toBS = pack . toList . fmap BV.unpack . Vec.unconcatBitVector# @_ @8
@@ -425,12 +444,33 @@ runHitltPubKeyAlgorithm sem dev settings h k d =
 
   eq = pack
      $ toList
-     $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * 2))
+     $ bitCoerce @_ @(ByteVec (ByteSize (Unsigned 256) * ResultCount SignHashTest))
      $ bimap (fromInteger @(Unsigned 256)) (fromInteger @(Unsigned 256))
      $ swap
      $ fromMaybe (error "Crypton actions should not fail")
      $ fmap (signatureToIntegers Proxy)
      $ signDigestWith @Curve_P256R1 Proxy scalarK scalarD hDigest
+
+runHitltDerivePublicKey ∷
+  (ArgCount DerivePublicKeyTest ~ 1, ResultCount DerivePublicKeyTest ~ 2) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  Unsigned 256 →
+  PropertyT IO ()
+runHitltDerivePublicKey sem dev settings d =
+  runHitlt (type (ByteSize (Unsigned 256) * ResultCount DerivePublicKeyTest))
+           sem dev settings bs eq
+ where
+  bs = pack $ toList
+     $ bitCoerce @_
+        @(ByteVec (ByteSize (Unsigned 256) * ArgCount DerivePublicKeyTest)) d
+
+  scalarD = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy bs
+
+  eq = BS.tail
+     $ encodePublic @Curve_P256R1 @ByteString Proxy
+     $ toPublic @Curve_P256R1 Proxy scalarD
 
 runStack ∷
   ∀ messageSize → KnownNat messageSize ⇒

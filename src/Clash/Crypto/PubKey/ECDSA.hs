@@ -158,6 +158,8 @@ data Routine p a (c ∷ Curve p a)
   | PointAddI3
   -- | Replace the top element with 0 if the top is 0, and 1 otherwise.
   | IsZero
+  -- | Derive a public key from a private key.
+  | DerivePublicKey
   deriving (Generic, NFDataX, BitPack, Ord, Eq, Show)
 
 -- | A type family for easy comparison of 'Routine's via indicies.
@@ -170,6 +172,7 @@ type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
   RoutineIndex PointAddI3         = 5
   RoutineIndex PointAddMain       = 6
   RoutineIndex IsZero             = 7
+  RoutineIndex DerivePublicKey    = 8
 
 type instance Compare (r₁ ∷ Routine p a c) (r₂ ∷ Routine p a c) =
   Compare (RoutineIndex r₁) (RoutineIndex r₂)
@@ -475,12 +478,23 @@ instance KnownRoutine (SignHash ∷ Routine Nat Nat SECP256R1) where
     -- r s
     ]
 
+instance KnownRoutine (DerivePublicKey ∷ Routine Nat Nat SECP256R1) where
+  routine _ = DerivePublicKey
+  knownRoutine = RoutineFacts
+  type Instructions (DerivePublicKey ∷ Routine Nat Nat SECP256R1) =
+    -- d
+   '[ PUT_GY
+    , PUT_GX
+    , RUN 1 PointScalarMul
+    -- {dG}
+   ]
+
 -- | The t'RIndex' of the ECDSA signature generation routines.
 type SignHashRIndex (r ∷ Routine Nat Nat SECP256R1) =
   RIndex (SignHash ∷ Routine Nat Nat SECP256R1) r
 
 -- | The instruction pointer of the ECDSA signature generation routines.
-data EcdsaIP
+data SignHashIP
   = IPSignHash           (SignHashRIndex SignHash)
   | IPPointScalarMul     (SignHashRIndex PointScalarMul)
   | IPPointScalarMulStep (SignHashRIndex PointScalarMulStep)
@@ -493,7 +507,7 @@ data EcdsaIP
   deriving (Generic, NFDataX, Show)
 
 instance
-  InstructionPointer (SignHash ∷ Routine Nat Nat SECP256R1) EcdsaIP
+  InstructionPointer (SignHash ∷ Routine Nat Nat SECP256R1) SignHashIP
  where
   inc _ = \case
     IPSignHash n           | (False, m) ← cso n → IPSignHash m
@@ -549,6 +563,7 @@ instance
       | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
       , USucc{} ← toUNat $ SNat @(InstructionCount r)
       → IPIsZero . RIndex 0
+    r → error $ show r <> " should not be called by SignHash"
 
   instr @a m = \case
     IPSignHash RIndex{..}
@@ -587,6 +602,125 @@ instance
       → pure $ instructions m r !! iptr
 
     IPIsZero RIndex{..}
+      | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    _ → Nothing
+
+-- | The t'RIndex' of the public key derivation routine.
+type DerivePublicKeyRIndex (r ∷ Routine Nat Nat SECP256R1) =
+  RIndex (DerivePublicKey ∷ Routine Nat Nat SECP256R1) r
+
+-- | The instruction pointer of the public key derivation routine.
+data DerivePublicKeyIP
+  = IPDerivePublicKey     (DerivePublicKeyRIndex DerivePublicKey)
+  | IPDPointScalarMul     (DerivePublicKeyRIndex PointScalarMul)
+  | IPDPointScalarMulStep (DerivePublicKeyRIndex PointScalarMulStep)
+  | IPDPointAddMain       (DerivePublicKeyRIndex PointAddMain)
+  | IPDPointAddI1         (DerivePublicKeyRIndex PointAddI1)
+  | IPDPointAddI2         (DerivePublicKeyRIndex PointAddI2)
+  | IPDPointAddI3         (DerivePublicKeyRIndex PointAddI3)
+  | IPDIsZero             (DerivePublicKeyRIndex IsZero)
+  | IPDEndOfSequence
+  deriving (Generic, NFDataX, Show)
+
+instance
+  InstructionPointer (DerivePublicKey ∷ Routine Nat Nat SECP256R1) DerivePublicKeyIP
+ where
+  inc _ = \case
+    IPDerivePublicKey n     | (False, m) ← cso n → IPDerivePublicKey m
+    IPDPointScalarMul n     | (False, m) ← cso n → IPDPointScalarMul m
+    IPDPointScalarMulStep n | (False, m) ← cso n → IPDPointScalarMulStep m
+    IPDPointAddMain n       | (False, m) ← cso n → IPDPointAddMain m
+    IPDPointAddI1 n         | (False, m) ← cso n → IPDPointAddI1 m
+    IPDPointAddI2 n         | (False, m) ← cso n → IPDPointAddI2 m
+    IPDPointAddI3 n         | (False, m) ← cso n → IPDPointAddI3 m
+    IPDIsZero n             | (False, m) ← cso n → IPDIsZero m
+    _ → IPDEndOfSequence
+   where
+    cso ∷ Counter a ⇒ a → (Bool, a)
+    cso = countSuccOverflow
+
+  start _ = \case
+    DerivePublicKey
+      | Proxy @r ← Proxy @(DerivePublicKey ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDerivePublicKey . RIndex 0
+
+    PointScalarMul
+      | Proxy @r ← Proxy @(PointScalarMul ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDPointScalarMul . RIndex 0
+
+    PointScalarMulStep
+      | Proxy @r ← Proxy @(PointScalarMulStep ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat (SNat @(InstructionCount r))
+      → IPDPointScalarMulStep . RIndex 0
+
+    PointAddMain
+      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDPointAddMain . RIndex 0
+
+    PointAddI1
+      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDPointAddI1 . RIndex 0
+
+    PointAddI2
+      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDPointAddI2 . RIndex 0
+
+    PointAddI3
+      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDPointAddI3 . RIndex 0
+
+    IsZero
+      | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
+      , USucc{} ← toUNat $ SNat @(InstructionCount r)
+      → IPDIsZero . RIndex 0
+    r → error $ show r <> " should not be called by DerivePublicKey"
+
+  instr @a m = \case
+    IPDerivePublicKey RIndex{..}
+      | Proxy @r ← Proxy @(DerivePublicKey ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointScalarMul RIndex{..}
+      | Proxy @r ← Proxy @(PointScalarMul ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointScalarMulStep RIndex{..}
+      | Proxy @r ← Proxy @(PointScalarMulStep ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointAddMain RIndex{..}
+      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointAddI1 RIndex{..}
+      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointAddI2 RIndex{..}
+      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDPointAddI3 RIndex{..}
+      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
+      , RoutineFacts ← knownRoutine @_ @r @a
+      → pure $ instructions m r !! iptr
+
+    IPDIsZero RIndex{..}
       | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
       , RoutineFacts ← knownRoutine @_ @r @a
       → pure $ instructions m r !! iptr

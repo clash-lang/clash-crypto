@@ -42,6 +42,7 @@ hsPkgs: config: rec {
       Calculator = byModule "Calculator";
       CLU = byModule "CLU";
       DeterministicNonce = byModule "DeterministicNonce";
+      ECDSADerivePublicKey = byModule "ECDSADerivePublicKey";
       ECDSASign = byModule "ECDSASign";
       FastGCD = byModule "FastGCD";
       FltCtmi = byModule "FltCtmi";
