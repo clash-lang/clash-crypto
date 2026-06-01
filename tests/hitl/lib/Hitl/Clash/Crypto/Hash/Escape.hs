@@ -40,7 +40,7 @@ descape = mealy (~~>) (False, S ∷ NextExpectedDataFrame)
 
   emptyFrame = \case
     S → Idle
-    _ → NoData
+    _ → Stretch
 
   frame = \case
     S   → Start ()
@@ -53,4 +53,3 @@ descape = mealy (~~>) (False, S ∷ NextExpectedDataFrame)
 
 data NextExpectedDataFrame = S | M | E (Index (BitSize Byte))
   deriving (Generic, NFDataX)
-
