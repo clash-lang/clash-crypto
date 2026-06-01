@@ -33,7 +33,7 @@ import Language.Haskell.Unicode (type (≤))
 
 -- | The amount of bits required to represent natruals in the range
 -- from @0@ to @m - 1@.
-type ModSize m = CLog 2 m
+type ModSize m = CLogWZ 2 m 0
 
 -- | The ring of integers modulo @m@.
 type ℤₘ (m ∷ Nat) = Wrapping (Index m)
@@ -51,7 +51,7 @@ unMod = fromWrapping
 
 -- | Converts from an 'Index' to a ring of integers modulo @m@ of equal
 -- capacity.
-createMod ∷ (KnownNat m, 1 ≤ m) ⇒ Index m → ℤₘ m
+createMod ∷ KnownNat m ⇒ Index m → ℤₘ m
 createMod = toWrapping
 
 -- | The number of cycles an instance of 'computeModuloUnsigned' takes
@@ -64,7 +64,7 @@ type ComputeModuloUnsignedCycles m len = len - ModSize m
 computeModuloUnsigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
-  , 1 ≤ m, ModSize m ≤ len
+  , ModSize m ≤ len
   ) ⇒
   Channel dom (Unsigned len) →
   Channel dom (ℤₘ m)
@@ -81,7 +81,7 @@ computeModuloUnsigned = enhance put get compute
 computeUnsignedModuloUnsigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
-  , 1 ≤ m, m ≤ len
+  , m ≤ len
   ) ⇒
   Channel dom (Unsigned len, Unsigned m) →
   Channel dom (Unsigned m)
@@ -99,7 +99,7 @@ computeUnsignedModuloUnsigned = enhance put get compute
 computeModuloSigned ∷
   ∀ (m ∷ Nat) (len ∷ Nat) dom.
   ( KnownNat m, KnownNat len, HiddenClockResetEnable dom
-  , 1 ≤ m, ModSize m ≤ len
+  , ModSize m ≤ len
   ) ⇒
   Channel dom (Signed (len + 1)) →
   Channel dom (ℤₘ m)
@@ -127,9 +127,7 @@ computeModuloSigned = enhance put get compute
 -- That input will be constant for the max number of shifts.
 moduloShift ∷
   ∀ m shifts dom.
-  ( KnownNat m, KnownNat shifts, HiddenClockResetEnable dom
-  , 1 ≤ m, 1 ≤ shifts
-  ) ⇒
+  (KnownNat m, KnownNat shifts, HiddenClockResetEnable dom, 1 ≤ shifts) ⇒
   -- | number to shift + number of shifts
   Channel dom (ℤₘ m, Index shifts) →
   Channel dom (ℤₘ m)

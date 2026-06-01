@@ -3,11 +3,11 @@
     "clash-compiler": {
       "flake": false,
       "locked": {
-        "lastModified": 1770431545,
-        "narHash": "sha256-G3kqahhbTgVDGnDL60rrE6gggDLICUSTo6zADA7pSvY=",
+        "lastModified": 1772314381,
+        "narHash": "sha256-9l7IPULoAmzin/U8eblCSht92+Owe56hwlMuU0URHoE=",
         "owner": "clash-lang",
         "repo": "clash-compiler",
-        "rev": "6fa2d7a581228a5663d157de2fc944f55e6bf68d",
+        "rev": "1b2722983a561074598e4928105780d28bd7d0ac",
         "type": "github"
       },
       "original": {
@@ -108,11 +108,11 @@
     "ghc-typelits-extra": {
       "flake": false,
       "locked": {
-        "lastModified": 1764765869,
-        "narHash": "sha256-ynlFGRhTcXwG/fgpIk/GAy+mpvo8eBCptTuRWGl/YC4=",
+        "lastModified": 1772595683,
+        "narHash": "sha256-A+V1Z9wzZ8HnLuE9Ruayas41UAP/7tDdOMLpKwCtesI=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-extra",
-        "rev": "db8cfbd17a8c8984d28c8af254cc81860d8430a9",
+        "rev": "365a1f7b74ac2b1fa097bdba3fc2334cc81c5b22",
         "type": "github"
       },
       "original": {
@@ -124,11 +124,11 @@
     "ghc-typelits-knownnat": {
       "flake": false,
       "locked": {
-        "lastModified": 1760704938,
-        "narHash": "sha256-l1rQk8hQ7ywYGkfT9TtRuP4E1SH4n1LioxquHgzf+rY=",
+        "lastModified": 1770720963,
+        "narHash": "sha256-WEg/zHixGjX/63QuSJGky6wFLhTr9aBl+atfch0W/EI=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-knownnat",
-        "rev": "47ed62f90218ecf74246caabbbeaeb22e8be8246",
+        "rev": "dd44df6872232a62bfb6488f3fd9509d966b3e4e",
         "type": "github"
       },
       "original": {
@@ -140,11 +140,11 @@
     "ghc-typelits-natnormalise": {
       "flake": false,
       "locked": {
-        "lastModified": 1768420697,
-        "narHash": "sha256-igR4OILxX+WmQapDSTMnEJ/8qVLA9Npf3PmZlcnSIdM=",
+        "lastModified": 1770930420,
+        "narHash": "sha256-WvW2LTdcRw9Q+JShbufoFU+L3U5jQR11VTFb9MSM3Bc=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-natnormalise",
-        "rev": "a4fdc5bf17f678e74a47bf3b8924c6a35e214fb2",
+        "rev": "c12c1b4405f466af4972ddc8f516c528c4f3ebc7",
         "type": "github"
       },
       "original": {

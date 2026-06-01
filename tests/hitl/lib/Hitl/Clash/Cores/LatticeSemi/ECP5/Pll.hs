@@ -229,3 +229,98 @@ orangePLL12TF# bbCtx
         outPorts
 
 orangePLL12TF# bbCtx = error (ppShow bbCtx)
+
+orangePll8 ∷ Clock Dom48 → (Clock Dom8, Reset Dom8)
+orangePll8 clkIn =
+  let (clkOut, lock) = orangePLL8# clkIn
+   in (clkOut, unsafeFromActiveLow lock)
+
+orangePLL8# ∷ Clock Dom48 → (Clock Dom8, Signal Dom8 Bool)
+orangePLL8# Clock {} = (clockGen, unsafeToActiveLow resetGen)
+{-# OPAQUE orangePLL8# #-}
+{-# ANN orangePLL8# hasBlackBox #-}
+{-# ANN orangePLL8#
+  let
+    primName = show 'orangePLL8#
+    tfName = show 'orangePLL8TF
+  in InlineYamlPrimitive [Verilog, SystemVerilog] [__i|
+    BlackBox:
+      name: #{primName}
+      kind: Declaration
+      format: Haskell
+      templateFunction: #{tfName}
+  |] #-}
+
+orangePLL8TF ∷ TemplateFunction
+orangePLL8TF = TemplateFunction [clkSrc] (const True) orangePLL8TF#
+ where
+  clkSrc :< _ = (0...)
+
+-- | Output of @ecppll -i 48 -o 8@
+orangePLL8TF# ∷ Backend backend ⇒ BlackBoxContext → State backend Doc
+orangePLL8TF# bbCtx
+  | [ srcClk ]  ← fst <$> DSL.tInputs bbCtx
+  , [ results ] ← DSL.tResults bbCtx
+  = do
+    let componentName = ("EHXPLLL" ∷ Text)
+
+    instanceName ← Id.make $ componentName <> "_inst"
+    DSL.declaration (componentName <> "_block") $ do
+      (dstClk, locked) ←
+        DSL.untuple results ["pll_clk_out", "pll_lock_out"] >>= \case
+          [a, b] → pure (a, b)
+          _ → error $ ppShow bbCtx
+
+      cLow  ← DSL.assign "pll_cLow"  DSL.Low
+      cHigh ← DSL.assign "pll_cHigh" DSL.High
+
+      let
+        generics ∷ [(Text, DSL.TExpr)]
+        generics = second DSL.litTExpr <$>
+          [ ("PLLRST_ENA",      "DISABLED")
+          , ("INTFB_WAKE",      "DISABLED")
+          , ("STDBY_ENABLE",    "DISABLED")
+          , ("DPHASE_SOURCE",   "DISABLED")
+          , ("OUTDIVIDER_MUXA",     "DIVA")
+          , ("OUTDIVIDER_MUXB",     "DIVB")
+          , ("OUTDIVIDER_MUXC",     "DIVC")
+          , ("OUTDIVIDER_MUXD",     "DIVD")
+          , ("CLKI_DIV",                 6)
+          , ("CLKOP_ENABLE",     "ENABLED")
+          , ("CLKOP_DIV",               75)
+          , ("CLKOP_CPHASE",            37)
+          , ("CLKOP_FPHASE",             0)
+          , ("FEEDBK_PATH",        "CLKOP")
+          , ("CLKFB_DIV",                1)
+          ]
+
+        inPorts ∷ [(Text, DSL.TExpr)]
+        inPorts =
+          [ ("CLKI",         srcClk)
+          , ("CLKFB",        dstClk)
+          , ("PHASESEL0",      cLow)
+          , ("PHASESEL1",      cLow)
+          , ("PHASEDIR",      cHigh)
+          , ("PHASESTEP",     cHigh)
+          , ("PHASELOADREG",  cHigh)
+          , ("STDBY",          cLow)
+          , ("PLLWAKESYNC",    cLow)
+          , ("RST",            cLow)
+          , ("ENCLKOP",        cLow)
+          ]
+
+        outPorts ∷ [(Text, DSL.TExpr)]
+        outPorts =
+          [ ("CLKOP", dstClk)
+          , ("LOCK",  locked)
+          ]
+
+      DSL.instDecl
+        N.Empty
+        (Id.unsafeMake componentName)
+        instanceName
+        generics
+        inPorts
+        outPorts
+
+orangePLL8TF# bbCtx = error (ppShow bbCtx)

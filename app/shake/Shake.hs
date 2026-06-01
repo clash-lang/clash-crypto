@@ -314,7 +314,7 @@ hitltRules group component defines = do
         ((\(x,y) -> "-D" <> x <> "=" <> y) <$> defines)
         "--verilog"
         "-fclash-clear"
-        "-fclash-spec-limit=100"
+        "-fclash-spec-limit=400"
         "-fclash-inline-limit=100"
         "-fconstraint-solver-iterations=20"
         "-outputdir" (bdir </> "01-clash")

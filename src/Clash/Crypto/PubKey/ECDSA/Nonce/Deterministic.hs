@@ -41,8 +41,8 @@ deriveNonce ∷
   ∀ (dom ∷ Domain). HiddenClockResetEnable dom ⇒
   ∀ (p ∷ Nat) → KnownNat p ⇒
   ( 1 ≤ p
-  , 1 <= ModSize p `Div` 8
-  , 1 <= ModSize p
+  , 1 ≤ ModSize p `Div` 8
+  , 1 ≤ ModSize p
   , ModSize p `Mod` 8 ~ 0
   ) ⇒
   ∀ (alg ∷ SHA) → KnownSHA alg ⇒
@@ -333,5 +333,5 @@ data NonceState alg p = NonceState
 
 instance
   ( KnownNat p, KnownNat (MessageDigestSize alg)
-  , 1 <= p, 1 <= MessageDigestSize alg
+  , 1 ≤ p, 1 ≤ MessageDigestSize alg
   ) ⇒ NFDataX (NonceState alg p)

@@ -7,7 +7,7 @@ hsPkgs: config: rec {
       ];
       extraFlags = [
         "-fclash-clear"
-        "-fclash-spec-limit=100"
+        "-fclash-spec-limit=400"
         "-fclash-inline-limit=100"
         "-fconstraint-solver-iterations=20"
       ];
