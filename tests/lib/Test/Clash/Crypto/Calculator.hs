@@ -5,7 +5,7 @@ Maintainer  : QBayLogic B.V.
 Stability   : experimental
 Portability : POSIX
 
-Test specifics for 'Clash.Crypto.Calculator'.
+Shared test infrastructure for 'Clash.Crypto.Calculator'.
 -}
 
 {-# LANGUAGE RecordWildCards #-}
@@ -28,6 +28,7 @@ import Clash.Crypto.Calculator.Modulo
 
 import Test.Clash.Crypto.Calculator.InverseModulo (invMod)
 
+-- | A golden reference for the 'Main' routine.
 goldenRoutine ∷ ℤₘ SecP256ModPrime → ℤₘ SecP256ModPrime → ℤₘ SecP256ModPrime
 goldenRoutine a b =
   let
@@ -41,6 +42,7 @@ goldenRoutine a b =
   sq x = x * x
   tb x y = if testBit x y then 1 else 0
 
+-- | Some test routines.
 data TestRoutines
   = Main
   | Routine0
@@ -109,6 +111,7 @@ instance KnownRoutine Arithmetic where
      , BIT SecP256ModPrime
      ]
 
+-- | The instruction pointer for the test routines.
 data TestIP
   = IPMain       (RIndex Main Main)
   | IPRoutine0   (RIndex Main Routine0)

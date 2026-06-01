@@ -21,9 +21,13 @@ module Test.Clash.Crypto.Calculator.Simulate
   , simplifyFix
   , FixChoice(..)
   , simplifyFixChoice
+  , SimInstructions
+  , SimulateInstructions(..)
+  , StackParams
   ) where
 
 import Prelude
+import Clash.Prelude.Safe (Unsigned, Resize(..), testBit)
 
 import Clash.Class.BitPack (BitPack(..))
 import Clash.Promoted.Nat (natToNum)
@@ -32,7 +36,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.List (genericIndex)
 import Data.Kind (Type)
 import GHC.Generics (Generic)
-import GHC.TypeNats (Nat, KnownNat)
+import GHC.TypeNats (Nat, KnownNat, type (*))
 
 import Clash.Crypto.Calculator.ISA
   ( KnownRoutine(..)
@@ -48,28 +52,25 @@ import Clash.Crypto.Calculator.ISA
 
 import qualified Clash.Crypto.Calculator.ISA as Calc
 
--- | Run a known routine @r@ given a stack of 'CalculatorNum' values. The result
--- is optional, since the routine may underflow the stack. Note that although
--- this function requires @SimulateInstructions@, this constraint is implied
--- under the condition that:
+-- | Runs a known routine @r@ given a stack of 'CalculatorNum' values. The
+-- result is optional, since the routine may underflow the stack. Note that
+-- although this function requires 'SimulateInstructions', this constraint is
+-- implied under the condition that:
 --
--- * @KnownRoutine r@ holds, which is also required by this function;
--- * The structure of @Instructions r@ is completely known, i.e. we can match
---   the entire structure of the list @Instructions r@, and each element of each
+-- * @'KnownRoutine' r@ holds, which is also required by this function;
+-- * The structure of @'Instructions' r@ is completely known, i.e. we can match
+--   the entire structure of the list @'Instructions' r@, and each element of each
 --   instruction is known via 'KnownNat', 'KnownRoutine' or
 --   'KnownCluInstruction'. This is required by the standard instances of
---   'KnownInstruction' and 'KnownInstructions', so it should automatically
---   follow from there being a 'KnownRoutine' instance.
+--   'KnownInstruction' and 'Clash.Crypto.Calculator.ISA.KnownInstructions', so
+--   it should automatically follow from there being a 'KnownRoutine' instance.
 run ∷
-  ∀ r →
-  ( Show k
-  , KnownRoutine (r ∷ k)
-  , CalculatorNum a
-  , SimulateInstructions (StackParams is rbound stackSize a)
-  , is ~ Instructions r
-  , rbound ~ RepetitionBound r
-  , stackSize ~ RequiredStackSize r
-  ) ⇒ CalculatorNum a ⇒ [a] → Maybe [a]
+  (Show k, CalculatorNum a) ⇒
+  ∀ r → (KnownRoutine (r ∷ k), SimInstructions r a) ⇒
+  [a]
+  -- ^ value stack
+  → Maybe [a]
+  -- ^ optional result
 run r as = runIdentity $ traceM r (const $ pure ()) id as
 
 -- | Run a known routine @r@ given a stack of 'CalculatorNum' values, outputting
@@ -78,17 +79,16 @@ run r as = runIdentity $ traceM r (const $ pure ()) id as
 -- function at each step, which can be easily constructed using 'simplifyFix' or
 -- 'simplifyFixChoice' in the case that @a@ is constructed as a fixpoint.
 traceM ∷
-  ∀ {k} m a is rbound stackSize .
-  ∀ r →
-  ( Show k
-  , KnownRoutine (r ∷ k)
-  , CalculatorNum a
-  , Monad m
-  , SimulateInstructions (StackParams is rbound stackSize a)
-  , is ~ Instructions r
-  , rbound ~ RepetitionBound r
-  , stackSize ~ RequiredStackSize r
-  ) ⇒ CalculatorNum a ⇒ (String → m ()) → (a → a) → [a] → m (Maybe [a])
+  ∀ {k} m a. (Show k, Monad m, CalculatorNum a) ⇒
+  ∀ r → (KnownRoutine (r ∷ k), SimInstructions r a) ⇒
+  (String → m ()) →
+  -- ^ monad specific printer
+  (a → a) →
+  -- ^ simplification function
+  [a] →
+  -- ^ value stack
+  m (Maybe [a])
+  -- ^ optional result
 traceM r write simplify as
   | RoutineFacts ← knownRoutine @_ @r @a
   = traceInstructionsM
@@ -97,12 +97,19 @@ traceM r write simplify as
     simplify
     as
 
+-- | Type alias for simulation instructions over 'StackParams'.
+type SimInstructions r a =
+  SimulateInstructions
+    (StackParams (Instructions r) (RepetitionBound r) (RequiredStackSize r) a)
+
+-- | Symbolic stack parameters.
 data StackParams
   (is ∷ k)
   (rbound ∷ Nat)
   (stackSize ∷ Nat)
   (a ∷ Type)
 
+-- | The class of instructions that are symbolically executable.
 class SimulateInstructions (r ∷ k) where
   traceInstructionsM ∷
     ∀ x → x ~ r ⇒
@@ -216,7 +223,7 @@ showStack = \case
   Just [] → "∅ Empty ∅"
   Just as → unwords $ map (flip (showsPrec 11) "") as
 
--- | Number that supports the operations required for the CLU.
+-- | The class of numbers that support CLU operations.
 class (Num a, BitPack a, Show a, NFData a) ⇒ CalculatorNum a where
   add ∷ a → a → a → a
   sub ∷ a → a → a → a
@@ -232,9 +239,10 @@ runOp p Calc.Mul (a:b:as) = Just $ mul p b a : as
 runOp _ Calc.Bit (a:b:as) = Just $ bit b a   : as
 runOp _ _        _        = Nothing
 
--- | 'CalculatorNum' type that suspends the computation as a structural formula
--- instead. It is meant to be applied to a fixpoint combinator, which ensures
--- that the 'Functor' instance finds all recursion points in the formula.
+-- | A data type variant of 'CalculatorNum', which suspends the
+-- computation as a structural formula instead. It is meant to be
+-- applied to a fixpoint combinator, which ensures that the 'Functor'
+-- instance finds all recursion points in the formula.
 data SymbolicNum l r where
   Lit ∷ l → SymbolicNum l r
   Add ∷ r → r → SymbolicNum l r
@@ -244,7 +252,7 @@ data SymbolicNum l r where
   Bit ∷ r → r → SymbolicNum l r
   deriving (Eq, Functor, Generic, NFData)
 
--- | Type-level fixpoint combinator.
+-- | A type-level fixpoint combinator.
 data Fix f
   = Fix (f (Fix f))
 
@@ -252,7 +260,7 @@ deriving instance (∀ r . Eq r ⇒ Eq (f r)) ⇒ Eq (Fix f)
 deriving instance Generic (Fix f)
 deriving instance (∀ r . NFData r ⇒ NFData (f r)) ⇒ NFData (Fix f)
 
--- | Type-level fixpoint combinator with choice.
+-- | A type-level fixpoint combinator with choice.
 data FixChoice l r
   = FixLeft (l (FixChoice l r))
   | FixRight (r (FixChoice l r))
@@ -270,8 +278,10 @@ deriving instance
 -- | Apply a given function at all recursion points of a fixpoint until
 -- exhaustion, i.e. until the result no longer changes.
 simplifyFix ∷
-  (∀ r . Eq r ⇒ Eq (f r), Functor f) ⇒
-  (Fix f → Fix f) → Fix f → Fix f
+  (Functor f, ∀ r. Eq r ⇒ Eq (f r)) ⇒
+  (Fix f → Fix f) →
+  Fix f →
+  Fix f
 simplifyFix f x0
   | x' == x0  = x0
   | otherwise = simplifyFix f x'
@@ -282,9 +292,8 @@ simplifyFix f x0
 -- | Apply a given function at all recursion points of a fixpoint until
 -- exhaustion, i.e. until the result no longer changes.
 simplifyFixChoice ∷
-  ( ∀ r . Eq r ⇒ Eq (f r)
-  , ∀ r . Eq r ⇒ Eq (g r)
-  , Functor f, Functor g
+  ( Functor f, ∀ r. Eq r ⇒ Eq (f r)
+  , Functor g, ∀ r. Eq r ⇒ Eq (g r)
   ) ⇒
   (FixChoice f g → FixChoice f g) →
   FixChoice f g → FixChoice f g
@@ -363,3 +372,43 @@ instance
   mul _ x y = FixLeft $ x `Mul` y
   inv _ x z = FixLeft $ Inv x z
   bit   x b = FixLeft $ Bit x b
+
+instance CalculatorNum (Unsigned 256) where
+  add p x y
+   | p - x > y = x + y
+   | otherwise = y - (p - x)
+  sub p x y
+   | x >= y    = x - y
+   | otherwise = p - (y - x)
+  mul p x y = truncateB $ bigR `mod` extend p
+   where
+    bigR ∷ Unsigned 512
+    bigR = extend x * extend y
+  inv p a b =
+   if a == 0 then b
+   else moduloPower p (p - 2) a 1
+  bit a j
+   | j < 256, testBit a (fromEnum j) = 1
+   | otherwise = 0
+
+moduloPower ∷
+  ∀ p. KnownNat p ⇒
+  Unsigned p →
+  Unsigned p →
+  Unsigned p →
+  Unsigned p →
+  Unsigned p
+moduloPower _ 0 _   _   = 1
+moduloPower p 1 val tmp = truncateB $ r `mod` extend p
+ where
+  r ∷ Unsigned (p * 2)
+  r = extend val * extend tmp
+moduloPower p n val tmp =
+ if even n then
+  moduloPower p (n `div` 2) (truncateB $ r1 `mod` extend p) (tmp `mod` p)
+ else
+  moduloPower p (n - 1) val (truncateB $ r2 `mod` extend p)
+ where
+  r1, r2 ∷ Unsigned (p * 2)
+  r1 = extend val * extend val
+  r2 = extend tmp * extend val

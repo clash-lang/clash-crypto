@@ -97,6 +97,7 @@ library
 
 library test
   import: common-options
+  visibility: public
   hs-source-dirs: tests/lib
   build-depends:
     , clash-crypto
