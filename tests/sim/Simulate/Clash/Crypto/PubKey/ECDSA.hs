@@ -106,39 +106,39 @@ tastyTests = localOption (HedgehogTestLimit (Just 100))
                  $ runPointAdd $ fromInteger <$> [x1,y1,x2,y2]
         ref === impl
     ]
-    , testProperty "Point Multiplication (against crypton)" $ property $ do
-        p1 ← genPoint
-        s ← forAll $ genUnsigned $ Range.linear 0
-          $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
-        let (x, y) = pointToIntegers p1
-            scal = throwCryptoError $ scalarFromInteger $ toInteger s
-            ref  = pointToIntegers $ pointMul scal p1
-            impl = pointFromList
-                 $ fromMaybe (error "Routines in tests should always return")
-                 $ runPointMul $ bitCoerce <$> [fromInteger x, fromInteger y,s]
-        ref === impl
-    , testProperty "IsZero" $ property $ do
-        x ← forAll $ genUnsigned $ Range.linear 0
-          $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
-        let res = resultFromList
-                $ fromMaybe (error "Routines in tests should always return")
-                $ runIsZero [bitCoerce x]
-        lsb res === bitCoerce (x == 0)
-    , testProperty "DerivePublicKey" $ property $ do
-        pKey ← forAll $ genUnsigned $ Range.linear 1
-          $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
-      
-        let bsKey = BS.pack $ toList
-             $ unpack <$> unconcatBitVector# @_ @8 (bitCoerce pKey)
-            scalarKey = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy bsKey
-            scalarPubKey = toPublic (Proxy @Curve_P256R1) scalarKey
-            ref =
-             BS.tail $ encodePublic @Curve_P256R1 @BS.ByteString Proxy scalarPubKey
-            impl = BS.pack $ toList $ bitCoerce @(CurveNum, CurveNum) @(Vec _ Word8)
-                 $ pointFromList
-                 $ fromMaybe (error "Routines in tests should always return")
-                 $ runDerivePublicKey [pKey]
-        ref === impl
+  , testProperty "Point Multiplication (against crypton)" $ property $ do
+      p1 ← genPoint
+      s ← forAll $ genUnsigned $ Range.linear 0
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
+      let (x, y) = pointToIntegers p1
+          scal = throwCryptoError $ scalarFromInteger $ toInteger s
+          ref  = pointToIntegers $ pointMul scal p1
+          impl = pointFromList
+               $ fromMaybe (error "Routines in tests should always return")
+               $ runPointMul $ bitCoerce <$> [fromInteger x, fromInteger y,s]
+      ref === impl
+  , testProperty "IsZero" $ property $ do
+      x ← forAll $ genUnsigned $ Range.linear 0
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
+      let res = resultFromList
+              $ fromMaybe (error "Routines in tests should always return")
+              $ runIsZero [bitCoerce x]
+      lsb res === bitCoerce (x == 0)
+  , testProperty "DerivePublicKey" $ property $ do
+      pKey ← forAll $ genUnsigned $ Range.linear 1
+        $ bitCoerce @(PrimeField (Q SECP256R1)) @CurveNum maxBound
+
+      let bsKey = BS.pack $ toList
+            $ unpack <$> unconcatBitVector# @_ @8 (bitCoerce pKey)
+          scalarKey = throwCryptoError $ decodePrivate @Curve_P256R1 Proxy bsKey
+          scalarPubKey = toPublic (Proxy @Curve_P256R1) scalarKey
+          ref =
+           BS.tail $ encodePublic @Curve_P256R1 @BS.ByteString Proxy scalarPubKey
+          impl = BS.pack $ toList $ bitCoerce @(CurveNum, CurveNum) @(Vec _ Word8)
+               $ pointFromList
+               $ fromMaybe (error "Routines in tests should always return")
+               $ runDerivePublicKey [pKey]
+      ref === impl
   ]
 
 type CurveNum = Unsigned 256

@@ -120,7 +120,7 @@ calculator main ptr stages regs input
                     Fresh z → (next ip, out { dataStackAction = Push z })
                     _       →
                       ( Execute ip (Old x) (Old y)
-                      , out { cluAction = (op, ) . (, p) <$> (liftA2 (,) mx my) }
+                      , out { cluAction = (op, ) . (, p) <$> liftA2 (,) mx my }
                       )
 
       -- / end of instruction sequence / --

@@ -29,7 +29,7 @@ import Clash.Class.BitPack (BitPack(..))
 import Clash.Promoted.Nat (natToNum)
 import Control.DeepSeq (NFData(..))
 import Data.Functor.Identity (Identity(..))
-import Data.List (genericIndex, intercalate)
+import Data.List (genericIndex)
 import Data.Kind (Type)
 import GHC.Generics (Generic)
 import GHC.TypeNats (Nat, KnownNat)
@@ -150,7 +150,7 @@ instance
   traceInstructionsM _ _ _ as
     | i ← natToNum @n
     , i <= length as
-    = pure $ Just $ drop (i) as
+    = pure $ Just $ drop i as
     | otherwise
     = pure Nothing
 
@@ -175,7 +175,7 @@ instance
   traceInstructionsM _ _ _ as
     | i ← natToNum @m
     , i < length as
-    = pure $ Just $ (genericIndex as i) : as
+    = pure $ Just $ genericIndex as i : as
     | otherwise
     = pure Nothing
 
@@ -214,7 +214,7 @@ showStack ∷ Show a ⇒ Maybe [a] → String
 showStack = \case
   Nothing → "↯ Underflow ↯"
   Just [] → "∅ Empty ∅"
-  Just as → intercalate " " $ map (($ "") . showsPrec 11) as
+  Just as → unwords $ map (flip (showsPrec 11) "") as
 
 -- | Number that supports the operations required for the CLU.
 class (Num a, BitPack a, Show a, NFData a) ⇒ CalculatorNum a where
@@ -225,11 +225,11 @@ class (Num a, BitPack a, Show a, NFData a) ⇒ CalculatorNum a where
   bit ∷     a → a → a
 
 runOp ∷ ∀ a. CalculatorNum a ⇒  a → CluInstruction → [a] → Maybe [a]
-runOp p Calc.Add (a:b:as) = Just $ (add p b a):as
-runOp p Calc.Sub (a:b:as) = Just $ (sub p b a):as
-runOp p Calc.Inv (a:b:as) = Just $ (inv p b a):as
-runOp p Calc.Mul (a:b:as) = Just $ (mul p b a):as
-runOp _ Calc.Bit (a:b:as) = Just $ (bit b a):as
+runOp p Calc.Add (a:b:as) = Just $ add p b a : as
+runOp p Calc.Sub (a:b:as) = Just $ sub p b a : as
+runOp p Calc.Inv (a:b:as) = Just $ inv p b a : as
+runOp p Calc.Mul (a:b:as) = Just $ mul p b a : as
+runOp _ Calc.Bit (a:b:as) = Just $ bit b a   : as
 runOp _ _        _        = Nothing
 
 -- | 'CalculatorNum' type that suspends the computation as a structural formula
@@ -302,7 +302,7 @@ instance (Show l, Show r) ⇒ Show (SymbolicNum l r) where
     Add x y → ip 6 6  x $ showString " + " . showsPrec 7 y
     Sub x y → ip 6 6  x $ showString " - " . showsPrec 7 y
     Mul x y → ip 7 7  x $ showString " · " . showsPrec 8 y
-    Bit x n → ip 9 11 x $ showString "[" . showsPrec 0 n . showString "]"
+    Bit x n → ip 9 11 x $ showString "[" . shows n . showString "]"
     Inv x z → ip 1 9  x $ showString "⁻¹ or " . showsPrec 2 z
    where
     ip n m x g = showParen (p > n) $ showsPrec m x . g

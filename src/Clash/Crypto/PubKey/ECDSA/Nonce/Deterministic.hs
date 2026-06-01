@@ -9,7 +9,6 @@ A streaming implementation generating a nonce for deterministic ECDSA
 according to [FIPS 186-5](https://doi.org/10.6028/NIST.FIPS.186-5).
 -}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -60,7 +59,7 @@ deriveNonce p alg seedMaterial shaOutput
   hmacOutput ∷ DataStream dom () (Index 8) (BitVector 8)
   (lastRes, hmacOutput)
     | SHAFacts ← knownSHA alg
-    = hmacE alg (register NoData $ output.hmacInput) shaOutput
+    = hmacE alg (register NoData output.hmacInput) shaOutput
 
   output ∷ Signal dom (NonceOutput alg p)
   output | SHAFacts ← knownSHA alg = mealy (~~>) initialState

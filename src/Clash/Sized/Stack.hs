@@ -108,8 +108,8 @@ stack stackAction = case toUNat (SNat @n) of
    where
     (raddr, writeAct, result) = mealyB (~~>) (Nothing, 0, False, False)
       ( stackAction
-      , (hideClockResetEnable blockRamU)
-          NoClearOnReset (fromUNat un) raddr writeAct
+      , hideClockResetEnable
+          blockRamU NoClearOnReset (fromUNat un) raddr writeAct
       )
 
     (top, charge0, success0, wasInspect0) ~~> (action, val) =

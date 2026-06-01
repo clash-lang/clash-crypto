@@ -9,7 +9,6 @@ Simulation tests for 'Clash.Crypto.Hash.SHA'.
 -}
 
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedLists #-}
 
 {-# OPTIONS_GHC -Wno-deprecations #-}

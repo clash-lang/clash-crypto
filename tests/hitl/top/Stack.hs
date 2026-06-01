@@ -18,8 +18,7 @@ import Clash.Prelude.Safe
 import Clash.Annotations.TH (makeTopEntity)
 import Data.Maybe (fromMaybe)
 
-import Clash.Sized.Stack (stack)
-import Clash.Sized.Stack (StackAction(Pop))
+import Clash.Sized.Stack (StackAction(Pop), stack)
 
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Domain (Dom48, Dom24)
 import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
