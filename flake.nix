@@ -47,16 +47,7 @@
           ecpprogOverlay = _: _: {
             ecpprog = ecpprog.defaultPackage.${system};
           };
-          # Needed due to https://github.com/NixOS/cabal2nix/issues/707
-          cabal2nixOverlay = _: prev: {
-            cabal2nix = prev.cabal2nix.overrideAttrs (_: {
-              patches = [ ./nix/cabal2nix.patch ];
-            });
-            cabal2nix-unwrapped = prev.cabal2nix-unwrapped.overrideAttrs (_: {
-              patches = [ ./nix/cabal2nix.patch ];
-            });
-          };
-          extensions = [ ecpprogOverlay cabal2nixOverlay];
+          extensions = [ ecpprogOverlay ];
           pkgs0 = nixpkgs.legacyPackages.${system};
           pkgs = pkgs0.extend (pkgs0.lib.composeManyExtensions extensions);
 
