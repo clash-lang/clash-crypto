@@ -68,6 +68,8 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit(..), testProperty)
 import Text.Printf (printf)
 
 import Clash.Sized.Stack (StackAction(..), stack)
+import Crypto.Error (throwCryptoError)
+
 import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA,
   Digest
@@ -76,9 +78,14 @@ import Clash.Crypto.Calculator.ISA
   ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime, ArgCount, ResultCount
   )
 import Clash.Crypto.Calculator.Modulo (ℤₘ, PrimeField, ModSize, createMod)
+import Clash.Crypto.Cipher.AES
+  ( AES(..), KnownAES(..), AESFacts(..)
+  , AESWordByteCount, AESBlockByteCount, Nb, Nk
+  )
 
 import Test.Clash.Crypto.Calculator
 import Test.Clash.Crypto.Calculator.InverseModulo
+import Test.Clash.Crypto.Cipher.AES
 import Test.Clash.Crypto.Hash.SHA
 
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
@@ -95,13 +102,12 @@ import qualified Data.ByteString     as BS
   )
 import qualified Data.List           as List
 import qualified System.Timeout      as TO (timeout)
-import qualified Hedgehog.Range      as Range (linear)
+import qualified Hedgehog.Range      as Range
 import qualified Hedgehog.Gen        as Gen
 import qualified Clash.Sized.Vector  as Vec
 import qualified Crypto.Hash         as Hash
 import qualified Crypto.MAC.HMAC     as HMAC
 import Crypto.ECC (Curve_P256R1, EllipticCurve (..))
-import Crypto.Error (throwCryptoError)
 import Crypto.PubKey.ECDSA
   ( signDigestWith, decodePrivate, signatureToIntegers, toPublic, encodePublic
   )
@@ -138,6 +144,11 @@ main = do
         [ localOption (HedgehogTestLimit (Just 10))
         $ testGroup "Clash.Sized.Stack"
             [ testStack "Stack" sem dev settings
+            ]
+        , testGroup "Clash.Crypto.Cipher.AES"
+            [ testAES AES128 sem dev settings
+            , testAES AES192 sem dev settings
+            , testAES AES256 sem dev settings
             ]
         , testGroup "Clash.Crypto.Hash.SHA"
             [ -- we don't test the >256 variants here, as synthesis
@@ -288,6 +299,24 @@ main = do
         y ∷ PrimeField SecP256ModPrime ← genMod
         runHitltKaratsubaModulo sem dev settings x y
 
+  testAES ∷
+    ∀ (alg ∷ AES) → (KnownAES alg, CryptoAES alg, Typeable alg) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testAES alg sem dev settings
+    | AESFacts ← knownAES alg
+    , name ← dropWhile (== '\'') $ show $ typeRep (Proxy @alg)
+    = test sem dev settings name $ do
+        key   ← forAll $ fmap BS.pack
+              $ Gen.list (Range.singleton (natToNum @(AESWordByteCount * Nk alg)))
+                         Gen.enumBounded
+        input ← forAll $ fmap BS.pack
+              $ Gen.list (Range.singleton (natToNum @(AESWordByteCount * Nb alg)))
+                         Gen.enumBounded
+        runHitltAES alg sem dev settings input key
+
   testSHA ∷
     ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
              Hash.HashAlgorithm (CryptoToHash alg)) ⇒
@@ -353,6 +382,19 @@ readProcessSilently path args = readCreateProcess silentProc ""
  where
   baseProc = proc path args
   silentProc = baseProc { std_err = CreatePipe }
+
+runHitltAES ∷
+  ∀ (alg ∷ AES) → (KnownAES alg, CryptoAES alg) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  ByteString →
+  PropertyT IO ()
+runHitltAES alg sem dev settings input key | AESFacts ← knownAES alg =
+ let bs = append input key
+     eq = encryptoECB alg key input
+ in runHitlt (type (AESBlockByteCount alg)) sem dev settings bs eq
 
 callProcessSilently ∷ FilePath → [String] → IO ()
 callProcessSilently path args =

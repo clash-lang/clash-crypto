@@ -74,6 +74,15 @@ library
     Clash.Crypto.Calculator.ISA
     Clash.Crypto.Calculator.Karatsuba
     Clash.Crypto.Calculator.Modulo
+    Clash.Crypto.Cipher.AES
+    Clash.Crypto.Cipher.AES.Specification
+    Clash.Crypto.Cipher.AES.Specification.Algorithm
+    Clash.Crypto.Cipher.AES.Specification.Constants
+    Clash.Crypto.Cipher.AES.Specification.Definitions
+    Clash.Crypto.Cipher.AES.Specification.Properties
+    Clash.Crypto.Cipher.AES.Specification.Types
+    Clash.Crypto.Cipher.AES.Streaming
+    Clash.Crypto.Cipher.AES.Streaming.Algorithm
     Clash.Crypto.PubKey.ECDSA
     Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic
     Clash.Crypto.Hash.SHA
@@ -112,6 +121,7 @@ library test
     Test.Clash.Crypto.Calculator
     Test.Clash.Crypto.Calculator.InverseModulo
     Test.Clash.Crypto.Calculator.Simulate
+    Test.Clash.Crypto.Cipher.AES
     Test.Clash.Crypto.Hash.SHA
     Test.Clash.Crypto.PubKey.ECDSA.Simulate
 
@@ -127,6 +137,12 @@ test-suite simulation
     Simulate.Clash.Crypto.Calculator.InverseModulo
     Simulate.Clash.Crypto.Calculator.Karatsuba
     Simulate.Clash.Crypto.Calculator.Modulo
+    Simulate.Clash.Crypto.Cipher.AES
+    Simulate.Clash.Crypto.Cipher.AES.Specification
+    Simulate.Clash.Crypto.Cipher.AES.Specification.Algorithm
+    Simulate.Clash.Crypto.Cipher.AES.Specification.Definitions
+    Simulate.Clash.Crypto.Cipher.AES.Streaming
+    Simulate.Clash.Crypto.Cipher.AES.Streaming.Algorithm
     Simulate.Clash.Crypto.Hash.SHA
     Simulate.Clash.Crypto.MAC.HMAC
     Simulate.Clash.Crypto.PubKey.ECDSA
@@ -177,6 +193,7 @@ library hitlt-instances
     , clash-crypto:hitl
     , clash-crypto:test
   exposed-modules:
+    AES
     BEA
     Calculator
     CLU

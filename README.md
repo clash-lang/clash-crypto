@@ -6,6 +6,8 @@ This repository contains cryptographic primitive hardware designs
 written in [Clash](https://clash-lang.org), where the following
 primitives are currently supported:
 
+* Advanced Encryption Standard (AES) according to
+  [FIPS 197](https://doi.org/10.6028/NIST.FIPS.197-upd1).
 * Secure hashing according to
   [FIPS 180-4](https://dx.doi.org/10.6028/NIST.FIPS.180-4).
 * Keyed-Hash Message Authentication Code (HMAC) according to

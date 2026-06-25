@@ -6,7 +6,8 @@ Stability   : experimental
 Portability : POSIX
 
 Streaming based secure hash algorithms according to
-[FIPS PUB 180-4: Secure Hash Standard (SHS)](http://dx.doi.org/10.6028/NIST.FIPS.180-4).
+[FIPS PUB 180-4: Secure Hash Standard
+(SHS)](http://dx.doi.org/10.6028/NIST.FIPS.180-4).
 -}
 
 module Clash.Crypto.Hash.SHA

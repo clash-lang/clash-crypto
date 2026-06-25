@@ -16,6 +16,7 @@ import qualified Simulate.Clash.Crypto.Calculator.CLU as CLU
 import qualified Simulate.Clash.Crypto.Calculator.InverseModulo as InverseModulo
 import qualified Simulate.Clash.Crypto.Calculator.Karatsuba as Karatsuba
 import qualified Simulate.Clash.Crypto.Calculator.Modulo as Modulo
+import qualified Simulate.Clash.Crypto.Cipher.AES as AES
 import qualified Simulate.Clash.Crypto.PubKey.ECDSA as ECDSA
 import qualified Simulate.Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic as Nonce
 import qualified Simulate.Clash.Crypto.Hash.SHA as SHA
@@ -34,4 +35,5 @@ main = defaultMain $ testGroup "clash-crypto simulation tests"
   , Calculator.tastyTests
   , ECDSA.tastyTests
   , Nonce.tastyTests
+  , AES.tastyTests
   ]

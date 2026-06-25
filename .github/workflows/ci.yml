@@ -88,6 +88,7 @@ jobs:
     strategy:
       matrix:
         test:
+          - { name: "AES", pattern: AES }
           - { name: "SHA", pattern: SHA }
           - { name: "HMAC", pattern: HMAC }
           - { name: "Stack", pattern: Stack }
@@ -120,6 +121,9 @@ jobs:
     strategy:
       matrix:
         test:
+          - { name: "AES128", testcase: AES128, memory: 11g }
+          - { name: "AES192", testcase: AES192, memory: 11g }
+          - { name: "AES256", testcase: AES256, memory: 11g }
           - { name: "SHA1", testcase: SHA1, memory: 11g  }
           - { name: "SHA224", testcase: SHA224, memory: 11g }
           - { name: "SHA256", testcase: SHA256, memory: 11g }
@@ -170,7 +174,10 @@ jobs:
     strategy:
       matrix:
         test:
-          - { name: "SHA1", pattern: SHA.SHA1, memory: 11g  }
+          - { name: "AES128", pattern: AES.AES128, memory: 11g }
+          - { name: "AES192", pattern: AES.AES192, memory: 11g }
+          - { name: "AES256", pattern: AES.AES256, memory: 11g }
+          - { name: "SHA1", pattern: SHA.SHA1, memory: 11g }
           - { name: "SHA224", pattern: SHA.SHA224, memory: 11g }
           - { name: "SHA256", pattern: SHA.SHA256, memory: 11g }
           - { name: "HMAC (SHA256)", pattern: HMACSHA256, memory: 11g }

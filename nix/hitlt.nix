@@ -25,45 +25,48 @@ hsPkgs: config: rec {
             inherit module;
           };
         };
-        bySource = source: sha: {
+        bySource = source: value: {
           target = {
-            source = "${./..}/tests/hitl/top/${source}";
+            source = "${./..}/tests/hitl/top/${source}.hs";
           };
           clashArgs = {
             extraEnvPackages = [ "clash-crypto" ];
             extraFlags = hitltBaseArgs.clashArgs.extraFlags ++ [
-              "-DHITLT_SHA=${sha}"
+              "-DHITLT_${source}=${value}"
               "-DHITLT_BAUD=${config.serial-speed}"
             ];
           };
         };
     in {
-      BEA = byModule "BEA";
-      Calculator = byModule "Calculator";
-      CLU = byModule "CLU";
-      DeterministicNonce = byModule "DeterministicNonce";
+      AES128               = bySource "AES" "AES128";
+      AES192               = bySource "AES" "AES192";
+      AES256               = bySource "AES" "AES256";
+      BEA                  = byModule "BEA";
+      Calculator           = byModule "Calculator";
+      CLU                  = byModule "CLU";
+      DeterministicNonce   = byModule "DeterministicNonce";
       ECDSADerivePublicKey = byModule "ECDSADerivePublicKey";
-      ECDSASign = byModule "ECDSASign";
-      FastGCD = byModule "FastGCD";
-      FltCtmi = byModule "FltCtmi";
-      Karatsuba = byModule "Karatsuba";
-      KaratsubaModulo = byModule  "KaratsubaModulo";
-      Modulo = byModule "Modulo";
-      SictMi = byModule "SictMi";
-      Stack = byModule "Stack";
-      SHA1 = bySource "SHA.hs" "SHA1";
-      SHA224 = bySource "SHA.hs" "SHA224";
-      SHA256 = bySource "SHA.hs" "SHA256";
-      SHA384 = bySource "SHA.hs" "SHA384";
-      SHA512 = bySource "SHA.hs" "SHA512";
-      SHA512224 = bySource "SHA.hs" "SHA512224";
-      SHA512256 = bySource "SHA.hs" "SHA512256";
-      HMACSHA1 = bySource "HMAC.hs" "SHA1";
-      HMACSHA224 = bySource "HMAC.hs" "SHA224";
-      HMACSHA256 = bySource "HMAC.hs" "SHA256";
-      HMACSHA384 = bySource "HMAC.hs" "SHA384";
-      HMACSHA512 = bySource "HMAC.hs" "SHA512";
-      HMACSHA512224 = bySource "HMAC.hs" "SHA512224";
-      HMACSHA512256 = bySource "HMAC.hs" "SHA512256";
+      ECDSASign            = byModule "ECDSASign";
+      FastGCD              = byModule "FastGCD";
+      FltCtmi              = byModule "FltCtmi";
+      Karatsuba            = byModule "Karatsuba";
+      KaratsubaModulo      = byModule "KaratsubaModulo";
+      Modulo               = byModule "Modulo";
+      SictMi               = byModule "SictMi";
+      Stack                = byModule "Stack";
+      SHA1                 = bySource "SHA" "SHA1";
+      SHA224               = bySource "SHA" "SHA224";
+      SHA256               = bySource "SHA" "SHA256";
+      SHA384               = bySource "SHA" "SHA384";
+      SHA512               = bySource "SHA" "SHA512";
+      SHA512224            = bySource "SHA" "SHA512224";
+      SHA512256            = bySource "SHA" "SHA512256";
+      HMACSHA1             = bySource "HMAC" "SHA1";
+      HMACSHA224           = bySource "HMAC" "SHA224";
+      HMACSHA256           = bySource "HMAC" "SHA256";
+      HMACSHA384           = bySource "HMAC" "SHA384";
+      HMACSHA512           = bySource "HMAC" "SHA512";
+      HMACSHA512224        = bySource "HMAC" "SHA512224";
+      HMACSHA512256        = bySource "HMAC" "SHA512256";
     };
 }

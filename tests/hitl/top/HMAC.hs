@@ -29,10 +29,10 @@ import Hitl.Clash.Cores.LatticeSemi.ECP5.Pll (orangePll24)
 import Hitl.Clash.Cores.Uart.Extra (Byte, withUartRequestResponseHandler)
 
 -- allows to select an SHA variant via a CPP define
-#ifndef HITLT_SHA
+#ifndef HITLT_HMAC
 type SHAX = SHA256
 #else
-type SHAX = HITLT_SHA
+type SHAX = HITLT_HMAC
 #endif
 
 -- allows to select the UART baud via a CPP define
