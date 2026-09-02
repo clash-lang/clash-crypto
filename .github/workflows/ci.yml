@@ -98,6 +98,7 @@ jobs:
           - { name: "CLU", pattern: CLU }
           - { name: "ECDSA", pattern: ECDSA }
           - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic }
+          - { name: "SHA3", pattern: SHA3 }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v5
@@ -141,6 +142,9 @@ jobs:
           - { name: "ECDSA (Nonce)", testcase: DeterministicNonce, memory: 30g }
           - { name: "ECDSA (Sign)", testcase: ECDSASign, memory: 30g }
           - { name: "ECDSA (Public Key Derivation)", testcase: ECDSADerivePublicKey, memory: 30g }
+          - { name: "SHA3_224", testcase: SHA3_224, memory: 11g }
+          - { name: "SHA3_256", testcase: SHA3_256, memory: 11g }
+          - { name: "SHA3_384", testcase: SHA3_384, memory: 11g }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v4
@@ -192,6 +196,9 @@ jobs:
           - { name: "ECDSA (Sign)", pattern: ECDSA.Sign, memory: 30g }
           - { name: "ECDSA (Nonce)", pattern: Nonce.Deterministic, memory: 11g }
           - { name: "ECDSA (Public Key Derivation)", pattern: ECDSADerivePublicKey, memory: 30g }
+          - { name: "SHA3_224", pattern: SHA3_224, memory: 11g }
+          - { name: "SHA3_256", pattern: SHA3_256, memory: 11g }
+          - { name: "SHA3_384", pattern: SHA3_384, memory: 11g }
     steps:
       - name: "Checkout the repository"
         uses: actions/checkout@v5

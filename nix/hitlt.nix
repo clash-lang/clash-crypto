@@ -61,6 +61,12 @@ hsPkgs: config: rec {
       SHA512               = bySource "SHA" "SHA512";
       SHA512224            = bySource "SHA" "SHA512224";
       SHA512256            = bySource "SHA" "SHA512256";
+      SHA3_224             = bySource "SHA3" "SHA3_224";
+      SHA3_256             = bySource "SHA3" "SHA3_256";
+      SHA3_384             = bySource "SHA3" "SHA3_384";
+      SHA3_512             = bySource "SHA3" "SHA3_512";
+      SHAKE128_1600        = bySource "SHA3" "SHAKE128 1600";
+      SHAKE256_1280        = bySource "SHA3" "SHAKE256 1280";
       HMACSHA1             = bySource "HMAC" "SHA1";
       HMACSHA224           = bySource "HMAC" "SHA224";
       HMACSHA256           = bySource "HMAC" "SHA256";

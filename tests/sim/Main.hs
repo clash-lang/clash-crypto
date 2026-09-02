@@ -22,11 +22,13 @@ import qualified Simulate.Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic as Nonce
 import qualified Simulate.Clash.Crypto.Hash.SHA as SHA
 import qualified Simulate.Clash.Crypto.MAC.HMAC as HMAC
 import qualified Simulate.Clash.Sized.Stack as Stack
+import Simulate.Clash.Crypto.Hash.SHA3 as SHA3
 
 main ∷ IO ()
 main = defaultMain $ testGroup "clash-crypto simulation tests"
   [ Stack.tastyTests
   , SHA.tastyTests
+  , SHA3.testyTests
   , HMAC.tastyTests
   , Karatsuba.tastyTests
   , Modulo.tastyTests

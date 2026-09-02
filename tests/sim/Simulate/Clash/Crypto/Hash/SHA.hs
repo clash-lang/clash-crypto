@@ -13,7 +13,7 @@ Simulation tests for 'Clash.Crypto.Hash.SHA'.
 
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module Simulate.Clash.Crypto.Hash.SHA (tastyTests) where
+module Simulate.Clash.Crypto.Hash.SHA (tastyTests, input1, input2, input3, input4) where
 
 import Clash.Prelude.Safe
 import Clash.Signal.Channel

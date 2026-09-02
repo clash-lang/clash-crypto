@@ -74,6 +74,8 @@ import Clash.Crypto.Hash.SHA
   ( SHA(..), MessageDigestSize, KnownSHA, SHAFacts(..), BlockSize, knownSHA,
   Digest
   )
+import qualified Clash.Crypto.Hash.SHA3.Types as SHA3
+import Clash.Crypto.Hash.SHA3.Properties (SHA3Facts(..), KnownSHA3(..))
 import Clash.Crypto.Calculator.ISA
   ( CluInstruction(..), SecP256ModPrime, SecP256OrdPrime, ArgCount, ResultCount
   )
@@ -87,6 +89,7 @@ import Test.Clash.Crypto.Calculator
 import Test.Clash.Crypto.Calculator.InverseModulo
 import Test.Clash.Crypto.Cipher.AES
 import Test.Clash.Crypto.Hash.SHA
+import qualified Test.Clash.Crypto.Hash.SHA3 as SHA3T
 
 import Hitl.Clash.Crypto.Calculator.CLU (CluInput)
 import Hitl.Clash.Sized.Stack (StackSize, StackValueSize, StackPadding)
@@ -157,6 +160,11 @@ main = do
               testSHA SHA1   sem dev settings
             , testSHA SHA224 sem dev settings
             , testSHA SHA256 sem dev settings
+            ]
+            , testGroup "Clash.Crypto.Hash.SHA3"
+            [ testSHA3 SHA3.SHA3_224 sem dev settings
+            , testSHA3 SHA3.SHA3_256 sem dev settings
+            , testSHA3 SHA3.SHA3_384 sem dev settings
             ]
         , testGroup "Clash.Crypto.Hash.HMAC"
             [ testHMACSHA SHA256 sem dev settings
@@ -330,6 +338,21 @@ main = do
     = test sem dev settings name $ do
         bs ← forAll $ Gen.bytes $ Range.linear 80 100
         runHitltSHA alg sem dev settings bs
+
+  testSHA3 ∷
+    ∀ alg → (KnownSHA3 alg, SHA3T.CryptoHash alg, Typeable alg,
+              Hash.HashAlgorithm (SHA3T.CryptoToHash alg)) ⇒
+    QSem →
+    FilePath →
+    SerialPortSettings →
+    TestTree
+  testSHA3 alg sem dev settings
+    | SHA3Facts ← knownSHA3 alg
+    , name ← fmap (\c → if c == ' ' then '_' else c) $
+              dropWhile (== '\'') $ show $ typeRep (Proxy @alg)
+    = test sem dev settings name $ do
+        bs ← forAll $ Gen.bytes $ Range.linear 80 100
+        runHitltSHA3 alg sem dev settings bs
 
   testHMACSHA ∷
     ∀ alg → (KnownSHA alg, CryptoHash alg, Typeable alg,
@@ -626,6 +649,22 @@ runHitltSHA alg sem dev settings input
  where
   bs = escapeAndTerminate input
   eq = cryptoHash alg input
+
+runHitltSHA3 ∷
+  ∀ (alg ∷ SHA3.SHA3) →
+  (KnownSHA3 alg, SHA3T.CryptoHash alg, Hash.HashAlgorithm (SHA3T.CryptoToHash alg)) ⇒
+  QSem →
+  FilePath →
+  SerialPortSettings →
+  ByteString →
+  PropertyT IO ()
+runHitltSHA3 alg sem dev settings input
+  | SHA3Facts ← knownSHA3 alg
+  , SNat ∷ SNat resultSize ← SNat @(SHA3.MessageDigestSize alg `Div` 8)
+  = runHitlt resultSize sem dev settings bs eq
+ where
+  bs = escapeAndTerminate input
+  eq = SHA3T.cryptoHash alg input
 
 runHitltDeterministicNonce ∷
   ∀ (alg ∷ SHA) →

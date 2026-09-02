@@ -16,6 +16,8 @@ primitives are currently supported:
   _Section 6_ of [FIPS 186-5](https://doi.org/10.6028/NIST.FIPS.186-5).
 * Deterministic Nonce Generation for ECDSA according to _Appendix 3.3_
   of [FIPS 186-5](https://doi.org/10.6028/NIST.FIPS.186-5).
+* Secure hashing algorithm 3 according to
+  [FIPS 202](https://doi.org/10.6028/NIST.FIPS.202).
 
 Additionally, the following extended Clash utility primitives are
 offered by this library:

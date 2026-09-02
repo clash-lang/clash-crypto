@@ -94,6 +94,15 @@ library
     Clash.Crypto.Hash.SHA.Streaming
     Clash.Crypto.Hash.SHA.Streaming.Stages
     Clash.Crypto.Hash.SHA.Streaming.Padding
+    Clash.Crypto.Hash.SHA3.Types
+    Clash.Crypto.Hash.SHA3.State
+    Clash.Crypto.Hash.SHA3.Properties
+    Clash.Crypto.Hash.SHA3.Functions.Permutations
+    Clash.Crypto.Hash.SHA3.Functions.Padding
+    Clash.Crypto.Hash.SHA3.Functions.Algorithm
+    Clash.Crypto.Hash.SHA3.Streaming.Padding
+    Clash.Crypto.Hash.SHA3.Streaming.Sponge
+    Clash.Crypto.Hash.SHA3.Streaming.Streaming
     Clash.Crypto.MAC.HMAC
     Clash.Promoted.Integer
     Clash.Promoted.List
@@ -123,6 +132,7 @@ library test
     Test.Clash.Crypto.Calculator.Simulate
     Test.Clash.Crypto.Cipher.AES
     Test.Clash.Crypto.Hash.SHA
+    Test.Clash.Crypto.Hash.SHA3
     Test.Clash.Crypto.PubKey.ECDSA.Simulate
 
 test-suite simulation
@@ -144,6 +154,7 @@ test-suite simulation
     Simulate.Clash.Crypto.Cipher.AES.Streaming
     Simulate.Clash.Crypto.Cipher.AES.Streaming.Algorithm
     Simulate.Clash.Crypto.Hash.SHA
+    Simulate.Clash.Crypto.Hash.SHA3
     Simulate.Clash.Crypto.MAC.HMAC
     Simulate.Clash.Crypto.PubKey.ECDSA
     Simulate.Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic
@@ -208,6 +219,7 @@ library hitlt-instances
     Modulo
     SictMi
     SHA
+    SHA3
     Stack
 
 test-suite hitlt
