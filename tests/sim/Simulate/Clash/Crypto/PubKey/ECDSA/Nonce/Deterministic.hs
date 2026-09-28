@@ -30,16 +30,16 @@ import Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic (deriveNonce)
 import Clash.Crypto.Hash.SHA
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import Clash.Crypto.Calculator.Modulo (ℤₘ)
-import Clash.Crypto.Calculator.ISA (SecP256ModPrime, SecP256OrdPrime)
+import Clash.Crypto.Calculator.ISA (SecP256OrdPrime)
 import qualified Data.ByteArray as Memory
 import qualified Clash.Sized.Vector as Vec
 
 tastyTests ∷ TestTree
 tastyTests = testGroup "Clash.Crypto.PubKey.ECDSA.Nonce.Deterministic"
   [ testProperty "Nonce Generation" $ property $ do
-      let m = natToNum @(SecP256ModPrime - 1)
+      let n = natToNum @(SecP256OrdPrime - 1)
       message <- forAll $ Gen.bytes (Range.linear 1 1000)
-      pK <- forAll $ Gen.integral (Range.linear 1 m)
+      pK <- forAll $ Gen.integral (Range.linear 1 n)
       let refDig = Spec.hash @_ @Spec.SHA256 message
           h = Memory.unpack refDig
           p = Vec.toList $ bitCoerce
