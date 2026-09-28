@@ -159,11 +159,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1775979118,
-        "narHash": "sha256-P4LGv9hpI17dbJ0YpXOrFrH1yzie4sC+rpkEZWk44h8=",
+        "lastModified": 1783066904,
+        "narHash": "sha256-lfvOuHLd3SYYvVNiGwyvSEqdpH82nEezZejZSrjIRsQ=",
         "owner": "clash-lang",
         "repo": "ghc-typelits-proof-assist",
-        "rev": "e94bf0140101ab4cfe5fa44acf02032ecb9bdb15",
+        "rev": "48b66727560ff53ac80184669e14503f454e3f4b",
         "type": "github"
       },
       "original": {

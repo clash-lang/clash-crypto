@@ -44,6 +44,12 @@ module Data.Constraint.Nat.Extra
   , CLog2LECond0
   , CLog2Monotone
   , HalfLowerBound
+  , LtImpliesLE
+  , DividentLESucDivTimesDivisor
+  , Pad10s1Property
+  , SubOfPosIsLT
+  , SubOfLTIsPos
+  , DividentLTRemTimesDivider
   ) where
 
 import Clash.Prelude.Safe
@@ -685,3 +691,228 @@ HalfLowerBound (suc zero) 2≤n = contradiction 2≤n (<⇒≱ (s≤s ≤-refl))
 HalfLowerBound (2+ n) 2≤n = >-nonZero (m≥n⇒m/n>0 {2+ n} {2} (s≤s (s≤s z≤n)))
 /-}
 instance HalfLowerBound n ⇒ QED (HalfLowerBound n)
+
+instance
+  ( n < m
+  ) ⇒ LtImpliesLE n m
+class
+  ( n <= m
+  ) ⇒ LtImpliesLE n m
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. n < m → n ≤ m
+--
+{-/ Proof (Agda): LtImpliesLE
+open import Data.Nat.Properties using (<⇒≤)
+LtImpliesLE n m nltm = <⇒≤ nltm
+/-}
+instance LtImpliesLE n m ⇒ QED (LtImpliesLE n m)
+
+instance ( 1 <=  n ) ⇒ DividentLESucDivTimesDivisor m n
+class
+  ( m <= (Div m n + 1) * n
+  ) ⇒ DividentLESucDivTimesDivisor m n
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. 1 ≤ n → m ≤ (m / n + 1) * n
+--
+{-/ Proof (Agda): DividentLESucDivTimesDivisor
+open import Agda.Builtin.Nat
+open import Data.Nat.Base
+open import Agda.Builtin.Nat
+open import Data.Nat.Base
+open import Data.Nat.Properties using (+-monoʳ-≤; +-mono-≤; ≤-trans; *-distribʳ-+; *-identityˡ; +-comm)
+open import Data.Nat.DivMod using (m%n≤n; m≡m%n+[m/n]*n)
+open import Relation.Binary.PropositionalEquality
+  using (_≡_; refl; sym; cong; subst; subst₂; module ≡-Reasoning)
+open ≡-Reasoning
+DividentLESucDivTimesDivisor m n = subst (λ x → x ≤ (m / n + 1) * n) (lemma4 m n) (lemma3 m n)
+ where
+  lemma1 : (m n : ℕ) .{{_ : NonZero n}} → (m / n) * n + m % n ≤ (m / n) * n + n
+  lemma1 m n = +-monoʳ-≤ ((m / n) * n) (m%n≤n m n)
+
+  lemma2 : (m n : ℕ) → m * n + n ≡ (m + 1) * n
+  lemma2 m n =
+    m * n + n
+      ≡⟨ cong (λ x → m * n + x) (sym (*-identityˡ n)) ⟩
+    m * n + 1 * n
+      ≡⟨ sym (*-distribʳ-+ n m 1) ⟩
+    (m + 1) * n ∎
+
+  lemma3 : (m n : ℕ) .{{_ : NonZero n}} → (m / n) * n + m % n ≤ (m / n + 1) * n
+  lemma3 m n = subst (λ x → (m / n) * n + m % n ≤ x) (lemma2 (m / n) n) (lemma1 m n)
+
+  lemma4 : (m n : ℕ) .{{_ : NonZero n}} → (m / n) * n + m % n ≡ m
+  lemma4 m n =
+    (m / n) * n + m % n
+      ≡⟨ +-comm ((m / n) * n) (m % n) ⟩
+    m % n + m / n * n
+      ≡⟨ sym (m≡m%n+[m/n]*n m n) ⟩
+    m ∎
+/-}
+instance DividentLESucDivTimesDivisor m n ⇒ QED (DividentLESucDivTimesDivisor m n)
+
+instance
+  ( 1 <= n, n < m ) ⇒ SubOfPosIsLT m n
+class
+  ( m - n < m
+  ) ⇒ SubOfPosIsLT m n
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. 1 ≤ n < m → m - n < m
+--
+{-/ Proof (Agda): SubOfPosIsLT
+open import Agda.Builtin.Nat hiding (_<_)
+open import Data.Nat.Base
+open import Data.Nat.Properties
+SubOfPosIsLT b c cLTb = ∸-monoʳ-<  {b} {c} {0} (>-nonZero⁻¹ c) (<⇒≤ cLTb)
+/-}
+instance SubOfPosIsLT m n ⇒ QED (SubOfPosIsLT m n)
+
+instance
+  ( 1 <= n, n < m ) ⇒ SubOfLTIsPos m n
+class
+  ( 1 <= m - n
+  ) ⇒ SubOfLTIsPos m n
+-- ^ Evidence for
+--
+-- prop> ∀ n m ∈ ℕ. 1 ≤ n < m → 1 ≤ m - n
+--
+{-/ Proof (Agda): SubOfLTIsPos
+open import Data.Nat.Base using (_<_; _≤_; suc; ℕ; NonZero; >-nonZero)
+open import Data.Nat.Properties using (n∸n≡0; ∸-monoˡ-<; ≤-reflexive)
+open import Relation.Binary.PropositionalEquality using (refl; subst; cong)
+SubOfLTIsPos b c cLTb = >-nonZero diffIsPos
+ where
+  diffIsPos : b - c > 0
+  diffIsPos = subst (λ x → x ≤ b - c)
+              (cong suc (n∸n≡0 c))
+              (∸-monoˡ-< {c} {c} {b} cLTb (≤-reflexive refl))
+/-}
+instance SubOfLTIsPos m n ⇒ QED (SubOfLTIsPos m n)
+
+instance ( 1 <=  r ) ⇒ Pad10s1Property r l
+class
+  ( Mod (l + (Mod (r - Mod (l + 2) r) r + 2)) r ~ 0
+  ) ⇒ Pad10s1Property r l
+-- ^ Evidence for
+--
+-- prop> ∀ r l ∈ ℕ. 1 ≤ r → r | l + 1 + (r - (l + 2) % r) % r + 1
+--
+{-/ Proof (Agda): Pad10s1Property
+open import Agda.Builtin.Equality
+open import Agda.Builtin.Nat
+open import Data.Nat.Base
+open import Data.Nat.Properties
+open import Data.Nat.DivMod
+open import Relation.Binary.PropositionalEquality
+open ≡-Reasoning
+
+Pad10s1Property r l =
+  (l + ((r - (l + 2) % r) % r + 2)) % r
+    ≡⟨ cong (λ x → (l + x) % r) (+-comm ((r - (l + 2) % r) % r) 2) ⟩
+  (l + (2 + (r - (l + 2) % r) % r)) % r
+    ≡⟨ cong (λ x → x % r) (sym (+-assoc l 2 ((r ∸ (l + 2) % r) % r))) ⟩
+  (l + 2 + (r - (l + 2) % r) % r) % r
+    ≡⟨ lemma r (l + 2) ⟩
+  0 ∎
+ where
+  lemma : (d z : ℕ) .{{_ : NonZero d}} → (z + ((d - z % d) % d)) % d ≡ 0
+  lemma d z =
+    (z + ((d - z % d) % d)) % d
+      ≡⟨ %-distribˡ-+ z ((d ∸ z % d) % d) d ⟩
+    (z % d + (((d - z % d) % d)) % d) % d
+      ≡⟨ cong (λ x → (z % d + x) % d) (m%n%n≡m%n (d ∸ z % d) d) ⟩
+    (z % d + ((d - z % d) % d)) % d
+      ≡⟨ sym (%-distribˡ-+ z (d ∸ z % d) d) ⟩
+    (z + (d - z % d)) % d
+      ≡⟨ cong (λ x → (x + (d - z % d)) % d) (m≡m%n+[m/n]*n z d) ⟩
+    (z % d + (z / d) * d + (d - z % d)) % d
+      ≡⟨ cong (λ x → (x + (d - z % d)) % d) (+-comm (z % d) (z / d * d)) ⟩
+    ((z / d) * d + z % d + (d - z % d)) % d
+      ≡⟨ cong (λ x → x % d) (+-assoc (z / d * d) (z % d) (d - z % d)) ⟩
+    ((z / d) * d + (z % d + (d - z % d))) % d
+      ≡⟨ cong (λ x → (z / d * d + x) % d) (sym (+-∸-assoc (z % d) (<⇒≤ (m%n<n z d)))) ⟩
+    ((z / d) * d + (z % d + d - z % d)) % d
+      ≡⟨ cong (λ x → (z / d * d + (x - z % d)) % d) ((+-comm (z % d) d) ) ⟩
+    ((z / d) * d + (d + z % d - z % d)) % d
+      ≡⟨ cong (λ x → ((z / d) * d + x) % d) (+-∸-assoc d (≤-reflexive {z % d} refl)) ⟩
+    ((z / d) * d + (d + (z % d - z % d))) % d
+      ≡⟨ cong (λ x → ((z / d) * d + (d + x)) % d) (n∸n≡0 (z % d)) ⟩
+    ((z / d) * d + (d + 0)) % d
+      ≡⟨ cong (λ x → ((z / d) * d + x) % d) (+-identityʳ d) ⟩
+    ((z / d) * d + d) % d
+      ≡⟨ [m+n]%n≡m%n ((z / d) * d) d ⟩
+    ((z / d) * d) % d
+      ≡⟨ m*n%n≡0 ((z / d)) d ⟩
+    0 ∎
+/-}
+instance Pad10s1Property r l ⇒ QED (Pad10s1Property r l)
+
+instance
+  ( 1 <= r
+  ) ⇒ DividentLTRemTimesDivider d r
+class
+  ( d <= (Div d r + If (Mod d r == 0) 0 1) * r
+  ) ⇒ DividentLTRemTimesDivider d r
+-- ^ Evidence for
+--
+-- prop> ∀ d r ∈ ℕ. 1 ≤ r → d ≤ (d / r + (if r | d then 0 else 1)) * r
+--
+{-/ Proof (Agda): DividentLTRemTimesDivider
+open import Agda.Builtin.Equality
+open import Agda.Builtin.Nat
+
+open import Data.Bool.Base hiding (_≤_;_<_)
+open import Data.Bool.Properties using (_≟_; ¬-not)
+open import Data.Nat.Base
+open import Data.Nat.Properties using (≡ᵇ⇒≡; +-identityˡ; +-identityʳ; ≤-refl; +-monoˡ-≤; +-comm; *-identityˡ; *-distribʳ-+)
+open import Data.Nat.DivMod using (m≡m%n+[m/n]*n; m%n≤n)
+open import Data.Unit.Base using (⊤; tt)
+open import Data.Sum using ([_,_]′)
+open import Relation.Nullary.Decidable using (toSum)
+open import Relation.Binary.PropositionalEquality
+open ≡-Reasoning
+
+DividentLTRemTimesDivider d r = [ lemma1 , lemma2 ]′ (toSum ((d % r ≡ᵇ 0) ≟ true))
+ where
+  lemma1 : (d % r ≡ᵇ 0) ≡ true → d ≤ (d / r + (if_then_else_ (d % r ≡ᵇ 0) 0 1)) * r
+  lemma1 r|d = subst (λ x → d ≤ x) (sym eq) ≤-refl
+   where
+    eq =
+      (d / r + (if d % r ≡ᵇ 0 then 0 else 1)) * r
+        ≡⟨ cong (λ x → (d / r + (if x then 0 else 1)) * r) r|d ⟩
+      (d / r + (if true then 0 else 1)) * r
+        ≡⟨ cong (λ x → x * r) (+-identityʳ (d / r)) ⟩
+      (d / r) * r
+        ≡⟨ sym (+-identityˡ (d / r * r)) ⟩
+      0 + (d / r) * r
+        ≡⟨ cong (λ x → x + (d / r) * r) (sym (≡ᵇ⇒≡ (d % r) 0 (subst T (sym r|d) tt))) ⟩
+      d % r + (d / r) * r
+        ≡⟨ sym (m≡m%n+[m/n]*n d r) ⟩
+      d ∎
+  lemma2 : (d % r ≡ᵇ 0) ≢ true → d ≤ (d / r + (if_then_else_ (d % r ≡ᵇ 0) 0 1)) * r
+  lemma2 notr|d = subst (λ x → d ≤ x) (sym eq)  lt2
+   where
+    lt1 : d % r + (d / r) * r ≤ r + (d / r) * r
+    lt1 = +-monoˡ-≤ ((d / r) * r) (m%n≤n d r)
+    lt2 : d ≤ r + (d / r) * r
+    lt2 = subst (λ x → x ≤ r + d / r * r) (sym (m≡m%n+[m/n]*n d r)) lt1
+    aux =
+      d % r ≡ᵇ 0
+        ≡⟨ ¬-not notr|d ⟩
+      false ∎
+    eq =
+      (d / r + (if d % r ≡ᵇ 0 then 0 else 1)) * r
+        ≡⟨ cong (λ x → (d / r + (if x then 0 else 1)) * r) aux ⟩
+      (d / r + (if false then 0 else 1)) * r
+        ≡⟨ refl ⟩
+      (d / r + 1) * r
+        ≡⟨ *-distribʳ-+ r (d / r) 1 ⟩
+      (d / r) * r + 1 * r
+        ≡⟨ cong (λ x → (d / r) * r + x) (*-identityˡ r) ⟩
+      (d / r) * r + r
+        ≡⟨ +-comm ((d / r) * r) r ⟩
+      r + (d / r) * r ∎
+/-}
+instance DividentLTRemTimesDivider d r ⇒ QED (DividentLTRemTimesDivider d r)
