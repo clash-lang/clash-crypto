@@ -39,8 +39,8 @@ module Clash.Signal.Channel
   , delayC
   , enhance
   , CompMode
-  , pattern Computing
-  , pattern Releasing
+  , data Computing
+  , data Releasing
     -- * Combinators
   , join
   , disjoin

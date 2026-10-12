@@ -109,7 +109,7 @@ data KeyMode (alg ∷ AES)
   deriving (Generic, NFDataX, Show, Eq)
 
 instance AESKeyExpansion AES128 where
-  keyExpansionStream alg = enhance put get compute
+  keyExpansionStream _ = enhance put get compute
    where
     put ∷
       ∀ alg. (KnownAES alg, alg ~ AES128) ⇒
@@ -163,7 +163,7 @@ instance AESKeyExpansion AES128 where
     shiftNewPart w = fst . shiftInAtN w
 
 instance AESKeyExpansion AES192 where
-  keyExpansionStream alg = enhance put get compute
+  keyExpansionStream _ = enhance put get compute
    where
     put ∷
       ∀ alg. (KnownAES alg, alg ~ AES192) ⇒
@@ -231,7 +231,7 @@ instance AESKeyExpansion AES192 where
     shiftNewPart w = fst . shiftInAtN w
 
 instance AESKeyExpansion AES256 where
-  keyExpansionStream alg = enhance put get compute
+  keyExpansionStream _ = enhance put get compute
    where
     put ∷
       ∀ alg. (KnownAES alg, alg ~ AES256) ⇒
@@ -422,11 +422,11 @@ eqInvCipherStream alg | AESFacts ← knownAES alg = enhance put get compute
 --
 -- /Section 5.3.5, streamlined version/
 keyExpansionIECStream ∷
-  (HiddenClockResetEnable dom, AESKeyExpansion alg) ⇒
-  ∀ x → (x ~ alg, KnownAES alg) ⇒
-  Channel dom (AESKey alg) →
+  (HiddenClockResetEnable dom, AESKeyExpansion alg0) ⇒
+  ∀ x → (x ~ alg0, KnownAES alg0) ⇒
+  Channel dom (AESKey alg0) →
   -- ^ key
-  Channel dom (KeySchedule alg)
+  Channel dom (KeySchedule alg0)
   -- ^ response
 keyExpansionIECStream alg
   | AESFacts ← knownAES alg

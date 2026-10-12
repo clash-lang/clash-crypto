@@ -142,9 +142,9 @@ eqInvCipher# alg input (reverse . unconcatI → ws)
 
 -- | Shareable parts of Algorithm 5.
 keyExpansionIEC# ∷
-  ∀ x → x ~ alg ⇒
-  (AESFunctions alg, KnownNat (Nr alg), 1 <= Nr alg) ⇒
-  AESKey alg → KeySchedule alg
+  ∀ x → x ~ alg0 ⇒
+  (AESFunctions alg0, KnownNat (Nr alg0), 1 <= Nr alg0) ⇒
+  AESKey alg0 → KeySchedule alg0
 keyExpansionIEC# alg key
   = leToPlus @1 @(Nr alg)
   $ concat
