@@ -512,9 +512,8 @@ type family Requirements i p
    Requirements (CLU _ _) ('StackProfile p u l) =
      -- Executing a CLU operation has the same stack profile as popping
      -- two elements from the stack [POP 2] and then putting a result
-     -- afterwards [PUT _]. Note that @Minℤ l (Dec (p .+. Toℤ 2)) ≡ l@
-     -- by construction.
-     'StackProfile (Inc p) (Maxℤ u (p .+. Toℤ 2)) l
+     -- afterwards [PUT _].
+     'StackProfile (Inc p) (Maxℤ u (p .+. Toℤ 1)) (Minℤ l (Dec p))
 
    Requirements (RUN k r) p =
      -- See 'Attach'.
