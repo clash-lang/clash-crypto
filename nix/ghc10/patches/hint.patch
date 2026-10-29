@@ -1,0 +1,43 @@
+diff --git a/src/Hint/Context.hs b/src/Hint/Context.hs
+index d203530..def55d3 100644
+--- a/src/Hint/Context.hs
++++ b/src/Hint/Context.hs
+@@ -34,6 +34,7 @@ import System.Directory
+ 
+ import Hint.Configuration (setGhcOption)
+ import System.IO.Temp
++import GHC.Unit.Module.Name (hsModuleName)
+ 
+ type ModuleText = String
+ 
+@@ -94,7 +95,7 @@ getContext = do
+ getContextNames :: GHC.GhcMonad m => m([String], [String])
+ getContextNames = fmap (map name *** map decl) getContext
+     where name = GHC.moduleNameString . GHC.moduleName
+-          decl = GHC.moduleNameString . GHC.unLoc . GHC.ideclName
++          decl = GHC.moduleNameString . hsModuleName . GHC.unLoc . GHC.ideclName
+ 
+ setContext :: GHC.GhcMonad m => [GHC.Module] -> [GHC.ImportDecl GHC.GhcPs] -> m ()
+ setContext ms ds =
+diff --git a/src/Hint/GHC.hs b/src/Hint/GHC.hs
+index 6df5985..de9e4c9 100644
+--- a/src/Hint/GHC.hs
++++ b/src/Hint/GHC.hs
+@@ -157,7 +157,7 @@ import qualified GHC.Utils.Logger as GHC
+   (LogAction, Logger, initLogger, logFlags, log_default_user_context, putLogMsg, pushLogHook)
+ import qualified GHC.Driver.Monad as GHC (modifyLogger)
+ import qualified GHC.Types.Error as GHC
+-  (DiagnosticReason(ErrorWithoutFlag), MessageClass(MCDiagnostic))
++  (DiagnosticReason(ErrorWithoutFlag), MessageClass(InternalMCDiagnostic))
+ import qualified GHC.Utils.Outputable as GHC (renderWithContext)
+ 
+ -- UnitState
+@@ -440,7 +440,7 @@ mkLogAction :: (String -> a) -> IORef [a] -> GHC.LogAction
+ data WarnReason = NoReason
+ type Logger = GHC.Logger
+ initLogger = GHC.initLogger
+-putLogMsg logger _df _wn sev = GHC.putLogMsg logger (GHC.logFlags logger) (GHC.MCDiagnostic sev (ResolvedDiagnosticReason GHC.ErrorWithoutFlag) Nothing)
++putLogMsg logger _df _wn sev = GHC.putLogMsg logger (GHC.logFlags logger) (GHC.InternalMCDiagnostic sev (ResolvedDiagnosticReason GHC.ErrorWithoutFlag) Nothing)
+ pushLogHook = GHC.pushLogHook
+ modifyLogger = GHC.modifyLogger
+ mkLogAction f r = \lf mc src msg ->

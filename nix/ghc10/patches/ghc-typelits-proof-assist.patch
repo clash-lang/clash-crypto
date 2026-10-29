@@ -1,0 +1,79 @@
+diff --git a/src/GHC/TypeNats/Proof/Plugin.hs b/src/GHC/TypeNats/Proof/Plugin.hs
+index 432d44d..7f9e338 100644
+--- a/src/GHC/TypeNats/Proof/Plugin.hs
++++ b/src/GHC/TypeNats/Proof/Plugin.hs
+@@ -32,11 +32,12 @@ import GHC.TcPlugin.API
+   , newWanted, classifyPredType, eqType
+   )
+ import GHC.TcPlugin.API.Internal (unsafeLiftTcM)
+-import GHC.Builtin.Types
+-  ( cTupleTyCon, cTupleDataCon, naturalTy, constraintKindTyConName
++import GHC.Builtin.WiredIn.Types (constraintKindTyConName)
++import GHC.Builtins
++  ( cTupleTyCon, cTupleDataCon, naturalTy
+   , promotedTrueDataCon, promotedFalseDataCon
++  , typeNatCmpTyCon
+   )
+-import GHC.Builtin.Types.Literals (typeNatCmpTyCon)
+ import GHC.Core.DataCon (dataConWrapId)
+ import GHC.Core.Opt.Monad (getModule)
+ import GHC.Core.TyCo.Rep (Type(..), TyLit(..))
+@@ -79,11 +80,11 @@ import GHC.Types.Name.Reader (unLocWithUserRdr)
+ import GHC.Types.SrcLoc (SrcSpan(..), noSrcSpan)
+ import GHC.Types.Unique.FM
+   (lookupUFM, addToUFM, nonDetEltsUFM, minusUFM)
++import GHC.Unit.Module.Name (moduleNameSlashes)
+ import GHC.Unit.Types (GenModule(..))
+ import GHC.Utils.Panic (sorryDoc)
+ import GHC.Utils.Outputable ((<+>), ($$), quotes, vcat, nest)
+ import Language.Haskell.Syntax.Decls (StandaloneKindSig(..))
+-import Language.Haskell.Syntax.Module.Name (moduleNameSlashes)
+ import System.Directory (createDirectoryIfMissing)
+ import System.Exit (exitFailure)
+ import System.FilePath ((</>))
+diff --git a/src/GHC/TypeNats/Proof/Plugin/KnownTypes.hs b/src/GHC/TypeNats/Proof/Plugin/KnownTypes.hs
+index 0617065..18d1371 100644
+--- a/src/GHC/TypeNats/Proof/Plugin/KnownTypes.hs
++++ b/src/GHC/TypeNats/Proof/Plugin/KnownTypes.hs
+@@ -7,9 +7,8 @@ module GHC.TypeNats.Proof.Plugin.KnownTypes
+   ) where
+ 
+ import GHC.Base (Constraint, Type)
+-import GHC.Builtin.Types (eqTyCon)
+-import GHC.Builtin.Types.Literals
+-  ( typeNatAddTyCon, typeNatSubTyCon, typeNatMulTyCon
++import GHC.Builtins
++  ( eqTyCon, typeNatAddTyCon, typeNatSubTyCon, typeNatMulTyCon
+   , typeNatExpTyCon, typeNatDivTyCon, typeNatModTyCon, typeNatLogTyCon
+   )
+ import GHC.Core.TyCon (TyCon)
+diff --git a/src/GHC/TypeNats/Proof/Plugin/Prover/Coq.hs b/src/GHC/TypeNats/Proof/Plugin/Prover/Coq.hs
+index d0ff6c9..5f79507 100644
+--- a/src/GHC/TypeNats/Proof/Plugin/Prover/Coq.hs
++++ b/src/GHC/TypeNats/Proof/Plugin/Prover/Coq.hs
+@@ -7,7 +7,7 @@ import Prelude hiding (unwords)
+ import Data.String.Combinators
+   ((<+>), colon, comma, parens, punctuate, unwords)
+ import Data.String (IsString(..))
+-import GHC.Builtin.Types (boolTy, naturalTy)
++import GHC.Builtins (boolTy, naturalTy)
+ import GHC.Data.FastString (unpackFS)
+ import GHC.Plugins (getOccString)
+ import GHC.Tc.Utils.TcType (eqType)
+diff --git a/src/GHC/TypeNats/Proof/Plugin/Prover/Tynal.hs b/src/GHC/TypeNats/Proof/Plugin/Prover/Tynal.hs
+index 5ee645d..646fa2f 100644
+--- a/src/GHC/TypeNats/Proof/Plugin/Prover/Tynal.hs
++++ b/src/GHC/TypeNats/Proof/Plugin/Prover/Tynal.hs
+@@ -24,9 +24,9 @@ import Data.List (find)
+ import Data.Set (Set, empty, toAscList, insert)
+ import Data.String (IsString(..))
+ import GHC.Base (Constraint)
+-import GHC.Builtin.Types
+-  (promotedFalseDataCon, promotedTrueDataCon, cTupleTyCon, multMulTyCon)
+-import GHC.Builtin.Types.Literals (typeNatCmpTyCon)
++import GHC.Builtin.WiredIn.Types (multMulTyCon)
++import GHC.Builtins
++  (promotedFalseDataCon, promotedTrueDataCon, cTupleTyCon, typeNatCmpTyCon)
+ import GHC.Core.Class (Class)
+ import GHC.Core.InstEnv (ClsInst)
+ import GHC.Core.TyCo.Rep (Type(..), TyLit(..), FunTyFlag(..), ForAllTyFlag(..))

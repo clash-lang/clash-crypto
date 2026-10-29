@@ -152,10 +152,7 @@ data Routine p a (c ∷ Curve p a)
   --   @¬valid@.
   -- * Add @r₂@ to the result when @r₁ = O@
   -- * Add @r₁@ to the result when @r₂ = O@
-  | PointAddMain
-  | PointAddI1
-  | PointAddI2
-  | PointAddI3
+  | PointAdd
   -- | Replace the top element with 0 if the top is 0, and 1 otherwise.
   | IsZero
   -- | Derive a public key from a private key.
@@ -167,12 +164,9 @@ type family RoutineIndex (r ∷ Routine p a c) ∷ Nat where
   RoutineIndex SignHash           = 0
   RoutineIndex PointScalarMul     = 1
   RoutineIndex PointScalarMulStep = 2
-  RoutineIndex PointAddI1         = 3
-  RoutineIndex PointAddI2         = 4
-  RoutineIndex PointAddI3         = 5
-  RoutineIndex PointAddMain       = 6
-  RoutineIndex IsZero             = 7
-  RoutineIndex DerivePublicKey    = 8
+  RoutineIndex PointAdd           = 3
+  RoutineIndex IsZero             = 4
+  RoutineIndex DerivePublicKey    = 5
 
 type instance Compare (r₁ ∷ Routine p a c) (r₂ ∷ Routine p a c) =
   Compare (RoutineIndex r₁) (RoutineIndex r₂)
@@ -227,10 +221,12 @@ instance KnownRoutine (IsZero ∷ Routine Nat Nat SECP256R1) where
     -- (x=0)
     ]
 
-instance KnownRoutine (PointAddI1 ∷ Routine Nat Nat SECP256R1) where
-  routine _ = PointAddI1
+instance KnownRoutine (PointAdd ∷ Routine Nat Nat SECP256R1) where
+  routine _ = PointAdd
   knownRoutine = RoutineFacts
-  type Instructions (PointAddI1 ∷ Routine Nat Nat SECP256R1) =
+  type Instructions (PointAdd ∷ Routine Nat Nat SECP256R1) =
+    -- {r₁} {r₂}
+    -- x₁ y₁ x₂ y₂
    '[ CUP 3
     , CUP 2
     , SUB_Q
@@ -267,13 +263,28 @@ instance KnownRoutine (PointAddI1 ∷ Routine Nat Nat SECP256R1) where
     , RUN 1 IsZero
     , MUL_Q
     -- (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    ]
-
-instance KnownRoutine (PointAddI2 ∷ Routine Nat Nat SECP256R1) where
-  routine _ = PointAddI2
-  knownRoutine = RoutineFacts
-  type Instructions (PointAddI2 ∷ Routine Nat Nat SECP256R1) =
-   '[ CUP 6
+    , CUP 4
+    , RUN 1 IsZero
+    , CUP 4
+    , RUN 1 IsZero
+    , MUL_Q
+    -- (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , PUT 1
+    , CUP 3
+    , RUN 1 IsZero
+    , SUB_Q
+    -- (d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , PUT 1
+    , CUP 3
+    , SUB_Q
+    , PUT 1
+    , CUP 3
+    , SUB_Q
+    , MUL_Q
+    , MUL_Q
+    -- (r₁≠O ∧ r₂≠O ∧ d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    -- valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , CUP 6
     , CUP 9
     , SUB_Q
     , PUT 1
@@ -306,14 +317,23 @@ instance KnownRoutine (PointAddI2 ∷ Routine Nat Nat SECP256R1) where
     , SUB_Q
     , CUP 9
     , SUB_Q
-    ]
-
-instance KnownRoutine (PointAddI3 ∷ Routine Nat Nat SECP256R1) where
-  routine _ = PointAddI3
-  knownRoutine = RoutineFacts
-  type Instructions (PointAddI3 ∷ Routine Nat Nat SECP256R1) =
-    -- x s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-   '[ CUP 7
+    -- (s²-x₁-x₂) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    -- x' s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , CUP 2
+    , MUL_Q
+    -- x'·valid s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , CUP 7
+    , CUP 5
+    , MUL_Q
+    , ADD_Q
+    -- (x'·valid + x₁·(r₂=O)) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , CUP 9
+    , CUP 4
+    , MUL_Q
+    , ADD_Q
+    -- (x'·valid + x₁·(r₂=O) + x₂·(r₁=O)) s
+    -- valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
+    , CUP 7
     , CUP 1
     , SUB_Q
     , CUP 2
@@ -336,54 +356,6 @@ instance KnownRoutine (PointAddI3 ∷ Routine Nat Nat SECP256R1) where
     , POP 1
     -- x s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} x₁ y
     , SWP 9
-    ]
-
-instance KnownRoutine (PointAddMain ∷ Routine Nat Nat SECP256R1) where
-  routine _ = PointAddMain
-  knownRoutine = RoutineFacts
-  type Instructions (PointAddMain ∷ Routine Nat Nat SECP256R1) =
-    -- {r₁} {r₂}
-    -- x₁ y₁ x₂ y₂
-   '[ RUN 1 PointAddI1
-    , CUP 4
-    , RUN 1 IsZero
-    , CUP 4
-    , RUN 1 IsZero
-    , MUL_Q
-    -- (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , PUT 1
-    , CUP 3
-    , RUN 1 IsZero
-    , SUB_Q
-    -- (d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , PUT 1
-    , CUP 3
-    , SUB_Q
-    , PUT 1
-    , CUP 3
-    , SUB_Q
-    , MUL_Q
-    , MUL_Q
-    -- (r₁≠O ∧ r₂≠O ∧ d≠0) (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    -- valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , RUN 1 PointAddI2
-    -- (s²-x₁-x₂) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    -- x' s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , CUP 2
-    , MUL_Q
-    -- x'·valid s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , CUP 7
-    , CUP 5
-    , MUL_Q
-    , ADD_Q
-    -- (x'·valid + x₁·(r₂=O)) s valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , CUP 9
-    , CUP 4
-    , MUL_Q
-    , ADD_Q
-    -- (x'·valid + x₁·(r₂=O) + x₂·(r₁=O)) s
-    -- valid (r₁=O) (r₂=O) d (r₁=r₂) {r₁} {r₂}
-    , RUN 1 PointAddI3
     , POP 9
     -- x y
     -- {r}
@@ -405,13 +377,13 @@ instance KnownRoutine (PointScalarMulStep ∷ Routine Nat Nat SECP256R1) where
     , CUP 4
     , MUL_Q
     -- {s[bit]·2^bit·r} {acc} {2^bit·r} s bit
-    , RUN 1 PointAddMain
+    , RUN 1 PointAdd
     -- {acc'} {2^bit·r} s bit
     , CUP 3
     , CUP 3
     , CUP 1
     , CUP 1
-    , RUN 1 PointAddMain
+    , RUN 1 PointAdd
     , SWP 4
     , POP 1
     , SWP 4
@@ -498,10 +470,7 @@ data SignHashIP
   = IPSignHash           (SignHashRIndex SignHash)
   | IPPointScalarMul     (SignHashRIndex PointScalarMul)
   | IPPointScalarMulStep (SignHashRIndex PointScalarMulStep)
-  | IPPointAddMain       (SignHashRIndex PointAddMain)
-  | IPPointAddI1         (SignHashRIndex PointAddI1)
-  | IPPointAddI2         (SignHashRIndex PointAddI2)
-  | IPPointAddI3         (SignHashRIndex PointAddI3)
+  | IPPointAdd           (SignHashRIndex PointAdd)
   | IPIsZero             (SignHashRIndex IsZero)
   | EndOfSequence
   deriving (Generic, NFDataX, Show)
@@ -513,10 +482,7 @@ instance
     IPSignHash n           | (False, m) ← cso n → IPSignHash m
     IPPointScalarMul n     | (False, m) ← cso n → IPPointScalarMul m
     IPPointScalarMulStep n | (False, m) ← cso n → IPPointScalarMulStep m
-    IPPointAddMain n       | (False, m) ← cso n → IPPointAddMain m
-    IPPointAddI1 n         | (False, m) ← cso n → IPPointAddI1 m
-    IPPointAddI2 n         | (False, m) ← cso n → IPPointAddI2 m
-    IPPointAddI3 n         | (False, m) ← cso n → IPPointAddI3 m
+    IPPointAdd n           | (False, m) ← cso n → IPPointAdd m
     IPIsZero n             | (False, m) ← cso n → IPIsZero m
     _ → EndOfSequence
    where
@@ -539,25 +505,10 @@ instance
       , USucc{} ← toUNat (SNat @(InstructionCount r))
       → IPPointScalarMulStep . RIndex 0
 
-    PointAddMain
-      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
+    PointAdd
+      | Proxy @r ← Proxy @(PointAdd ∷ Routine Nat Nat SECP256R1)
       , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPPointAddMain . RIndex 0
-
-    PointAddI1
-      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPPointAddI1 . RIndex 0
-
-    PointAddI2
-      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPPointAddI2 . RIndex 0
-
-    PointAddI3
-      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPPointAddI3 . RIndex 0
+      → IPPointAdd . RIndex 0
 
     IsZero
       | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
@@ -581,23 +532,8 @@ instance
       , RoutineFacts ← knownRoutine @_ @r @a
       → pure $ instructions m r !! iptr
 
-    IPPointAddMain RIndex{..}
-      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPPointAddI1 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPPointAddI2 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPPointAddI3 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
+    IPPointAdd RIndex{..}
+      | Proxy @r ← Proxy @(PointAdd ∷ Routine Nat Nat SECP256R1)
       , RoutineFacts ← knownRoutine @_ @r @a
       → pure $ instructions m r !! iptr
 
@@ -617,10 +553,7 @@ data DerivePublicKeyIP
   = IPDerivePublicKey     (DerivePublicKeyRIndex DerivePublicKey)
   | IPDPointScalarMul     (DerivePublicKeyRIndex PointScalarMul)
   | IPDPointScalarMulStep (DerivePublicKeyRIndex PointScalarMulStep)
-  | IPDPointAddMain       (DerivePublicKeyRIndex PointAddMain)
-  | IPDPointAddI1         (DerivePublicKeyRIndex PointAddI1)
-  | IPDPointAddI2         (DerivePublicKeyRIndex PointAddI2)
-  | IPDPointAddI3         (DerivePublicKeyRIndex PointAddI3)
+  | IPDPointAdd           (DerivePublicKeyRIndex PointAdd)
   | IPDIsZero             (DerivePublicKeyRIndex IsZero)
   | IPDEndOfSequence
   deriving (Generic, NFDataX, Show)
@@ -632,10 +565,7 @@ instance
     IPDerivePublicKey n     | (False, m) ← cso n → IPDerivePublicKey m
     IPDPointScalarMul n     | (False, m) ← cso n → IPDPointScalarMul m
     IPDPointScalarMulStep n | (False, m) ← cso n → IPDPointScalarMulStep m
-    IPDPointAddMain n       | (False, m) ← cso n → IPDPointAddMain m
-    IPDPointAddI1 n         | (False, m) ← cso n → IPDPointAddI1 m
-    IPDPointAddI2 n         | (False, m) ← cso n → IPDPointAddI2 m
-    IPDPointAddI3 n         | (False, m) ← cso n → IPDPointAddI3 m
+    IPDPointAdd n           | (False, m) ← cso n → IPDPointAdd m
     IPDIsZero n             | (False, m) ← cso n → IPDIsZero m
     _ → IPDEndOfSequence
    where
@@ -658,25 +588,10 @@ instance
       , USucc{} ← toUNat (SNat @(InstructionCount r))
       → IPDPointScalarMulStep . RIndex 0
 
-    PointAddMain
-      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
+    PointAdd
+      | Proxy @r ← Proxy @(PointAdd ∷ Routine Nat Nat SECP256R1)
       , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPDPointAddMain . RIndex 0
-
-    PointAddI1
-      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPDPointAddI1 . RIndex 0
-
-    PointAddI2
-      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPDPointAddI2 . RIndex 0
-
-    PointAddI3
-      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
-      , USucc{} ← toUNat $ SNat @(InstructionCount r)
-      → IPDPointAddI3 . RIndex 0
+      → IPDPointAdd . RIndex 0
 
     IsZero
       | Proxy @r ← Proxy @(IsZero ∷ Routine Nat Nat SECP256R1)
@@ -700,23 +615,8 @@ instance
       , RoutineFacts ← knownRoutine @_ @r @a
       → pure $ instructions m r !! iptr
 
-    IPDPointAddMain RIndex{..}
-      | Proxy @r ← Proxy @(PointAddMain ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPDPointAddI1 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI1 ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPDPointAddI2 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI2 ∷ Routine Nat Nat SECP256R1)
-      , RoutineFacts ← knownRoutine @_ @r @a
-      → pure $ instructions m r !! iptr
-
-    IPDPointAddI3 RIndex{..}
-      | Proxy @r ← Proxy @(PointAddI3 ∷ Routine Nat Nat SECP256R1)
+    IPDPointAdd RIndex{..}
+      | Proxy @r ← Proxy @(PointAdd ∷ Routine Nat Nat SECP256R1)
       , RoutineFacts ← knownRoutine @_ @r @a
       → pure $ instructions m r !! iptr
 

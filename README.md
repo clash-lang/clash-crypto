@@ -45,6 +45,13 @@ offered by this library:
   `Frame`s for the transfer of variable-sized data messages over
   multiple cycles.
 
+## Building
+
+It is recommended to compile this library with GHC 10.1 (commit
+`70dc4e6` or later), as compilation will be very slow and requires
+some tremendous amount of memory otherwise. All required dependencies
+are also provided via the Nix development shell.
+
 ## Nix
 
 This repository offers several Nix development shells via
@@ -89,7 +96,7 @@ simulation tests, which are available via the Haskell-based
 `simulation` testsuite. Simply run
 
 ```
-cabal run -- simulation -l
+cabal run simulation -- -l
 ```
 
 to print a list of all the available test cases. Specific cases can be
@@ -97,7 +104,7 @@ selected via passing a pattern that matches the desired test cases by
 name, e.g., using
 
 ```
-cabal run -- simulation -p SHA-256
+cabal run simulation -- -p SHA-256
 ```
 
 runs only the `SHA-256` related tests.
@@ -137,7 +144,7 @@ On a Linux-based host it is further recommended to
 * make `/etc/udev/scripts/unique-device-num` executable
 * activate the rules via `sudo udevadm control --reload`
 
-HITL tests can be run using `cabal run -- hitlt`, which queries
+HITL tests can be run using `cabal run hitlt`, which queries
 the appropriate package defined in the flake for uploading its
 bitstream to the FPGA. The packages can be found under the `hitlt`
 prefix:

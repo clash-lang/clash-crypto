@@ -1,29 +1,22 @@
 {
   "nodes": {
-    "checked-literals": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1779473511,
-        "narHash": "sha256-+jcWGgZTciMhKN43SzQUHgSH54iEvPtCMBDnblsWfyw=",
-        "owner": "clash-lang",
-        "repo": "checked-literals",
-        "rev": "568a8603491bca0dbb24586828edf3040f30ee6f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "clash-lang",
-        "repo": "checked-literals",
-        "type": "github"
-      }
-    },
     "clash-compiler": {
-      "flake": false,
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "flake-utils": "flake-utils",
+        "ghc-tcplugin-api": "ghc-tcplugin-api",
+        "ghc-typelits-extra": "ghc-typelits-extra",
+        "ghc-typelits-knownnat": "ghc-typelits-knownnat",
+        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise",
+        "nixpkgs": "nixpkgs",
+        "qlog": "qlog"
+      },
       "locked": {
-        "lastModified": 1788804324,
-        "narHash": "sha256-ANfk3hvWJw/KEhc9HUk46R5NJz14xZZYhux5CNKmrEQ=",
+        "lastModified": 1790322073,
+        "narHash": "sha256-6bazPmFZOyrjTw1uIBsQJTjCtj2tQS+94Hzx6gIKXYA=",
         "owner": "clash-lang",
         "repo": "clash-compiler",
-        "rev": "428100b53bd35557823e8b7f3dc9e27da4500dba",
+        "rev": "baf249616455ebdff028ce04fa55783bbfcf3eff",
         "type": "github"
       },
       "original": {
@@ -34,44 +27,42 @@
     },
     "ecpprog": {
       "inputs": {
-        "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1726677369,
         "narHash": "sha256-FraBZo+I5zkYpCbYs7ACT1l57tu9m5jAgTwu8yfY0HM=",
-        "owner": "diegodiv",
+        "owner": "gregdavill",
         "repo": "ecpprog",
         "rev": "1f4579e81df8522a2f0bf143c7e3a44ef99ddad0",
         "type": "github"
       },
       "original": {
-        "owner": "diegodiv",
+        "owner": "gregdavill",
         "repo": "ecpprog",
+        "type": "github"
+      }
+    },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
         "type": "github"
       }
     },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
-      },
-      "locked": {
-        "lastModified": 1726560853,
-        "narHash": "sha256-X6rJYSESBVr3hBoH0WbKE5KvhPU5bloyZ2L4K60/fPQ=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "c1dfcf08411b08f6b8615f7d8971a2bfa81d5e8a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "flake-utils_2": {
-      "inputs": {
-        "systems": "systems_2"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -87,9 +78,45 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_2"
+      },
+      "locked": {
+        "lastModified": 1726560853,
+        "narHash": "sha256-X6rJYSESBVr3hBoH0WbKE5KvhPU5bloyZ2L4K60/fPQ=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "c1dfcf08411b08f6b8615f7d8971a2bfa81d5e8a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "flake-utils_3": {
       "inputs": {
         "systems": "systems_3"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_4": {
+      "inputs": {
+        "systems": "systems_4"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -137,6 +164,22 @@
         "type": "github"
       }
     },
+    "ghc-tcplugin-api_3": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788278105,
+        "narHash": "sha256-/80k2IGYt/lFlFFlHh1UOluqZQw9XJZdE4h5oP13XiY=",
+        "owner": "sheaf",
+        "repo": "ghc-tcplugin-api",
+        "rev": "dfb818fe279d29fd4e7fbec027bbdf40ce8cc0ad",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sheaf",
+        "repo": "ghc-tcplugin-api",
+        "type": "github"
+      }
+    },
     "ghc-typelits-extra": {
       "flake": false,
       "locked": {
@@ -154,6 +197,22 @@
       }
     },
     "ghc-typelits-extra_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790299104,
+        "narHash": "sha256-NzL8l0wlk1VXi/W0PTEBCG4WZtD+AAEa4IrYDcy3xN4=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-extra",
+        "rev": "ec4e9efd31c66c5f027cdb4322462194ef4a3bf0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-extra",
+        "type": "github"
+      }
+    },
+    "ghc-typelits-extra_3": {
       "flake": false,
       "locked": {
         "lastModified": 1790299104,
@@ -201,6 +260,22 @@
         "type": "github"
       }
     },
+    "ghc-typelits-knownnat_3": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789822692,
+        "narHash": "sha256-u+DE22GIu8RmD2do+K7n5OSV0LkveCaRPpZg+av/OFU=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-knownnat",
+        "rev": "4f041a82edad86e4a8ff8db057922bfe66a272a8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-knownnat",
+        "type": "github"
+      }
+    },
     "ghc-typelits-natnormalise": {
       "flake": false,
       "locked": {
@@ -233,14 +308,30 @@
         "type": "github"
       }
     },
+    "ghc-typelits-natnormalise_3": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789819900,
+        "narHash": "sha256-lukJpgSYhnuPsrfK7khOO7af0xcqz+VSML3d24FkauM=",
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-natnormalise",
+        "rev": "44c1a880be312d73c175dda131a8f97ff0d22a75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clash-lang",
+        "repo": "ghc-typelits-natnormalise",
+        "type": "github"
+      }
+    },
     "ghc-typelits-proof-assist": {
       "inputs": {
-        "flake-utils": "flake-utils_3",
-        "ghc-tcplugin-api": "ghc-tcplugin-api_2",
-        "ghc-typelits-extra": "ghc-typelits-extra_2",
-        "ghc-typelits-knownnat": "ghc-typelits-knownnat_2",
-        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise_2",
-        "nixpkgs": "nixpkgs_2"
+        "flake-utils": "flake-utils_4",
+        "ghc-tcplugin-api": "ghc-tcplugin-api_3",
+        "ghc-typelits-extra": "ghc-typelits-extra_3",
+        "ghc-typelits-knownnat": "ghc-typelits-knownnat_3",
+        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise_3",
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1791657456,
@@ -273,6 +364,22 @@
     },
     "nixpkgs": {
       "locked": {
+        "lastModified": 1787964612,
+        "narHash": "sha256-0N9nghg3nwzX6b6qc77EzjR9cu/Z+UR66FlfsCqiURs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e8be7818e19ada32105a8af937a6a473b38167ca",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
         "lastModified": 1726583932,
         "narHash": "sha256-zACxiQx8knB3F8+Ze+1BpiYrI+CbhxyWpcSID9kVhkQ=",
         "owner": "NixOS",
@@ -287,7 +394,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_2": {
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1787964612,
         "narHash": "sha256-0N9nghg3nwzX6b6qc77EzjR9cu/Z+UR66FlfsCqiURs=",
@@ -303,13 +410,13 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
-        "lastModified": 1788608636,
-        "narHash": "sha256-RqeFOwW329f4i1f5QlJgQYwgEZvxIHJsUYlzIBxsKsY=",
+        "lastModified": 1787964612,
+        "narHash": "sha256-0N9nghg3nwzX6b6qc77EzjR9cu/Z+UR66FlfsCqiURs=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "0af3d1402dec3fc7e93635e511d1f7428c89cebf",
+        "rev": "e8be7818e19ada32105a8af937a6a473b38167ca",
         "type": "github"
       },
       "original": {
@@ -319,19 +426,100 @@
         "type": "github"
       }
     },
+    "pyproject-build-systems": {
+      "inputs": {
+        "nixpkgs": [
+          "clash-compiler",
+          "qlog",
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "clash-compiler",
+          "qlog",
+          "pyproject-nix"
+        ],
+        "uv2nix": [
+          "clash-compiler",
+          "qlog",
+          "uv2nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782093830,
+        "narHash": "sha256-6gmEVe69+KlRkZD4PEEV5xAlB9CB0Y9TiuEgQjDrKTQ=",
+        "owner": "pyproject-nix",
+        "repo": "build-system-pkgs",
+        "rev": "430680a19bc85a3bda55f12e4cc1a1aadcf2e478",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pyproject-nix",
+        "repo": "build-system-pkgs",
+        "type": "github"
+      }
+    },
+    "pyproject-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "clash-compiler",
+          "qlog",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782089418,
+        "narHash": "sha256-LRD1SuQWr49fGq3A+8GLXfsLE2xqIpQA440YDZwms3M=",
+        "owner": "pyproject-nix",
+        "repo": "pyproject.nix",
+        "rev": "43f0b40edd0a74c63f66b7b48d969ae6b740d611",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pyproject-nix",
+        "repo": "pyproject.nix",
+        "type": "github"
+      }
+    },
+    "qlog": {
+      "inputs": {
+        "flake-utils": [
+          "clash-compiler",
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "clash-compiler",
+          "nixpkgs"
+        ],
+        "pyproject-build-systems": "pyproject-build-systems",
+        "pyproject-nix": "pyproject-nix",
+        "uv2nix": "uv2nix"
+      },
+      "locked": {
+        "lastModified": 1786022622,
+        "narHash": "sha256-9DoW04VvDAACRjmkVnHxQP8l/EG3hL+8M5alQeGDboY=",
+        "owner": "QBayLogic",
+        "repo": "qlog",
+        "rev": "ed1931375a9d18894ffc11c0e18d92eeb098b0d3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "QBayLogic",
+        "repo": "qlog",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
-        "checked-literals": "checked-literals",
         "clash-compiler": "clash-compiler",
         "ecpprog": "ecpprog",
-        "flake-utils": "flake-utils_2",
-        "ghc-tcplugin-api": "ghc-tcplugin-api",
-        "ghc-typelits-extra": "ghc-typelits-extra",
-        "ghc-typelits-knownnat": "ghc-typelits-knownnat",
-        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise",
+        "flake-utils": "flake-utils_3",
+        "ghc-tcplugin-api": "ghc-tcplugin-api_2",
+        "ghc-typelits-extra": "ghc-typelits-extra_2",
+        "ghc-typelits-knownnat": "ghc-typelits-knownnat_2",
+        "ghc-typelits-natnormalise": "ghc-typelits-natnormalise_2",
         "ghc-typelits-proof-assist": "ghc-typelits-proof-assist",
         "nix-filter": "nix-filter",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_4"
       }
     },
     "systems": {
@@ -376,6 +564,48 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_4": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "uv2nix": {
+      "inputs": {
+        "nixpkgs": [
+          "clash-compiler",
+          "qlog",
+          "nixpkgs"
+        ],
+        "pyproject-nix": [
+          "clash-compiler",
+          "qlog",
+          "pyproject-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782100052,
+        "narHash": "sha256-UfyLY3Hfwb3JqxCcj0953GxTFI5dEL85EKEe6DAFiVs=",
+        "owner": "pyproject-nix",
+        "repo": "uv2nix",
+        "rev": "920fc6dfaf9f10ec56de93b184055e1a9f380d5e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pyproject-nix",
+        "repo": "uv2nix",
         "type": "github"
       }
     }

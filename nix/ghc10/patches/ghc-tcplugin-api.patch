@@ -1,0 +1,32 @@
+diff --git a/src/GHC/TcPlugin/API.hs b/src/GHC/TcPlugin/API.hs
+index 42d2a0b..7438254 100644
+--- a/src/GHC/TcPlugin/API.hs
++++ b/src/GHC/TcPlugin/API.hs
+@@ -843,7 +843,10 @@ import GHC.Driver.Finder
+ #endif
+ import GHC.Unit.Module
+   ( UnitId, unitIdFS, stringToUnitId, mkModuleName )
+-#if MIN_VERSION_ghc(9,5,0)
++#if MIN_VERSION_ghc(10,1,0)
++import GHC.Unit.Module.Name
++  ( ModuleName )
++#elif MIN_VERSION_ghc(9,5,0)
+ import Language.Haskell.Syntax.Module.Name
+   ( ModuleName )
+ #else
+diff --git a/src/GHC/TcPlugin/API/Names.hs b/src/GHC/TcPlugin/API/Names.hs
+index bb3260d..c668312 100644
+--- a/src/GHC/TcPlugin/API/Names.hs
++++ b/src/GHC/TcPlugin/API/Names.hs
+@@ -146,7 +146,10 @@ import GHC.Driver.Types
+ import GHC.Driver.Finder
+   ( cannotFindModule )
+ #endif
+-#if MIN_VERSION_ghc(9,5,0)
++#if MIN_VERSION_ghc(10,1,0)
++import GHC.Unit.Module.Name
++  ( moduleNameString )
++#elif MIN_VERSION_ghc(9,5,0)
+ import Language.Haskell.Syntax.Module.Name
+   ( moduleNameString )
+ #else

@@ -1,0 +1,108 @@
+diff --git a/src/Clash/Core/EqSolver.hs b/src/Clash/Core/EqSolver.hs
+index e71c38d92..d437a6deb 100644
+--- a/src/Clash/Core/EqSolver.hs
++++ b/src/Clash/Core/EqSolver.hs
+@@ -20,7 +20,7 @@ import Clash.Core.Var
+ import Clash.Core.VarEnv (VarSet, elemVarSet, emptyVarSet, mkVarSet)
+ import Clash.Unique (fromGhcUnique)
+ import Clash.Core.DataCon (dcUniq)
+-import GHC.Builtin.Names
++import GHC.Builtin.KnownKeys
+   (unsafeReflDataConKey, eqPrimTyConKey, eqTyConKey, typeNatAddTyFamNameKey)
+
+ -- | Data type that indicates what kind of solution (if any) was found
+diff --git a/src/Clash/Core/Type.hs b/src/Clash/Core/Type.hs
+index da1988fb2..c449a86ba 100644
+--- a/src/Clash/Core/Type.hs
++++ b/src/Clash/Core/Type.hs
+@@ -79,10 +79,10 @@ import           Data.Maybe             (fromMaybe)
+ import           Data.Text.Extra        (showt)
+
+ -- GHC API
+-import           GHC.Builtin.Names
++import           GHC.Builtin.KnownKeys
+   (typeCharCmpTyFamNameKey, typeConsSymbolTyFamNameKey, typeUnconsSymbolTyFamNameKey,
+    typeCharToNatTyFamNameKey, typeNatToCharTyFamNameKey)
+-import           GHC.Builtin.Names
++import           GHC.Builtin.KnownKeys
+   (integerTyConKey, typeNatAddTyFamNameKey, typeNatExpTyFamNameKey,
+    typeNatMulTyFamNameKey, typeNatSubTyFamNameKey,
+    typeNatCmpTyFamNameKey, ordLTDataConKey, ordEQDataConKey, ordGTDataConKey,
+diff --git a/src/Clash/Core/TysPrim.hs b/src/Clash/Core/TysPrim.hs
+index d5fe3674b..25b771a40 100644
+--- a/src/Clash/Core/TysPrim.hs
++++ b/src/Clash/Core/TysPrim.hs
+@@ -41,7 +41,7 @@ module Clash.Core.TysPrim
+   )
+ where
+
+-import           GHC.Builtin.Names
++import           GHC.Builtin.KnownKeys
+
+ import           GHC.Base hiding (Type, TyCon)
+ import           Data.Text.Extra (showt)
+diff --git a/src/Clash/Core/Util.hs b/src/Clash/Core/Util.hs
+index 2de236bef..7a7b3e30b 100644
+--- a/src/Clash/Core/Util.hs
++++ b/src/Clash/Core/Util.hs
+@@ -37,7 +37,7 @@ import           GHC.Real
+   (divZeroError, overflowError, ratioZeroDenominatorError, underflowError)
+ import           GHC.Stack                     (HasCallStack)
+
+-import           GHC.Builtin.Names       (ipClassKey)
++import           GHC.Builtin.KnownKeys   (ipClassKey)
+
+ import Clash.Core.DataCon
+ import Clash.Core.EqSolver
+diff --git a/src/Clash/Driver.hs b/src/Clash/Driver.hs
+index 4d637d476..46ce6d139 100644
+--- a/src/Clash/Driver.hs
++++ b/src/Clash/Driver.hs
+@@ -82,7 +82,7 @@ import           System.IO.Temp
+ import           Text.Trifecta.Result
+   (Result(Success, Failure), _errDoc)
+
+-import           GHC.Builtin.Names                 (eqTyConKey, ipClassKey)
++import           GHC.Builtin.KnownKeys             (eqTyConKey, ipClassKey)
+
+ import           GHC.Types.SrcLoc                  (SrcSpan)
+ import           GHC.BasicTypes.Extra             ()
+diff --git a/src/Clash/Normalize/PrimitiveReductions.hs b/src/Clash/Normalize/PrimitiveReductions.hs
+index 636e8c77d..e32c2d96c 100644
+--- a/src/Clash/Normalize/PrimitiveReductions.hs
++++ b/src/Clash/Normalize/PrimitiveReductions.hs
+@@ -57,7 +57,7 @@ import           Data.Text.Extra                  (showt)
+ import qualified GHC.Classes
+ import           GHC.Stack                        (HasCallStack)
+
+-import           GHC.Builtin.Names
++import           GHC.Builtin.KnownKeys
+   (boolTyConKey, typeNatAddTyFamNameKey, typeNatMulTyFamNameKey,
+    typeNatSubTyFamNameKey)
+ import           GHC.Types.SrcLoc                 (wiredInSrcSpan)
+diff --git a/src/Clash/Normalize/Transformations/DEC.hs b/src/Clash/Normalize/Transformations/DEC.hs
+index a342bc411..24a1144ac 100644
+--- a/src/Clash/Normalize/Transformations/DEC.hs
++++ b/src/Clash/Normalize/Transformations/DEC.hs
+@@ -58,7 +58,7 @@ import Data.Text.Extra (showt)
+ import GHC.Stack (HasCallStack)
+ import qualified Language.Haskell.TH as TH
+
+-import GHC.Core.Make (chunkify, mkChunkified)
++import GHC.Builtin.WiredIn.Types (chunkify, mkChunkified)
+
+ import GHC.Settings.Constants (mAX_TUPLE_SIZE)
+
+diff --git a/src/Clash/Normalize/Util.hs b/src/Clash/Normalize/Util.hs
+index 5b542d6fc..9e437eb7d 100644
+--- a/src/Clash/Normalize/Util.hs
++++ b/src/Clash/Normalize/Util.hs
+@@ -46,7 +46,7 @@ import           Data.Text               (Text)
+ import qualified Data.Text as Text
+ import qualified Data.Text.Extra as Text
+
+-import           GHC.Builtin.Names       (eqTyConKey)
++import           GHC.Builtin.KnownKeys   (eqTyConKey)
+
+ import           Clash.Annotations.Primitive (extractPrim)
+ import           Clash.Core.FreeVars
