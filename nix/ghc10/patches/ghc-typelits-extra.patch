@@ -1,0 +1,72 @@
+diff --git a/src/GHC/TypeLits/Extra/Solver.hs b/src/GHC/TypeLits/Extra/Solver.hs
+index 0524f4b..891aac4 100644
+--- a/src/GHC/TypeLits/Extra/Solver.hs
++++ b/src/GHC/TypeLits/Extra/Solver.hs
+@@ -30,9 +30,9 @@ import Data.Maybe (catMaybes)
+ -- ghc-tcplugin-api
+ import GHC.TcPlugin.API
+ import GHC.TcPlugin.API.TyConSubst
++import GHC.Builtins (promotedTrueDataCon, promotedFalseDataCon)
+ 
+ -- GHC API
+-import GHC.Builtin.Types (promotedTrueDataCon, promotedFalseDataCon)
+ import GHC.Core.DataCon (dataConWrapId)
+ import GHC.Core.TyCo.Rep (Type (..), TyLit (..))
+ import GHC.Driver.Plugins (Plugin (..), defaultPlugin, purePlugin)
+diff --git a/src/GHC/TypeLits/Extra/Solver/Compat.hs b/src/GHC/TypeLits/Extra/Solver/Compat.hs
+index 5fbac5f..e80d0c8 100644
+--- a/src/GHC/TypeLits/Extra/Solver/Compat.hs
++++ b/src/GHC/TypeLits/Extra/Solver/Compat.hs
+@@ -12,17 +12,14 @@ import GHC.TcPlugin.API
+ 
+ import GHC.TypeLits.Normalise.Compat
+ 
+-import GHC.Builtin.Names
+-  ( eqPrimTyConKey, hasKey
+-  )
++-- ghc-tcplugin-api
++import GHC.Builtins
++  ( eqPrimTyConKey, hasKey, typeNatDivTyCon, typeNatModTyCon
+ #if MIN_VERSION_ghc(9,1,0)
+-import GHC.Builtin.Types
+-  ( boolTy, promotedFalseDataCon, promotedTrueDataCon
+-  )
++  , boolTy, promotedFalseDataCon, promotedTrueDataCon
+ #endif
+-import GHC.Builtin.Types.Literals
+-  ( typeNatDivTyCon, typeNatModTyCon
+   )
++
+ #if MIN_VERSION_ghc(9,8,0)
+ import GHC.Tc.Types.Constraint
+   ( DictCt(..), EqCt(..), IrredCt(..)
+diff --git a/src/GHC/TypeLits/Extra/Solver/Operations.hs b/src/GHC/TypeLits/Extra/Solver/Operations.hs
+index 1250c51..c0d5a30 100644
+--- a/src/GHC/TypeLits/Extra/Solver/Operations.hs
++++ b/src/GHC/TypeLits/Extra/Solver/Operations.hs
+@@ -46,9 +46,9 @@ import GHC.TypeLits.Normalise.Unify (CType (..), normaliseNat, isNatural)
+ 
+ -- ghc-tcplugin-api
+ import GHC.TcPlugin.API
++import GHC.Builtins (typeNatExpTyCon, typeNatSubTyCon)
+ 
+ -- GHC API
+-import GHC.Builtin.Types.Literals (typeNatExpTyCon, typeNatSubTyCon)
+ import GHC.Utils.Outputable ((<+>), integer, text)
+ 
+ -- internal
+diff --git a/src/GHC/TypeLits/Extra/Solver/Unify.hs b/src/GHC/TypeLits/Extra/Solver/Unify.hs
+index d32bbb2..45eecea 100644
+--- a/src/GHC/TypeLits/Extra/Solver/Unify.hs
++++ b/src/GHC/TypeLits/Extra/Solver/Unify.hs
+@@ -25,9 +25,9 @@ import GHC.TypeLits.Normalise.Unify (CType (..))
+ 
+ -- ghc-tcplugin-api
+ import GHC.TcPlugin.API
++import GHC.Builtins (typeNatExpTyCon)
+ 
+ -- GHC API
+-import GHC.Builtin.Types.Literals (typeNatExpTyCon)
+ import GHC.Core.TyCo.Rep (Type (..), TyLit (..))
+ import GHC.Core.Type (coreView)
+ import GHC.Types.Unique.Set (UniqSet, emptyUniqSet, unionUniqSets, unitUniqSet)

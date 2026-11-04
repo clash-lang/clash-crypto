@@ -1,0 +1,983 @@
+diff --git a/src-bin-10.0/Clash/GHC/Driver/Session/Mode.hs b/src-bin-10.0/Clash/GHC/Driver/Session/Mode.hs
+index e242544c0..03363cd45 100644
+--- a/src-bin-10.0/Clash/GHC/Driver/Session/Mode.hs
++++ b/src-bin-10.0/Clash/GHC/Driver/Session/Mode.hs
+@@ -190,7 +190,7 @@ parseModeFlags :: [Located String]
+                       [Warn])
+ parseModeFlags args = do
+   ((leftover, errs1, warns), (mModeFlag, units, errs2, flags')) <-
+-        processCmdLineP mode_flags (Nothing, [], [], []) args
++        processCmdLineP (mkFlagSpecTrie mode_flags) (Nothing, [], [], []) args
+   let mode = case mModeFlag of
+              Nothing     -> doMakeMode
+              Just (m, _) -> m
+diff --git a/src-bin-10.0/Clash/GHCi/UI.hs b/src-bin-10.0/Clash/GHCi/UI.hs
+index 905c72ce4..3f43a5e22 100644
+--- a/src-bin-10.0/Clash/GHCi/UI.hs
++++ b/src-bin-10.0/Clash/GHCi/UI.hs
+@@ -81,9 +81,10 @@ import GHC.Types.SourceError ( SourceError, initSourceErrorContext )
+ import GHC.Types.Name
+ import GHC.Types.Var ( varType )
+ import GHC.Iface.Syntax ( showToHeader )
+-import GHC.Builtin.Names
+-import GHC.Builtin.Types( stringTyCon_RDR )
+-import GHC.Types.Name.Reader as RdrName ( getGRE_NameQualifier_maybes, getRdrName, greName, globalRdrEnvElts)
++import GHC.Types.UnresolvedImport ( ImportDeclOrigin(..) )
++import GHC.Builtin.KnownKeys ( knownKeyRdrName, ioTyConKey )
++import GHC.Builtin.KnownOccs( ghciStepIoMOcc, stringTyCon_RDR, compose_RDR )
++import GHC.Types.Name.Reader as RdrName ( RdrName(..), getGRE_NameQualifier_maybes, knownOccRdrName, greName, globalRdrEnvElts)
+ import GHC.Types.SrcLoc as SrcLoc
+ import qualified GHC.Parser.Lexer as Lexer
+ import GHC.Parser.Header ( toArgs )
+@@ -151,6 +152,7 @@ import Foreign hiding (void)
+ import GHC.Stack hiding (SrcLoc(..))
+ import GHC.Unit.Env
+ import GHC.Unit.Home.PackageTable
++import Language.Haskell.Syntax.Module.Name (HsModuleName)
+
+ import System.Directory
+ import System.Environment
+@@ -571,7 +573,7 @@ interactiveUI config baseDFlags srcs maybe_exprs = do
+    let prelude_import =
+          case simpleImportDecl preludeModuleName of
+            -- Set to True because Prelude is implicitly imported.
+-           impDecl@ImportDecl{ideclExt=ext} -> impDecl{ideclExt = ext{ideclGenerated=True}}
++           impDecl@ImportDecl{ideclExt=ext} -> impDecl{ideclExt = ext{ideclOrigin=ImplicitPreludeImport}}
+    empty_cache <- liftIO newIfaceCache
+    startGHCi (runGHCi srcs maybe_exprs)
+         GHCiState{ progname           = default_progname,
+@@ -821,7 +823,7 @@ installInteractiveHomeUnits dflags = do
+           -- This is mostly for a clear separation of concerns,
+           -- to indicate we only care about unit dependencies from package dbs.
+           & filter (not . selectHptFlag (HUG.allUnits $ hsc_HUG hsc_env))
+-          & ordNub
++          & List.nubOrd
+         else
+           packageFlags dflags0
+
+@@ -919,11 +921,11 @@ installInteractiveHomeUnits dflags = do
+         -- There should be no 'ClearPackageDBs' in here, otherwise we are going to overwrite
+         -- the longest common prefix stacks.
+         --
+-        -- @ordNub@ can silently change precedence of package db stack merging.
++        -- @nubOrd@ can silently change precedence of package db stack merging.
+         -- This is not trivially avoidable right now, since multiple home units could simply
+         -- have package db stacks that cannot be unified.
+         unmergeableStack =
+-          ordNub (concatMap (List.reverse . List.drop (length prefix)) stacks)
++          List.nubOrd (concatMap (List.reverse . List.drop (length prefix)) stacks)
+       in
+         -- We reverse the final common package db stack again to match the expectation of 'packageDBFlags' that they are
+         -- stord in reverse order.
+@@ -1268,13 +1270,13 @@ getInfoForPrompt = do
+
+         rev_imports = reverse imports -- rightmost are the most recent
+
+-        myIdeclName :: ImportDecl GhcPs -> ModuleName
++        myIdeclName :: ImportDecl GhcPs -> HsModuleName
+         myIdeclName d | Just m <- ideclAs d = unLoc m
+                       | otherwise           = unLoc (ideclName d)
+
+         modules_names =
+              ['*':(moduleNameString (moduleName m)) | IIModule m <- rev_imports] ++
+-             [moduleNameString (myIdeclName d) | IIDecl d <- rev_imports]
++             [moduleNameString (hsModuleName (myIdeclName d)) | IIDecl d <- rev_imports]
+         line = 1 + line_number st
+
+   return (dots <> context_bit, modules_names, line)
+@@ -1311,7 +1313,7 @@ generatePromptFunctionFromString promptS modules_names line =
+         processString ('%':'s':xs) =
+             liftM2 (<>) (return modules_list) (processString xs)
+             where
+-              modules_list = hsep . map text . ordNub $ modules_names
++              modules_list = hsep . map text . List.nubOrd $ modules_names
+         processString ('%':'l':xs) =
+             liftM2 (<>) (return $ ppr line) (processString xs)
+         processString ('%':'d':xs) =
+@@ -1696,7 +1698,7 @@ runStmt input step = do
+       let
+         la  = L (noAnnSrcSpan loc)
+         la' = L (noAnnSrcSpan loc)
+-      in la (LetStmt noAnn (HsValBinds noAnn (ValBinds NoAnnSortKey [la' bind] [])))
++      in la (LetStmt noAnn (HsValBinds noAnn (ValBinds NoExtField [VbBind $ la' bind])))
+
+     setDumpFilePrefix :: GHC.GhcMonad m => InteractiveContext -> m () -- #17500
+     setDumpFilePrefix ic = do
+@@ -2143,7 +2145,7 @@ defineMacro overwrite s
+             let stringTy :: LHsType GhcPs
+                 stringTy = nlHsTyVar NotPromoted stringTyCon_RDR
+                 ioM :: LHsType GhcPs -- AZ
+-                ioM = nlHsTyVar NotPromoted (getRdrName ioTyConName) `nlHsAppTy` stringTy
++                ioM = nlHsTyVar NotPromoted (knownKeyRdrName ioTyConKey) `nlHsAppTy` stringTy
+                 body = nlHsVar compose_RDR `mkHsApp` (nlHsPar step)
+                                            `mkHsApp` (nlHsPar expr)
+                 tySig = mkHsWildCardBndrs $ noLocA $ mkHsImplicitSigType $
+@@ -2212,9 +2214,9 @@ getGhciStepIO :: GHC.GhcMonad m => m (LHsExpr GhcPs)
+ getGhciStepIO = do
+   ghciTyConName <- GHC.getGHCiMonad
+   let stringTy = nlHsTyVar NotPromoted stringTyCon_RDR
+-      ghciM = nlHsTyVar NotPromoted (getRdrName ghciTyConName) `nlHsAppTy` stringTy
+-      ioM = nlHsTyVar NotPromoted (getRdrName ioTyConName) `nlHsAppTy` stringTy
+-      body = nlHsVar (getRdrName ghciStepIoMName)
++      ghciM = nlHsTyVar NotPromoted (Exact ghciTyConName) `nlHsAppTy` stringTy
++      ioM = nlHsTyVar NotPromoted (knownKeyRdrName ioTyConKey) `nlHsAppTy` stringTy
++      body = nlHsVar (knownOccRdrName ghciStepIoMOcc)
+       tySig = mkHsWildCardBndrs $ noLocA $ mkHsImplicitSigType $
+               nlHsFunTy ghciM ioM
+   return $ noLocA $ ExprWithTySig noAnn body tySig
+@@ -2436,7 +2438,7 @@ addModule files = do
+     checkTargetModule m = do
+       hsc_env <- GHC.getSession
+       result <- liftIO $
+-        Finder.findImportedModule hsc_env m NoPkgQual
++        Finder.findImportedModule hsc_env LookupUser m NoPkgQual
+       case result of
+         Found _ _ -> return True
+         _ -> do reportError (GhciModuleError $ GhciModuleNotFound (moduleNameString m))
+@@ -2630,7 +2632,7 @@ keepPackageImports = filterM is_pkg_import
+                 Left _  -> return False
+                 Right m -> return $ not (HUG.memberHugUnit (moduleUnit m) hug)
+         where
+-          mod_name = unLoc (ideclName d)
++          mod_name = hsModuleName (unLoc (ideclName d))
+
+ {- Note [GHCi and local Preludes]
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+@@ -3143,8 +3145,8 @@ guessCurrentModule cmd = do
+     [] -> throwGhcException $ CmdLineError (':' : cmd ++ ": no current module")
+     IIModule m : _ -> pure m
+     IIDecl d : _ -> do
+-      pkgqual <- GHC.renameRawPkgQualM (unLoc $ ideclName d) (ideclPkgQual d)
+-      GHC.findQualifiedModule pkgqual (unLoc (ideclName d))
++      pkgqual <- GHC.renameRawPkgQualM (hsModuleName (unLoc $ ideclName d)) (ideclPkgQual d)
++      GHC.findQualifiedModule pkgqual (hsModuleName (unLoc (ideclName d)))
+
+ -- without bang, show items in context of their parents and omit children
+ -- with bang, show class methods and data constructors separately, and
+@@ -3344,7 +3346,7 @@ checkAdd ii = do
+        | otherwise -> checkInterpretedModule mod >> return ()
+
+     IIDecl d -> do
+-       let modname = unLoc (ideclName d)
++       let modname = hsModuleName (unLoc (ideclName d))
+        pkgqual <- GHC.renameRawPkgQualM modname (ideclPkgQual d)
+        m <- lookupQualifiedModuleName pkgqual modname
+        when safe $ do
+@@ -3423,7 +3425,7 @@ isIIModule _ = False
+
+ iiModuleName :: InteractiveImport -> ModuleName
+ iiModuleName (IIModule m) = moduleName m
+-iiModuleName (IIDecl d)   = unLoc (ideclName d)
++iiModuleName (IIDecl d)   = hsModuleName $ unLoc $ ideclName d
+
+ preludeModuleName :: ModuleName
+ preludeModuleName = GHC.mkModuleName "Clash.Prelude"
+@@ -3466,10 +3468,9 @@ iiSubsumes (IIDecl d1) (IIDecl d2)      -- A bit crude
+      && (not (isImportDeclQualified (ideclQualified d1)) || isImportDeclQualified (ideclQualified d2))
+      && (ideclImportList d1 `hidingSubsumes` ideclImportList d2)
+   where
+-     _                    `hidingSubsumes` Just (Exactly,L _ []) = True
+-     Just (Exactly, L _ xs) `hidingSubsumes` Just (Exactly,L _ ys)
+-                                                           = all (`elem` xs) ys
+-     h1                   `hidingSubsumes` h2              = h1 == h2
++     _                  `hidingSubsumes` Just (Exactly, []) = True
++     Just (Exactly, xs) `hidingSubsumes` Just (Exactly, ys) = all (`elem` xs) ys
++     h1                 `hidingSubsumes` h2                 = h1 == h2
+ iiSubsumes _ _ = False
+
+
+diff --git a/src-bin-10.0/Clash/GHCi/UI/Exception.hs b/src-bin-10.0/Clash/GHCi/UI/Exception.hs
+index ae68a6d4d..a116d554c 100644
+--- a/src-bin-10.0/Clash/GHCi/UI/Exception.hs
++++ b/src-bin-10.0/Clash/GHCi/UI/Exception.hs
+@@ -61,7 +61,7 @@ instance Show GhciCommandError where
+   show (GhciCommandError msgs) =
+       renderWithContext defaultSDocContext
+     . vcat
+-    . pprMsgEnvelopeBagWithLocDefault
++    . internalPprMessages
+     . getMessages
+     $ msgs
+
+diff --git a/src-bin-10.0/Clash/GHCi/UI/Info.hs b/src-bin-10.0/Clash/GHCi/UI/Info.hs
+index 1890fb330..5a9aac3ce 100644
+--- a/src-bin-10.0/Clash/GHCi/UI/Info.hs
++++ b/src-bin-10.0/Clash/GHCi/UI/Info.hs
+@@ -43,6 +43,7 @@ import           GHC.Types.Name
+ import           GHC.Tc.Types
+ import           GHC.Types.Name.Reader
+ import           GHC.Types.Name.Set
++import           GHC.Unit.Types
+ import           GHC.Utils.Outputable
+ import           GHC.Types.SrcLoc
+ import           GHC.Types.Var
+@@ -128,7 +129,7 @@ findLoc infos span0 string = do
+
+     case getSrcSpan name' of
+         UnhelpfulSpan{} -> throwE $ GhciNoLocationInfoForModule
+-          (maybe (ModuleName "<unknown>") moduleName (nameModule_maybe name'))
++          (maybe (mkModuleName "<unknown>") moduleName (nameModule_maybe name'))
+         span' -> return (info,name',span')
+
+ -- | Find any uses of the given identifier in the codebase.
+diff --git a/src-bin-10.0/Clash/GHCi/UI/Monad.hs b/src-bin-10.0/Clash/GHCi/UI/Monad.hs
+index 4dbdb65b1..824477919 100644
+--- a/src-bin-10.0/Clash/GHCi/UI/Monad.hs
++++ b/src-bin-10.0/Clash/GHCi/UI/Monad.hs
+@@ -49,7 +49,7 @@ import GHC.Types.SafeHaskell
+ import GHC.Driver.Make (ModIfaceCache(..))
+ import GHC.Unit
+ import GHC.Types.Name.Reader as RdrName (mkOrig)
+-import GHC.Builtin.Names (gHC_INTERNAL_GHCI_HELPERS)
++import GHC.Builtin.Modules (gHC_INTERNAL_GHCI_HELPERS)
+ import GHC.Runtime.Interpreter
+ import GHC.Runtime.Context
+ import GHCi.RemoteTypes
+diff --git a/src-bin-10.0/Clash/Main.hs b/src-bin-10.0/Clash/Main.hs
+index 6c9335110..faeea6ca4 100644
+--- a/src-bin-10.0/Clash/Main.hs
++++ b/src-bin-10.0/Clash/Main.hs
+@@ -163,7 +163,7 @@ defaultMainWithAction startAction = flip withArgs $ do
+                    ShowSupportedExtensions   -> showSupportedExtensions (Just libDir)
+                    ShowVersion               -> showVersion
+                    ShowNumVersion            -> putStrLn cProjectVersion
+-                   ShowOptions isInteractive -> showOptions isInteractive r
++                   ShowOptions isInteractive -> showOptions isInteractive
+         Right postStartupMode ->
+             GHC.runGhc (Just libDir) $ do
+
+@@ -435,13 +435,13 @@ showVersion = putStrLn $ concat [ "Clash, version "
+                                 , ")"
+                                 ]
+
+-showOptions :: Bool -> IORef ClashOpts -> IO ()
+-showOptions isInteractive = putStr . unlines . availableOptions
++showOptions :: Bool -> IO ()
++showOptions isInteractive = putStr $ unlines availableOptions
+     where
+-      availableOptions opts = concat [
++      availableOptions = concat [
+         flagsForCompletion isInteractive,
+         map ('-':) (getFlagNames mode_flags),
+-        map ('-':) (getFlagNames (flagsClash opts))
++        map ('-':) (getFlagNames flagsClash)
+         ]
+       getFlagNames opts         = map flagName opts
+
+@@ -547,7 +547,7 @@ abiHash strs = do
+
+   let find_it str = do
+          let modname = mkModuleName str
+-         r <- findImportedModule hsc_env modname NoPkgQual
++         r <- findImportedModule hsc_env LookupUser modname NoPkgQual
+          case r of
+            Found _ m -> return m
+            _error    ->
+diff --git a/src-ghc/Clash/GHC/ClashFlags.hs b/src-ghc/Clash/GHC/ClashFlags.hs
+index e96aaba98..c79f1b2e1 100644
+--- a/src-ghc/Clash/GHC/ClashFlags.hs
++++ b/src-ghc/Clash/GHC/ClashFlags.hs
+@@ -7,6 +7,8 @@
+   Maintainer  :  QBayLogic B.V. <devops@qbaylogic.com>
+ -}
+
++{-# LANGUAGE RankNTypes #-}
++
+ module Clash.GHC.ClashFlags
+   ( parseClashFlags
+   , flagsClash
+@@ -18,6 +20,7 @@ import           GHC.Utils.Panic
+ import           GHC.Types.SrcLoc
+
+ import           Control.Monad
++import           Control.Monad.Trans.State      (StateT, runStateT, modify)
+ import           Data.Char                      (isSpace)
+ import           Data.IORef
+ import           Data.List                      (dropWhileEnd)
+@@ -34,13 +37,18 @@ import           Clash.Warning
+
+ parseClashFlags :: IORef ClashOpts -> [Located String]
+                 -> IO ([Located String],[Warn])
+-parseClashFlags r = parseClashFlagsFull (flagsClash r)
+-
+-parseClashFlagsFull :: [Flag IO] -> [Located String]
+-                    -> IO ([Located String],[Warn])
+-parseClashFlagsFull flagsAvialable args = do
+-  (leftovers,errs,warns) <- processArgs flagsAvialable args
+-                              parseResponseFile
++parseClashFlags r = parseClashFlagsFull r flagsClash
++
++parseClashFlagsFull ::
++  IORef ClashOpts ->
++  [Flag (CmdLineP ClashOpts)] ->
++  [Located String] ->
++  IO ([Located String],[Warn])
++parseClashFlagsFull optsref flagsAvialable args = do
++  opts <- readIORef optsref
++  ((leftovers,errs,warns), opts1) <-
++    runStateT (processArgs (mkFlagSpecTrie flagsAvialable) args parseResponseFile) opts
++  writeIORef optsref opts1
+
+   unless (null errs) $ throwGhcExceptionIO $
+     errorsToGhcException . map (("on the commandline", ) .  unLoc . errMsg)
+@@ -48,56 +56,62 @@ parseClashFlagsFull flagsAvialable args = do
+
+   return (leftovers, warns)
+
+-flagsClash :: IORef ClashOpts -> [Flag IO]
+-flagsClash r = [
+-    defFlag "fclash-debug"                       $ SepArg (setDebugLevel r)
+-  , defFlag "fclash-debug-info"                  $ SepArg (setDebugInfo r)
+-  , defFlag "fclash-debug-invariants"            $ NoArg (liftEwM (setDebugInvariants r))
+-  , defFlag "fclash-debug-count-transformations" $ NoArg (liftEwM (setDebugCountTransformations r))
+-  , defFlag "fclash-debug-transformations"       $ SepArg (setDebugTransformations r)
+-  , defFlag "fclash-debug-transformations-from"  $ IntSuffix (setDebugTransformationsFrom r)
+-  , defFlag "fclash-debug-transformations-limit" $ IntSuffix (setDebugTransformationsLimit r)
+-  , defFlag "fclash-debug-history"               $ AnySuffix (liftEwM . (setRewriteHistoryFile r))
+-  , defFlag "fclash-hdldir"                      $ SepArg (setHdlDir r)
+-  , defFlag "fclash-hdlsyn"                      $ SepArg (setHdlSyn r)
+-  , defFlag "fclash-nocache"                     $ NoArg (deprecated "nocache" "no-cache" setNoCache r)
+-  , defFlag "fclash-no-cache"                    $ NoArg (liftEwM (setNoCache r))
+-  , defFlag "fclash-no-check-inaccessible-idirs" $ NoArg (liftEwM (setNoIDirCheck r))
+-  , defFlag "fclash-no-clean"                    $ NoArg (setNoClean r)
+-  , defFlag "fclash-clear"                       $ NoArg (liftEwM (setClear r))
+-  , defFlag "fclash-no-prim-warn"                $ NoArg (setNoPrimWarn r)
+-  , defFlag "fclash-spec-limit"                  $ IntSuffix (liftEwM . setSpecLimit r)
+-  , defFlag "fclash-inline-limit"                $ IntSuffix (liftEwM . setInlineLimit r)
+-  , defFlag "fclash-inline-function-limit"       $ IntSuffix (liftEwM . setInlineFunctionLimit r)
+-  , defFlag "fclash-inline-constant-limit"       $ IntSuffix (liftEwM . setInlineConstantLimit r)
+-  , defFlag "fclash-evaluator-fuel-limit"        $ IntSuffix (liftEwM . setEvaluatorFuelLimit r)
+-  , defFlag "fclash-intwidth"                    $ IntSuffix (setIntWidth r)
+-  , defFlag "fclash-error-extra"                 $ NoArg (liftEwM (setErrorExtra r))
+-  , defFlag "fclash-float-support"               $ NoArg (setFloatSupport r)
+-  , defFlag "fclash-component-prefix"            $ SepArg (liftEwM . setComponentPrefix r)
+-  , defFlag "fclash-old-inline-strategy"         $ NoArg (liftEwM (setOldInlineStrategy r))
+-  , defFlag "fclash-no-escaped-identifiers"      $ NoArg (liftEwM (setNoEscapedIds r))
+-  , defFlag "fclash-lower-case-basic-identifiers"$ NoArg (liftEwM (setLowerCaseBasicIds r))
+-  , defFlag "fclash-compile-ultra"               $ NoArg (liftEwM (setUltra r))
+-  , defFlag "fclash-force-undefined"             $ OptIntSuffix (setUndefined r)
+-  , defFlag "fclash-aggressive-x-optimization"   $ NoArg (liftEwM (setAggressiveXOpt r))
+-  , defFlag "fclash-aggressive-x-optimization-blackboxes" $ NoArg (liftEwM (setAggressiveXOptBB r))
+-  , defFlag "fclash-inline-workfree-limit"       $ IntSuffix (liftEwM . setInlineWFLimit r)
+-  , defFlag "fclash-edalize"                     $ NoArg (liftEwM (setEdalize r))
+-  , defFlag "fclash-no-render-enums"             $ NoArg (liftEwM (setNoRenderEnums r))
+-  , defFlag "fclash-timescale-precision"         $ SepArg (setTimescalePrecision r)
+-  , defFlag "fclash-ignore-broken-ghcs"          $ NoArg (liftEwM (setIgnoreBrokenGhcs r))
+-  , defFlag "fclash-no-concurrent-topentity-compilation" $ NoArg (liftEwM (setNoConcurrentTopEntities r))
+-  , defFlag "fclash-debug-manifest-hash"         $ NoArg (liftEwM (setDebugManifestHash r))
+-  ] ++ warningFlags r
++-- defFlag :: String -> OptKind m -> Flag m
++-- mkFlagSpecTrie :: [Flag (CmdLineP s)] -> FlagSpecTrie s
++-- newtype CmdLineP s a = CmdLineP (forall m. (Monad m) => StateT s m a)
++-- CmdLineP () a = CmdLineP (forall m. (Monad m) => StateT () m a)
++-- type DynP = EwM (CmdLineP DynFlags)
++
++flagsClash :: [Flag (CmdLineP ClashOpts)]
++flagsClash = [
++    defFlag "fclash-debug"                       $ SepArg setDebugLevel
++  , defFlag "fclash-debug-info"                  $ SepArg setDebugInfo
++  , defFlag "fclash-debug-invariants"            $ NoArg $ liftEwM $ CmdLineP setDebugInvariants
++  , defFlag "fclash-debug-count-transformations" $ NoArg $ liftEwM $ CmdLineP setDebugCountTransformations
++  , defFlag "fclash-debug-transformations"       $ SepArg setDebugTransformations
++  , defFlag "fclash-debug-transformations-from"  $ IntSuffix setDebugTransformationsFrom
++  , defFlag "fclash-debug-transformations-limit" $ IntSuffix setDebugTransformationsLimit
++  , defFlag "fclash-debug-history"               $ AnySuffix $ \x -> liftEwM $ CmdLineP $ setRewriteHistoryFile x
++  , defFlag "fclash-hdldir"                      $ SepArg setHdlDir
++  , defFlag "fclash-hdlsyn"                      $ SepArg setHdlSyn
++  , defFlag "fclash-nocache"                     $ NoArg $ deprecated "nocache" "no-cache" setNoCache
++  , defFlag "fclash-no-cache"                    $ NoArg $ liftEwM $ CmdLineP setNoCache
++  , defFlag "fclash-no-check-inaccessible-idirs" $ NoArg $ liftEwM $ CmdLineP setNoIDirCheck
++  , defFlag "fclash-no-clean"                    $ NoArg setNoClean
++  , defFlag "fclash-clear"                       $ NoArg $ liftEwM $ CmdLineP setClear
++  , defFlag "fclash-no-prim-warn"                $ NoArg setNoPrimWarn
++  , defFlag "fclash-spec-limit"                  $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setSpecLimit x
++  , defFlag "fclash-inline-limit"                $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setInlineLimit x
++  , defFlag "fclash-inline-function-limit"       $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setInlineFunctionLimit x
++  , defFlag "fclash-inline-constant-limit"       $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setInlineConstantLimit x
++  , defFlag "fclash-evaluator-fuel-limit"        $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setEvaluatorFuelLimit x
++  , defFlag "fclash-intwidth"                    $ IntSuffix setIntWidth
++  , defFlag "fclash-error-extra"                 $ NoArg $ liftEwM $ CmdLineP $ setErrorExtra
++  , defFlag "fclash-float-support"               $ NoArg setFloatSupport
++  , defFlag "fclash-component-prefix"            $ SepArg $ \x -> liftEwM $ CmdLineP $ setComponentPrefix x
++  , defFlag "fclash-old-inline-strategy"         $ NoArg $ liftEwM $ CmdLineP $ setOldInlineStrategy
++  , defFlag "fclash-no-escaped-identifiers"      $ NoArg $ liftEwM $ CmdLineP $ setNoEscapedIds
++  , defFlag "fclash-lower-case-basic-identifiers"$ NoArg $ liftEwM $ CmdLineP $ setLowerCaseBasicIds
++  , defFlag "fclash-compile-ultra"               $ NoArg $ liftEwM $ CmdLineP $ setUltra
++  , defFlag "fclash-force-undefined"             $ OptIntSuffix setUndefined
++  , defFlag "fclash-aggressive-x-optimization"   $ NoArg $ liftEwM $ CmdLineP $ setAggressiveXOpt
++  , defFlag "fclash-aggressive-x-optimization-blackboxes" $ NoArg $ liftEwM $ CmdLineP $ setAggressiveXOptBB
++  , defFlag "fclash-inline-workfree-limit"       $ IntSuffix $ \x -> liftEwM $ CmdLineP $ setInlineWFLimit x
++  , defFlag "fclash-edalize"                     $ NoArg $ liftEwM $ CmdLineP $ setEdalize
++  , defFlag "fclash-no-render-enums"             $ NoArg $ liftEwM $ CmdLineP $ setNoRenderEnums
++  , defFlag "fclash-timescale-precision"         $ SepArg $ setTimescalePrecision
++  , defFlag "fclash-ignore-broken-ghcs"          $ NoArg $ liftEwM $ CmdLineP $ setIgnoreBrokenGhcs
++  , defFlag "fclash-no-concurrent-topentity-compilation" $ NoArg $ liftEwM $ CmdLineP $ setNoConcurrentTopEntities
++  , defFlag "fclash-debug-manifest-hash"         $ NoArg $ liftEwM $ CmdLineP $ setDebugManifestHash
++  ] ++ warningFlags
+
+ -- | GHC-style warning flags for every warning in 'ClashWarning':
+ -- @-W\<name\>@, @-Wno-\<name\>@, @-Werror=\<name\>@, @-Wwarn=\<name\>@, and
+ -- @-Wno-error=\<name\>@. These are consumed before GHC parses its own flags;
+ -- misspelled warning names fall through to GHC's
+ -- @-Wunrecognised-warning-flags@ handling.
+-warningFlags :: IORef ClashOpts -> [Flag IO]
+-warningFlags r = concat
++warningFlags :: [Flag (CmdLineP ClashOpts)]
++warningFlags = concat
+   [ [ defFlag ("W"          ++ nm) $ NoArg (liftEwM (adjust (enableWarning  w)))
+     , defFlag ("Wno-"       ++ nm) $ NoArg (liftEwM (adjust (disableWarning w)))
+     , defFlag ("Werror="    ++ nm) $ NoArg (liftEwM (adjust (promoteWarning w)))
+@@ -108,7 +122,9 @@ warningFlags r = concat
+   , let nm = warningName w
+   ]
+  where
+-  adjust f = modifyIORef r (\c -> c {opt_warnings = f (opt_warnings c)})
++  adjust f = CmdLineP $ modify $ \c -> c {opt_warnings = f (opt_warnings c)}
++
++-- type DynP = EwM (CmdLineP DynFlags)
+
+ -- | Print deprecated flag warning
+ deprecated
+@@ -116,63 +132,44 @@ deprecated
+   -- ^ Deprecated flag
+   -> String
+   -- ^ Use X instead
+-  -> (a -> IO ())
+-  -> a
+-  -> EwM IO ()
+-deprecated wrong right f a = do
++  -> (forall m. Monad m => StateT s m ())
++  -> EwM (CmdLineP s) ()
++deprecated wrong right action = do
+   addWarn ("Using '-fclash-" ++ wrong
+                              ++ "' is deprecated. Use '-fclash-"
+                              ++ right
+                              ++ "' instead.")
+-  liftEwM (f a)
+-
+-setInlineLimit :: IORef ClashOpts
+-               -> Int
+-               -> IO ()
+-setInlineLimit r n = modifyIORef r (\c -> c {opt_inlineLimit = n})
+-
+-setInlineFunctionLimit
+-  :: IORef ClashOpts
+-  -> Int
+-  -> IO ()
+-setInlineFunctionLimit r n = modifyIORef r (\c -> c {opt_inlineFunctionLimit = toEnum n})
+-
+-setInlineConstantLimit
+-  :: IORef ClashOpts
+-  -> Int
+-  -> IO ()
+-setInlineConstantLimit r n = modifyIORef r (\c -> c {opt_inlineConstantLimit = toEnum n})
+-
+-setEvaluatorFuelLimit
+-  :: IORef ClashOpts
+-  -> Int
+-  -> IO ()
+-setEvaluatorFuelLimit r n = modifyIORef r (\c -> c {opt_evaluatorFuelLimit = toEnum n})
+-
+-setInlineWFLimit
+-  :: IORef ClashOpts
+-  -> Int
+-  -> IO ()
+-setInlineWFLimit r n = modifyIORef r (\c -> c {opt_inlineWFCacheLimit = toEnum n})
+-
+-setSpecLimit :: IORef ClashOpts
+-             -> Int
+-             -> IO ()
+-setSpecLimit r n = modifyIORef r (\c -> c {opt_specLimit = n})
+-
+-setDebugInvariants :: IORef ClashOpts -> IO ()
+-setDebugInvariants r =
+-  modifyIORef r $ \c ->
+-    c { opt_debug = (opt_debug c) { dbg_invariants = True } }
+-
+-setDebugCountTransformations :: IORef ClashOpts -> IO ()
+-setDebugCountTransformations r =
+-  modifyIORef r $ \c ->
+-    c { opt_debug = (opt_debug c) { dbg_countTransformations = True } }
+-
+-setDebugTransformations :: IORef ClashOpts -> String -> EwM IO ()
+-setDebugTransformations r s =
+-  liftEwM (modifyIORef r (setTransformations transformations))
++  liftEwM $ CmdLineP action
++
++setInlineLimit :: Monad m => Int -> StateT ClashOpts m ()
++setInlineLimit n = modify (\c -> c {opt_inlineLimit = n})
++
++setInlineFunctionLimit :: Monad m => Int -> StateT ClashOpts m ()
++setInlineFunctionLimit n = modify (\c -> c {opt_inlineFunctionLimit = toEnum n})
++
++setInlineConstantLimit :: Monad m => Int -> StateT ClashOpts m ()
++setInlineConstantLimit n = modify (\c -> c {opt_inlineConstantLimit = toEnum n})
++
++setEvaluatorFuelLimit :: Monad m => Int -> StateT ClashOpts m ()
++setEvaluatorFuelLimit n = modify (\c -> c {opt_evaluatorFuelLimit = toEnum n})
++
++setInlineWFLimit :: Monad m => Int -> StateT ClashOpts m ()
++setInlineWFLimit n = modify (\c -> c {opt_inlineWFCacheLimit = toEnum n})
++
++setSpecLimit :: Monad m => Int -> StateT ClashOpts m ()
++setSpecLimit n = modify (\c -> c {opt_specLimit = n})
++
++setDebugInvariants :: Monad m => StateT ClashOpts m ()
++setDebugInvariants =
++  modify $ \c -> c { opt_debug = (opt_debug c) { dbg_invariants = True } }
++
++setDebugCountTransformations :: Monad m => StateT ClashOpts m ()
++setDebugCountTransformations =
++  modify $ \c -> c { opt_debug = (opt_debug c) { dbg_countTransformations = True } }
++
++setDebugTransformations :: String -> EwM (CmdLineP ClashOpts) ()
++setDebugTransformations s =
++  liftEwM $ CmdLineP $ modify (setTransformations transformations)
+  where
+   transformations = Set.fromList (filter (not . null) (map trim (splitOn "," s)))
+   trim = dropWhileEnd isSpace . dropWhile isSpace
+@@ -180,195 +177,182 @@ setDebugTransformations r s =
+   setTransformations xs opts =
+     opts { opt_debug = (opt_debug opts) { dbg_transformations = xs } }
+
+-setDebugTransformationsFrom :: IORef ClashOpts -> Int -> EwM IO ()
+-setDebugTransformationsFrom r n =
+-  liftEwM (modifyIORef r (setFrom (fromIntegral n)))
++setDebugTransformationsFrom :: Int -> EwM (CmdLineP ClashOpts) ()
++setDebugTransformationsFrom n =
++  liftEwM $ CmdLineP $ modify (setFrom (fromIntegral n))
+  where
+   setFrom from opts =
+     opts { opt_debug = (opt_debug opts) { dbg_transformationsFrom = Just from } }
+
+-setDebugTransformationsLimit :: IORef ClashOpts -> Int -> EwM IO ()
+-setDebugTransformationsLimit r n =
+-  liftEwM (modifyIORef r (setLimit (fromIntegral n)))
++setDebugTransformationsLimit :: Int -> EwM (CmdLineP ClashOpts) ()
++setDebugTransformationsLimit n =
++  liftEwM $ CmdLineP $ modify (setLimit (fromIntegral n))
+  where
+   setLimit limit opts =
+     opts { opt_debug = (opt_debug opts) { dbg_transformationsLimit = Just limit } }
+
+-setDebugLevel :: IORef ClashOpts -> String -> EwM IO ()
+-setDebugLevel r s =
++setDebugLevel :: String -> EwM (CmdLineP ClashOpts) ()
++setDebugLevel s =
+   case s of
+     "DebugNone" ->
+-      liftEwM $ modifyIORef r (setLevel debugNone)
++      liftEwM $ CmdLineP $
++        setLevel debugNone
+     "DebugSilent" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugSilent)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugSilent
++        setNoCache
+     "DebugFinal" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugFinal)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugFinal
++        setNoCache
+     "DebugCount" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugCount)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugCount
++        setNoCache
+     "DebugName" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugName)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugName
++        setNoCache
+     "DebugTry" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugTry)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugTry
++        setNoCache
+     "DebugApplied" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugApplied)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugApplied
++        setNoCache
+     "DebugAll" ->
+-      liftEwM $ do
+-        modifyIORef r (setLevel debugAll)
+-        setNoCache r
++      liftEwM $ CmdLineP $ do
++        setLevel debugAll
++        setNoCache
+     _ ->
+       addWarn (s ++ " is an invalid debug level")
+  where
+-  setLevel lvl opts =
+-    opts { opt_debug = lvl }
++  setLevel lvl =
++    modify (\opts -> opts { opt_debug = lvl })
+
+-setDebugInfo :: IORef ClashOpts -> String -> EwM IO ()
+-setDebugInfo r s =
++setDebugInfo :: String -> EwM (CmdLineP ClashOpts) ()
++setDebugInfo s =
+   case readMaybe s of
+     Just info ->
+-      liftEwM $ do
+-        modifyIORef r (setInfo info)
+-        when (info /= None) (setNoCache r)
+-
++      liftEwM $ CmdLineP $ do
++        modify (setInfo info)
++        when (info /= None)
++          setNoCache
+     Nothing ->
+       addWarn (s ++ " is an invalid debug info")
+  where
+   setInfo info opts =
+     opts { opt_debug = (opt_debug opts) { dbg_transformationInfo = info } }
+
+-setNoCache :: IORef ClashOpts -> IO ()
+-setNoCache r = modifyIORef r (\c -> c {opt_cachehdl = False})
++setNoCache :: Monad m => StateT ClashOpts m ()
++setNoCache = modify (\c -> c {opt_cachehdl = False})
+
+-setNoIDirCheck :: IORef ClashOpts -> IO ()
+-setNoIDirCheck r = modifyIORef r (\c -> c {opt_checkIDir = False})
++setNoIDirCheck :: Monad m => StateT ClashOpts m ()
++setNoIDirCheck = modify (\c -> c {opt_checkIDir = False})
+
+-setNoClean :: a -> EwM IO ()
+-setNoClean _ = addWarn "-fclash-no-clean has been removed"
++setNoClean :: Monad m => EwM m ()
++setNoClean = addWarn "-fclash-no-clean has been removed"
+
+-setClear :: IORef ClashOpts -> IO ()
+-setClear r = modifyIORef r (\c -> c {opt_clear = True})
++setClear :: Monad m => StateT ClashOpts m ()
++setClear = modify (\c -> c {opt_clear = True})
+
+-setNoPrimWarn :: IORef ClashOpts -> EwM IO ()
+-setNoPrimWarn r = do
++setNoPrimWarn :: EwM (CmdLineP ClashOpts) ()
++setNoPrimWarn = do
+   addWarn ("Using '-fclash-no-prim-warn' is deprecated. Use "
+            ++ "'-Wno-clash-dubious-primitive' and/or "
+            ++ "'-Wno-clash-non-synthesizable' instead.")
+-  liftEwM $ modifyIORef r $ \c ->
++  liftEwM $ CmdLineP $ modify $ \c ->
+     c { opt_warnings =
+           disableWarning WarnDubiousPrimitive
+             (disableWarning WarnNonSynthesizable (opt_warnings c)) }
+
+-setIntWidth :: IORef ClashOpts
+-            -> Int
+-            -> EwM IO ()
+-setIntWidth r n =
++setIntWidth :: Int -> EwM (CmdLineP ClashOpts) ()
++setIntWidth n =
+   if n == 32 || n == 64
+-     then liftEwM $ modifyIORef r (\c -> c {opt_intWidth = n})
++     then liftEwM $ CmdLineP $ modify (\c -> c {opt_intWidth = n})
+      else addWarn (show n ++ " is an invalid Int/Word/Integer bit-width. Allowed widths: 32, 64.")
+
+-setHdlDir :: IORef ClashOpts
+-          -> String
+-          -> EwM IO ()
+-setHdlDir r s = liftEwM $ modifyIORef r (\c -> c {opt_hdlDir = Just s})
++setHdlDir :: String -> EwM (CmdLineP ClashOpts) ()
++setHdlDir s = liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlDir = Just s})
+
+-setHdlSyn :: IORef ClashOpts
+-          -> String
+-          -> EwM IO ()
+-setHdlSyn r s = case readMaybe s of
+-  Just hdlSyn -> liftEwM $ modifyIORef r (\c -> c {opt_hdlSyn = hdlSyn})
++setHdlSyn :: String -> EwM (CmdLineP ClashOpts) ()
++setHdlSyn s = case readMaybe s of
++  Just hdlSyn -> liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlSyn = hdlSyn})
+   Nothing -> case s of
+-    "Xilinx"  -> liftEwM $ modifyIORef r (\c -> c {opt_hdlSyn = Vivado})
+-    "ISE"     -> liftEwM $ modifyIORef r (\c -> c {opt_hdlSyn = Vivado})
+-    "Altera"  -> liftEwM $ modifyIORef r (\c -> c {opt_hdlSyn = Quartus})
+-    "Intel"   -> liftEwM $ modifyIORef r (\c -> c {opt_hdlSyn = Quartus})
++    "Xilinx"  -> liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlSyn = Vivado})
++    "ISE"     -> liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlSyn = Vivado})
++    "Altera"  -> liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlSyn = Quartus})
++    "Intel"   -> liftEwM $ CmdLineP $ modify (\c -> c {opt_hdlSyn = Quartus})
+     _         -> addWarn (s ++ " is an unknown hdl synthesis tool")
+
+-setErrorExtra :: IORef ClashOpts -> IO ()
+-setErrorExtra r = modifyIORef r (\c -> c {opt_errorExtra = True})
++setErrorExtra :: Monad m => StateT ClashOpts m ()
++setErrorExtra = modify (\c -> c {opt_errorExtra = True})
+
+-setFloatSupport :: IORef ClashOpts -> EwM IO ()
+-setFloatSupport _ =
++setFloatSupport :: Monad m => EwM m ()
++setFloatSupport =
+   addWarn "Deprecated flag: -fclash-float-support is always enabled from Clash 1.6 and onwards"
+
+-setComponentPrefix
+-  :: IORef ClashOpts
+-  -> String
+-  -> IO ()
+-setComponentPrefix r s =
+-  modifyIORef r (\c -> c {opt_componentPrefix = Just (Text.pack s)})
++setComponentPrefix :: Monad m =>  String -> StateT ClashOpts m ()
++setComponentPrefix s = modify (\c -> c {opt_componentPrefix = Just (Text.pack s)})
+
+-setTimescalePrecision
+-  :: IORef ClashOpts
+-  -> String
+-  -> EwM IO ()
+-setTimescalePrecision r s =
++setTimescalePrecision :: String -> EwM (CmdLineP ClashOpts) ()
++setTimescalePrecision s =
+   case parsePeriod s of
+     Just period ->
+-      liftEwM $ modifyIORef r $ \c ->
++      liftEwM $ CmdLineP $ modify $ \c ->
+         c{opt_timescalePrecision = period}
+     Nothing ->
+       addWarn $ "Could not parse " <> s <> " as a period."
+
+-setOldInlineStrategy :: IORef ClashOpts -> IO ()
+-setOldInlineStrategy r = modifyIORef r (\c -> c {opt_newInlineStrat = False})
++setOldInlineStrategy :: Monad m => StateT ClashOpts m ()
++setOldInlineStrategy = modify (\c -> c {opt_newInlineStrat = False})
+
+-setNoEscapedIds :: IORef ClashOpts -> IO ()
+-setNoEscapedIds r = modifyIORef r (\c -> c {opt_escapedIds = False})
++setNoEscapedIds :: Monad m => StateT ClashOpts m ()
++setNoEscapedIds = modify (\c -> c {opt_escapedIds = False})
+
+-setLowerCaseBasicIds :: IORef ClashOpts -> IO ()
+-setLowerCaseBasicIds r = modifyIORef r (\c -> c {opt_lowerCaseBasicIds = ToLower})
++setLowerCaseBasicIds :: Monad m => StateT ClashOpts m ()
++setLowerCaseBasicIds = modify(\c -> c {opt_lowerCaseBasicIds = ToLower})
+
+-setIgnoreBrokenGhcs :: IORef ClashOpts -> IO ()
+-setIgnoreBrokenGhcs r = modifyIORef r (\c -> c {opt_ignoreBrokenGhcs = True})
++setIgnoreBrokenGhcs :: Monad m => StateT ClashOpts m ()
++setIgnoreBrokenGhcs = modify (\c -> c {opt_ignoreBrokenGhcs = True})
+
+-setUltra :: IORef ClashOpts -> IO ()
+-setUltra r = modifyIORef r (\c -> c {opt_ultra = True})
++setUltra :: Monad m => StateT ClashOpts m ()
++setUltra = modify (\c -> c {opt_ultra = True})
+
+-setUndefined :: IORef ClashOpts -> Maybe Int -> EwM IO ()
+-setUndefined _ (Just x) | x < 0 || x > 1 =
++setUndefined :: Maybe Int -> EwM (CmdLineP ClashOpts) ()
++setUndefined (Just x) | x < 0 || x > 1 =
+   addWarn ("-fclash-force-undefined=" ++ show x ++ " ignored, " ++ show x ++
+            " not in range [0,1]")
+-setUndefined r iM =
+-  liftEwM (modifyIORef r (\c -> c {opt_forceUndefined = Just iM}))
+-
+-setAggressiveXOpt :: IORef ClashOpts -> IO ()
+-setAggressiveXOpt r = do
+-  modifyIORef r (\c -> c { opt_aggressiveXOpt = True })
+-  setAggressiveXOptBB r
++setUndefined iM =
++  liftEwM $ CmdLineP $ modify (\c -> c {opt_forceUndefined = Just iM})
+
++setAggressiveXOpt :: Monad m => StateT ClashOpts m ()
++setAggressiveXOpt = do
++  modify (\c -> c { opt_aggressiveXOpt = True })
++  setAggressiveXOptBB
+
+-setAggressiveXOptBB :: IORef ClashOpts -> IO ()
+-setAggressiveXOptBB r = modifyIORef r (\c -> c { opt_aggressiveXOptBB = True })
++setAggressiveXOptBB :: Monad m => StateT ClashOpts m ()
++setAggressiveXOptBB = modify (\c -> c { opt_aggressiveXOptBB = True })
+
+-setEdalize :: IORef ClashOpts -> IO ()
+-setEdalize r = modifyIORef r (\c -> c { opt_edalize = True })
++setEdalize :: Monad m => StateT ClashOpts m ()
++setEdalize = modify (\c -> c { opt_edalize = True })
+
+-setRewriteHistoryFile :: IORef ClashOpts -> String -> IO ()
+-setRewriteHistoryFile r arg = do
++setRewriteHistoryFile :: Monad m => String -> StateT ClashOpts m ()
++setRewriteHistoryFile arg = do
+   let fileNm = case drop (length "-fclash-debug-history=") arg of
+                 [] -> "history.dat"
+                 str -> str
+-  modifyIORef r (setFile fileNm)
++  modify (setFile fileNm)
+  where
+   setFile file opts =
+     opts { opt_debug = (opt_debug opts) { dbg_historyFile = Just file } }
+
+-setNoRenderEnums :: IORef ClashOpts -> IO ()
+-setNoRenderEnums r = modifyIORef r (\c -> c { opt_renderEnums = False })
++setNoRenderEnums :: Monad m => StateT ClashOpts m ()
++setNoRenderEnums = modify (\c -> c { opt_renderEnums = False })
+
+-setNoConcurrentTopEntities :: IORef ClashOpts -> IO ()
+-setNoConcurrentTopEntities r = modifyIORef r (\c -> c { opt_concurrentTopEntities = False })
++setNoConcurrentTopEntities :: Monad m =>  StateT ClashOpts m ()
++setNoConcurrentTopEntities = modify (\c -> c { opt_concurrentTopEntities = False })
+
+-setDebugManifestHash :: IORef ClashOpts -> IO ()
+-setDebugManifestHash r = modifyIORef r (\c -> c { opt_debugManifestHash = True })
++setDebugManifestHash :: Monad m => StateT ClashOpts m ()
++setDebugManifestHash = modify (\c -> c { opt_debugManifestHash = True })
+diff --git a/src-ghc/Clash/GHC/Evaluator/Primitive/Util.hs b/src-ghc/Clash/GHC/Evaluator/Primitive/Util.hs
+index 5122f84f9..a77618ff1 100644
+--- a/src-ghc/Clash/GHC/Evaluator/Primitive/Util.hs
++++ b/src-ghc/Clash/GHC/Evaluator/Primitive/Util.hs
+@@ -45,9 +45,9 @@ import           System.IO.Unsafe    (unsafeDupablePerformIO)
+
+ import           GHC.Types.Basic     (Boxity (..))
+ import           GHC.Types.Name      (getSrcSpan, nameOccName, occNameString)
+-import           GHC.Builtin.Names   (trueDataConKey, falseDataConKey)
++import           GHC.Builtin.KnownKeys (trueDataConKey, falseDataConKey)
+ import qualified GHC.Core.TyCon      as TyCon
+-import           GHC.Builtin.Types   (tupleTyCon)
++import           GHC.Builtin.WiredIn.Types   (tupleTyCon)
+
+ import           Clash.Core.DataCon  (DataCon (..))
+ import           Clash.Core.Evaluator.Types
+diff --git a/src-ghc/Clash/GHC/Evaluator/Primitives/Clash/Sized/Vector.hs b/src-ghc/Clash/GHC/Evaluator/Primitives/Clash/Sized/Vector.hs
+index 6ca376031..8b393f06d 100644
+--- a/src-ghc/Clash/GHC/Evaluator/Primitives/Clash/Sized/Vector.hs
++++ b/src-ghc/Clash/GHC/Evaluator/Primitives/Clash/Sized/Vector.hs
+@@ -30,7 +30,7 @@ import           Data.Text           (Text)
+ import           Data.Text.Extra     (showt)
+
+ import           GHC.Types.Basic     (Boxity (..))
+-import           GHC.Builtin.Types   (tupleTyCon)
++import           GHC.Builtin.WiredIn.Types (tupleTyCon)
+
+ import           Clash.Core.Evaluator.Types
+ import           Clash.Core.FreeVars (typeFreeVars)
+diff --git a/src-ghc/Clash/GHC/GHC2Core.hs b/src-ghc/Clash/GHC/GHC2Core.hs
+index 3c79cc065..b179ab031 100644
+--- a/src-ghc/Clash/GHC/GHC2Core.hs
++++ b/src-ghc/Clash/GHC/GHC2Core.hs
+@@ -71,7 +71,7 @@ import           Language.Haskell.Syntax.Basic (FieldLabelString (..))
+
+ -- GHC API
+ import GHC.Core.Reduction (Reduction(Reduction), HetReduction(..))
+-import GHC.Builtin.Types (falseDataCon)
++import GHC.Builtin.WiredIn.Types (falseDataCon)
+ import GHC.Core.Coercion.Axiom
+   (CoAxiom (co_ax_branches), CoAxBranch (cab_lhs,cab_rhs), fromBranches)
+ import GHC.Core.Coercion (Role (Nominal), coercionType, coercionKind)
+@@ -93,7 +93,7 @@ import GHC.Core.FamInstEnv
+   ( FamInst (..), FamInstEnvs
+   , familyInstances, normaliseType, emptyFamInstEnvs, topReduceTyFamApp_maybe
+   )
+-import GHC.Data.FastString (FastString, mkFastString, unpackFS, bytesFS)
++import GHC.Data.FastString (FastString, mkFastString, mkFastStringShortText, unpackFS, bytesFS)
+ import GHC.Types.Id (isDataConId_maybe)
+ import GHC.Types.Id.Info (IdDetails (..), unfoldingInfo)
+ import GHC.Types.Literal (Literal (..), LitNumType (..), literalType)
+@@ -104,7 +104,7 @@ import GHC.Types.Literal.Floating
+ import GHC.Unit.Module (moduleName, moduleNameString)
+ import GHC.Types.Name
+   (Name, nameModule_maybe, nameOccName, nameUnique, getSrcSpan)
+-import GHC.Builtin.Names  (integerTyConKey, naturalTyConKey)
++import GHC.Builtin.KnownKeys  (integerTyConKey, naturalTyConKey)
+ import GHC.Types.Name.Occurrence (occNameFS, occNameString)
+ import GHC.Data.Pair (Pair (..))
+ import GHC.Types.SrcLoc (SrcSpan (..), isGoodSrcSpan)
+@@ -112,7 +112,7 @@ import GHC.Core.TyCon
+   (AlgTyConRhs (..), TyCon, tyConName, algTyConRhs, isAlgTyCon, isFamilyTyCon,
+    isNewTyCon, isPrimTyCon, isTupleTyCon,
+ #if MIN_VERSION_ghc(10,0,0)
+-   isClosedFamilyTyCon_maybe,
++   closedFamilyTyConCoAxiom_maybe,
+ #else
+    isClosedSynFamilyTyConWithAxiom_maybe,
+ #endif
+@@ -130,8 +130,8 @@ import GHC.Core.Type (mkTvSubstPrs, substTy, coreView)
+ import GHC.Core.TyCo.Rep (Coercion (..), TyLit (..), Type (..), scaledThing)
+ import GHC.Types.Unique (Uniquable (..), Unique, getKey, hasKey)
+ import GHC.Types.Var
+-  (Id, TyVar, Var, VarBndr (..), idDetails, isTyVar, varName, varType,
+-   varUnique, idInfo, isGlobalId)
++  (Id, TyVar, Var, VarBndr (..), eqForAllVis, idDetails, isTyVar, varName,
++   varType, varUnique, idInfo, isGlobalId)
+ import GHC.Types.Var.Set (isEmptyVarSet)
+
+ -- Local imports
+@@ -180,7 +180,7 @@ eqType = go
+   go (TyConApp tc1 args1) (TyConApp tc2 args2) =
+     tc1 == tc2 && goList args1 args2
+   go (ForAllTy (Bndr v1 f1) t1) (ForAllTy (Bndr v2 f2) t2) =
+-    eqVar v1 v2 && f1 == f2 && go t1 t2
++    eqVar v1 v2 && eqForAllVis f1 f2 && go t1 t2
+   go (FunTy f1 m1 a1 r1) (FunTy f2 m2 a2 r2) =
+     f1 == f2 && go m1 m2 && go a1 a2 && go r1 r2
+   go (LitTy l1) (LitTy l2) = l1 == l2
+@@ -334,7 +334,7 @@ makeTyCon tc = tycon
+           tcKind <- coreToType (tyConKind tc)
+           substs <- case
+ #if MIN_VERSION_ghc(10,0,0)
+-            isClosedFamilyTyCon_maybe tc of
++            closedFamilyTyConCoAxiom_maybe tc of
+ #else
+             isClosedSynFamilyTyConWithAxiom_maybe tc of
+ #endif
+@@ -917,7 +917,7 @@ coreToDataCon dc = do
+     mkDc dcTy repTys
+   where
+     mkDc dcTy repTys = do
+-      let decLabel = decodeUtf8 . bytesFS . field_label . flLabel
++      let decLabel = decodeUtf8 . bytesFS . mkFastStringShortText . field_label . flLabel
+       let repBangs = fmap hsImplBangToBool (dataConImplBangs dc)
+       let fLabels  = map decLabel (dataConFieldLabels dc)
+
+diff --git a/src-ghc/Clash/GHC/GenerateBindings.hs b/src-ghc/Clash/GHC/GenerateBindings.hs
+index c4d74224e..8f1935671 100644
+--- a/src-ghc/Clash/GHC/GenerateBindings.hs
++++ b/src-ghc/Clash/GHC/GenerateBindings.hs
+@@ -56,7 +56,7 @@ import qualified GHC.Types.Name          as GHC hiding (varName)
+ import qualified GHC.Core.FamInstEnv     as GHC
+ import qualified GHC.Core.TyCon          as GHC
+ import qualified GHC.Core.Type           as GHC
+-import qualified GHC.Builtin.Types       as GHC
++import qualified GHC.Builtin.WiredIn.Types as GHC
+ import qualified GHC.Settings.Constants  as GHC
+ import qualified GHC.Types.Var           as GHC
+ import qualified GHC.Types.SrcLoc        as GHC
+diff --git a/src-ghc/Clash/GHC/LoadModules.hs b/src-ghc/Clash/GHC/LoadModules.hs
+index 121935aad..b95442187 100644
+--- a/src-ghc/Clash/GHC/LoadModules.hs
++++ b/src-ghc/Clash/GHC/LoadModules.hs
+@@ -454,7 +454,7 @@ loadLocalModule hdl modName = do
+ #endif
+       HscMain.hscSimplify hsc_env corePlugins dsMod
+     checkForInvalidPrelude simpl_guts
+-    opts <- liftIO (initTidyOpts hsc_env)
++    opts <- liftIO (initTidyOpts hsc_env simpl_guts)
+     (tidy_guts,_tidy_details) <- MonadUtils.liftIO $ TidyPgm.tidyProgram opts simpl_guts
+     let
+       loadAsByteCode
+@@ -1175,9 +1175,10 @@ removeStrictnessAnnotations pm =
+     -- type HsConDeclDetails name = HsConDetails (LBangType name) (Located [LConDeclField name])
+     -- rmConDetails :: _ => GHC.HsConDeclDetails name -> GHC.HsConDeclDetails name
+ #if MIN_VERSION_ghc(9,14,0)
+-    rmConDetails (GHC.PrefixCon args) = GHC.PrefixCon (fmap rmConDeclF args)
+-    rmConDetails (GHC.InfixCon l r)   = GHC.InfixCon (rmConDeclF l) (rmConDeclF r)
+-    rmConDetails (GHC.RecCon rec)     = GHC.RecCon ((fmap . fmap . fmap) rmConDeclRecF rec)
++    rmConDetails (GHC.PrefixCon x args) = GHC.PrefixCon x (fmap rmConDeclF args)
++    rmConDetails (GHC.InfixCon x l r)   = GHC.InfixCon x (rmConDeclF l) (rmConDeclF r)
++    rmConDetails (GHC.RecCon x rec)     = GHC.RecCon x ((fmap . fmap . fmap) rmConDeclRecF rec)
++    rmConDetails (GHC.XHsConDetails x)  = GHC.XHsConDetails x
+ #else
+     rmConDetails (GHC.PrefixCon tys args) = GHC.PrefixCon tys (fmap rmHsScaledType args)
+     rmConDetails (GHC.InfixCon l r)   = GHC.InfixCon (rmHsScaledType l) (rmHsScaledType r)

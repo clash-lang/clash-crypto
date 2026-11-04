@@ -162,7 +162,7 @@ runSignHash ∷ [CurveNum] → Maybe [CurveNum]
 runSignHash = run (SignHash ∷ Routine Nat Nat SECP256R1)
 
 runPointAdd ∷ [CurveNum] → Maybe [CurveNum]
-runPointAdd = run (PointAddMain ∷ Routine Nat Nat SECP256R1)
+runPointAdd = run (PointAdd ∷ Routine Nat Nat SECP256R1)
 
 runPointMul ∷ [CurveNum] → Maybe [CurveNum]
 runPointMul = run (PointScalarMul ∷ Routine Nat Nat SECP256R1)

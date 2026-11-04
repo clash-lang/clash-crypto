@@ -9,17 +9,13 @@
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     nix-filter.url = "github:numtide/nix-filter";
-    ecpprog.url = "github:diegodiv/ecpprog";
-    clash-compiler = {
-      url = "github:clash-lang/clash-compiler";
-      flake = false;
-    };
-    ghc-typelits-proof-assist.url = "github:clash-lang/ghc-typelits-proof-assist";
+    ecpprog.url = "github:gregdavill/ecpprog";
     ghc-tcplugin-api = { url = "github:sheaf/ghc-tcplugin-api"; flake = false; };
     ghc-typelits-natnormalise = { url = "github:clash-lang/ghc-typelits-natnormalise"; flake = false; };
     ghc-typelits-knownnat = { url = "github:clash-lang/ghc-typelits-knownnat"; flake = false; };
     ghc-typelits-extra = { url = "github:clash-lang/ghc-typelits-extra"; flake = false; };
-    checked-literals = { url = "github:clash-lang/checked-literals"; flake = false; };
+    clash-compiler = { url = "github:clash-lang/clash-compiler"; flake = false; };
+    ghc-typelits-proof-assist.url = "github:clash-lang/ghc-typelits-proof-assist";
   };
   outputs =
   { self
@@ -27,76 +23,122 @@
   , flake-utils
   , nix-filter
   , ecpprog
-  , clash-compiler
-  , ghc-typelits-proof-assist
   , ghc-tcplugin-api
   , ghc-typelits-natnormalise
   , ghc-typelits-knownnat
   , ghc-typelits-extra
-  , checked-literals
+  , clash-compiler
+  , ghc-typelits-proof-assist
   , ...
   }:
     flake-utils.lib.eachDefaultSystem (system:
-      let ghc-version = "ghc9141";
-          config = import ./build-config.nix;
-          src = nix-filter.lib {
-            root = self;
-            exclude = [
-              (nix-filter.lib.matchExt "nix")
-              "flake.lock"
-            ];
-          };
+      let config = import ./build-config.nix;
+
+          inherit (pkgs.haskell.lib) dontCheck doJailbreak overrideCabal markUnbroken;
+
           ecpprogOverlay = _: _: {
             ecpprog = ecpprog.defaultPackage.${system};
           };
-          extensions = [ ecpprogOverlay ];
+
+          haskellOverlay = final: prev:
+            let
+              ghcOverlayFile = ./. + "/nix/ghc10/overlay-ghc101.nix";
+              ghcOverlay =
+                if builtins.pathExists ghcOverlayFile then
+                  import ghcOverlayFile { pkgs = prev; }
+                else
+                  _: _: {};
+
+              pkgSrcOverlay = final: prev: {
+                clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
+                  (clash-compiler + "/clash-prelude") { });
+                clash-prelude-hedgehog = dontCheck (prev.callCabal2nix "clash-prelude-hedgehog"
+                  (clash-compiler + "/clash-prelude-hedgehog") { });
+                clash-lib =
+                  let package = prev.callCabal2nix "clash-lib" (clash-compiler + "/clash-lib") {};
+                   in dontCheck ( package.overrideAttrs (_: _: {
+                        patches = [ ./nix/ghc10/patches/clash-lib.patch ];
+                      }));
+                clash-ghc =
+                  let package = prev.callCabal2nix "clash-ghc" (clash-compiler + "/clash-ghc") {};
+                  in dontCheck ( package.overrideAttrs (_: _: {
+                        patches = [ ./nix/ghc10/patches/clash-ghc.patch ];
+                      }));
+                ghc-tcplugin-api =
+                  let package = prev.callCabal2nix "ghc-tcplugin-api" ghc-tcplugin-api {};
+                   in dontCheck ( package.overrideAttrs (_: _: {
+                        patches = [ ./nix/ghc10/patches/ghc-tcplugin-api.patch ];
+                      }));
+                ghc-typelits-natnormalise = dontCheck (
+                  prev.callCabal2nix "ghc-typelits-natnormalise"
+                    ghc-typelits-natnormalise {}
+                );
+                ghc-typelits-knownnat = dontCheck (
+                  prev.callCabal2nix "ghc-typelits-knownnat"
+                    ghc-typelits-knownnat {}
+                );
+                ghc-typelits-extra =
+                  let package = prev.callCabal2nix "ghc-typelits-extra" ghc-typelits-extra {};
+                   in doJailbreak ( dontCheck ( package.overrideAttrs (_: _: {
+                        patches = [ ./nix/ghc10/patches/ghc-typelits-extra.patch ];
+                      })));
+                ghc-typelits-proof-assist =
+                  let package = prev.callCabal2nix "ghc-typelits-proof-assist"
+                        ghc-typelits-proof-assist.outPath {};
+                   in dontCheck ( package.overrideAttrs (_: _: {
+                        patches = [ ./nix/ghc10/patches/ghc-typelits-proof-assist.patch ];
+                      }));
+                clash-crypto =
+                  let src = nix-filter.lib {
+                        root = self;
+                        exclude = [
+                          (nix-filter.lib.matchExt "nix")
+                          "flake.lock"
+                        ];
+                      };
+                   in (overrideCabal (final.callCabal2nix "clash-crypto" src {}) {
+                        # Works around a potential cabal bug preventing the main
+                        # library to be found when building a sub-library requiring
+                        # template haskell support.
+                        preBuild = (prev.clash-crypto.preBuild or "") + ''
+                          export LD_LIBRARY_PATH="$PWD/dist/build''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                        '';
+                        configureFlags = [
+                          "--ghc-option=-DHITLT_BAUD=${config.serial-speed}"
+                        ];
+                      }).overrideAttrs (_: _: {
+                        checkFlags = [ "simulation" ];
+                      });
+              };
+
+              overlays =
+                prev.lib.composeManyExtensions [
+                    pkgSrcOverlay
+                    ghcOverlay
+                  ];
+            in {
+              hsPkgs-ghc101 =
+                let
+                  ghc101Packages = (prev.haskell.packages.ghc9141.override {
+                    ghc = import ./nix/ghc10/ghc-10.1.nix { pkgs = prev; };
+                    buildHaskellPackages = ghc101Packages;
+                  }).extend overlays;
+                in
+                  ghc101Packages;
+            };
+
+          extensions = [ ecpprogOverlay haskellOverlay ];
           pkgs0 = nixpkgs.legacyPackages.${system};
           pkgs = pkgs0.extend (pkgs0.lib.composeManyExtensions extensions);
+          hsPkgs = pkgs.hsPkgs-ghc101;
 
           inherit (pkgs) lib;
           clashLib = import ./nix/clash.nix { inherit pkgs lib; };
-          inherit (pkgs.haskell.lib) dontCheck doJailbreak overrideCabal markUnbroken;
-
-          hsPkgs0 = pkgs.haskell.packages.${ghc-version};
-          overlay914 = import ./nix/overlay-ghc914.nix { inherit pkgs; };
-          overlay = final: prev: {
-            clash-prelude = dontCheck (prev.callCabal2nix "clash-prelude"
-              (clash-compiler + "/clash-prelude") { });
-            clash-prelude-hedgehog = dontCheck (prev.callCabal2nix "clash-prelude-hedgehog"
-              (clash-compiler + "/clash-prelude-hedgehog") { });
-            clash-lib = dontCheck (prev.callCabal2nix "clash-lib"
-              (clash-compiler + "/clash-lib") { });
-            clash-ghc = dontCheck (prev.callCabal2nix "clash-ghc"
-              (clash-compiler + "/clash-ghc") { });
-            network  = dontCheck (prev.callHackage "network" "3.2.7.0" {});
-            checked-literals = dontCheck (prev.callCabal2nix "checked-literals" checked-literals {});
-            th-desugar = doJailbreak (prev.callHackage "th-desugar" "1.19" { });
-            singletons-th = doJailbreak (prev.callHackage "singletons-th" "3.5.1" { });
-            singletons-base = dontCheck (doJailbreak (prev.callHackage "singletons-base" "3.5" { }));
-            singletons-base-code-generator = markUnbroken prev.singletons-base-code-generator;
-            cabal-add = dontCheck prev.cabal-add;
-            statistics = dontCheck prev.statistics;
-            fourmolu = dontCheck prev.fourmolu;
-            ghc-tcplugin-api = dontCheck (prev.callCabal2nix "ghc-tcplugin-api" ghc-tcplugin-api { });
-            ghc-typelits-natnormalise = dontCheck (prev.callCabal2nix "ghc-typelits-natnormalise" ghc-typelits-natnormalise { });
-            ghc-typelits-knownnat = dontCheck (prev.callCabal2nix "ghc-typelits-knownnat" ghc-typelits-knownnat { });
-            ghc-typelits-extra = doJailbreak (dontCheck (prev.callCabal2nix "ghc-typelits-extra" ghc-typelits-extra { }));
-            ghc-typelits-proof-assist = dontCheck (prev.callCabal2nix "ghc-typelits-proof-assist" ghc-typelits-proof-assist.outPath { });
-            clash-crypto = (overrideCabal (final.callCabal2nix "clash-crypto" src {}) {
-              configureFlags = [
-                "--ghc-option=-DHITLT_BAUD=${config.serial-speed}"
-              ];
-            }).overrideAttrs (_: _: {
-              checkFlags = [ "simulation" ];
-            });
-          };
-          hsPkgs1 = hsPkgs0.extend overlay;
-          hsPkgs = hsPkgs1.extend overlay914;
 
           envTools =
             (with pkgs; [ gnumake yosys nextpnr trellis ]) ++
             [ pkgs.ecpprog ] ++
-            (with hsPkgs; [ cabal-install ])
+            (with hsPkgs; [ cabal-install clash-ghc ])
             ;
           # Environment that is burned in to the CI runner image. The goal is to
           # alleviate cache.nixos.org a bit, but not over-specify the
@@ -111,7 +153,7 @@
             ]);
           };
           defaultDevShell = hsPkgs.shellFor {
-            name = "GHC 9.14.1";
+            name = "GHC-10.1-70dc4e6";
             packages = p: [ p.clash-crypto ];
             shellHook = ''
               SHAKEPATH=`cabal list-bin clash-crypto:shake`

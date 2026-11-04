@@ -132,19 +132,18 @@ karatsubaSequential stages k input
         -- Separate the two numbers into a high part and a low part and
         -- compute the values that'll be given to downstream
         -- multiplications.
-        toVec (a, b) = bitCoerce
-          $  extend xₕᵢ
-          :> extend yₕᵢ
-          :> extend xₗₒ
-          :> extend @_ @_ @(High s - Low s + 1) yₗₒ
-          :> extend yₕᵢ + extend yₗₒ
-          :> extend xₕᵢ + extend xₗₒ
-          :> Nil
+        toVec (a, b) = bitCoerce @(Vec 6 (Unsigned (High s + 1)))
+          $ exₕᵢ :> eyₕᵢ :> exₗₒ :> eyₗₒ :> eyₕᵢ + eyₗₒ :> exₕᵢ + exₗₒ :> Nil
          where
           xₗₒ, yₗₒ ∷ Unsigned (Low s)
           xₕᵢ, yₕᵢ ∷ Unsigned (High s)
           (xₕᵢ, xₗₒ) = bitCoerce $ resize a
           (yₕᵢ, yₗₒ) = bitCoerce $ resize b
+
+          exₗₒ = extend @_ @_ @(High s - Low s  + 1) xₗₒ
+          eyₗₒ = extend @_ @_ @(High s - Low s  + 1) yₗₒ
+          exₕᵢ = extend @_ @_ @(High s - High s + 1) xₕᵢ
+          eyₕᵢ = extend @_ @_ @(High s - High s + 1) yₕᵢ
 
         fromVec (bitCoerce → (z₂, z₀, z₃))
           = resize (z₀ ∷ Unsigned ((High s + 1) * 2))
@@ -214,8 +213,8 @@ karatsubaSequentialModulo stages regBound (unzipC → (input, k))
             :> extend yₕᵢ
             :> extend @_ @_ @(hi - lo + 1) xₗₒ
             :> extend @_ @_ @(hi - lo + 1) yₗₒ
-            :> extend yₕᵢ + extend yₗₒ
-            :> extend xₕᵢ + extend xₗₒ
+            :> extend yₕᵢ + extend @_ @_ @(hi - lo + 1) yₗₒ
+            :> extend xₕᵢ + extend @_ @_ @(hi - lo + 1) xₗₒ
             :> Nil @(Unsigned (hi + 1))
            where
             xₗₒ, yₗₒ ∷ Unsigned lo

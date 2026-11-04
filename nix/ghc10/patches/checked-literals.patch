@@ -1,0 +1,101 @@
+diff --git a/src/CheckedLiterals/Plugin.hs b/src/CheckedLiterals/Plugin.hs
+index c41a459..cf06dc8 100644
+--- a/src/CheckedLiterals/Plugin.hs
++++ b/src/CheckedLiterals/Plugin.hs
+@@ -9,14 +9,14 @@ import Prelude
+ import Control.Monad.Reader (Reader, ask, runReader)
+ import Data.Generics (Data, extM, gmapM)
+ import Data.Ratio.Extra qualified as RatioExtra
++import GHC.Data.FastString (fastStringToShortText)
++import GHC.Hs.Lit (FractionalLit, fl_text, mkIntegralLit, rationalFromFractionalLit)
+ import GHC.Iface.Env (lookupOrig)
+ import GHC.Plugins hiding (rational, (<>))
+ import GHC.Tc.Types (TcGblEnv, TcM)
+ import GHC.Tc.Utils.Monad (getTopEnv)
+-import GHC.Types.SourceText (
+-  SourceText (NoSourceText, SourceText),
+-  il_value,
+- )
++import GHC.Types.SourceText (SourceText (NoSourceText, SourceText))
++import Language.Haskell.Syntax.Lit (il_value)
+ 
+ import CheckedLiterals.Class.Integer (
+   checkedNegativeIntegerLiteral,
+@@ -81,7 +81,7 @@ loadHelperNames = do
+ lookupHelperModule :: ModuleName -> TcM Module
+ lookupHelperModule moduleName = do
+   hscEnv <- getTopEnv
+-  case lookupModuleWithSuggestions (hsc_units hscEnv) moduleName NoPkgQual of
++  case lookupModuleWithSuggestions (hsc_units hscEnv) LookupSystem moduleName NoPkgQual of
+     LookupFound foundModule _ -> pure foundModule
+     _ -> panic "CheckedLiterals.Plugin: failed to resolve helper module"
+ 
+@@ -105,7 +105,7 @@ transformLHsExpr lexpr@(L loc expr) = do
+     -- Handle negation of fractional literals: detect (negate 3.14) patterns
+     NegApp _ (L _ (HsOverLit _ OverLit{ol_val = HsFractional fracLit})) _ -> do
+       let
+-        rational = negate (SourceText.rationalFromFractionalLit fracLit)
++        rational = negate (rationalFromFractionalLit fracLit)
+         transformedExpr =
+           makeCheckedRationalLiteral
+             helperNames
+@@ -123,7 +123,7 @@ transformLHsExpr lexpr@(L loc expr) = do
+ 
+     -- Transform positive fractional literals
+     HsOverLit _ OverLit{ol_val = HsFractional fracLit} -> do
+-      let rational = SourceText.rationalFromFractionalLit fracLit
++      let rational = rationalFromFractionalLit fracLit
+       return $
+         L loc $
+           makeCheckedRationalLiteral
+@@ -170,14 +170,14 @@ makeCheckedPatternViewExpr helperNames overLit negation =
+       let value = applyPatternNegation negation (il_value intLit)
+        in Just (makeCheckedLiteralFunction helperNames value)
+     HsFractional fracLit ->
+-      let rational = applyPatternNegation negation (SourceText.rationalFromFractionalLit fracLit)
++      let rational = applyPatternNegation negation (rationalFromFractionalLit fracLit)
+        in Just
+             ( makeCheckedRationalLiteralFunction
+                 helperNames
+                 (fractionalLiteralDisplayText rational fracLit)
+                 rational
+             )
+-    HsIsString _ _ -> Nothing
++    HsIsString{} -> Nothing
+ 
+ applyPatternNegation :: (Num a) => Maybe b -> a -> a
+ applyPatternNegation Nothing value = value
+@@ -194,9 +194,9 @@ unpackFSCompat :: String -> String
+ unpackFSCompat = id
+ #endif
+ 
+-fractionalLiteralDisplayText :: Rational -> SourceText.FractionalLit -> String
++fractionalLiteralDisplayText :: Rational -> FractionalLit GhcRn -> String
+ fractionalLiteralDisplayText rational fracLit =
+-  case SourceText.fl_text fracLit of
++  case fl_text fracLit of
+     SourceText sourceText ->
+       let sourceTextStr = unpackFSCompat sourceText
+        in case sourceTextStr of
+@@ -271,7 +271,7 @@ makeCheckedLiteralFunction helperNames value = withTypeApp
+     | otherwise = helperNames.checkedNegativeIntegerLiteralName
+   funcVar = noLocA (HsVar noExtField (mkLocatedOcc funcName))
+ #if MIN_VERSION_ghc(10,0,0)
+-  tyLit = HsNatural noExtField (SourceText.mkIntegralLit (abs value))
++  tyLit = HsNatural noExtField (mkIntegralLit (abs value))
+ #else
+   tyLit = HsNumTy NoSourceText (abs value)
+ #endif
+@@ -307,9 +307,9 @@ makeCheckedRationalLiteralFunction helperNames stringRepr rational = withAllType
+ 
+ -- Type-level literals
+ #if MIN_VERSION_ghc(10,0,0)
+-  strTyLit = HsString NoSourceText (mkFastString stringRepr)
+-  numTyLit = HsNatural noExtField (SourceText.mkIntegralLit (abs (Ratio.numerator rational)))
+-  denTyLit = HsNatural noExtField (SourceText.mkIntegralLit (abs (Ratio.denominator rational)))
++  strTyLit = HsString NoSourceText (fastStringToShortText (mkFastString stringRepr))
++  numTyLit = HsNatural noExtField (mkIntegralLit (abs (Ratio.numerator rational)))
++  denTyLit = HsNatural noExtField (mkIntegralLit (abs (Ratio.denominator rational)))
+ #else
+   strTyLit = HsStrTy NoSourceText (mkFastString stringRepr)
+   numTyLit = HsNumTy NoSourceText (abs (Ratio.numerator rational))

@@ -18,4 +18,4 @@ runs:
       run: |
         nix develop \
           --command bash \
-          -c "cabal run -- simulation -p ${{ inputs.testcase }}"
+          -c "cabal run simulation -- -p ${{ inputs.testcase }}"

@@ -24,4 +24,4 @@ runs:
       run: |
         nix develop \
           --command bash \
-          -c "cabal run -- hitlt -p ${{ inputs.testcase }}"
+          -c "cabal run hitlt -- -p ${{ inputs.testcase }}"

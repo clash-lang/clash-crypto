@@ -62,7 +62,7 @@ withUartRequestResponseHandler clk rst baud requestResponseHandler rx
   $ let
       (rxData, tx, ack) = uart baud rx txReq
 
-      result ∷ Signal dom (Maybe (Vec (ByteSize a - 1 + 1) Byte))
+      result ∷ Signal dom (Maybe (Vec (ByteSize a) Byte))
       result | Rewrite ← using @(CancelMultiple (BitSize a) (BitSize Byte))
              = fmap (bitCoerce . pack) <$> requestResponseHandler rxData
 
@@ -76,7 +76,7 @@ withUartRequestResponseHandler clk rst baud requestResponseHandler rx
         -- wait for the response from the crypto core
         s@(_, 0) ~~> (Nothing, _) = (s, Nothing)
         -- response received, start sending bytes
-        (_, 0)   ~~> (Just h,  _) = ((h, maxBound), Just $ head h)
+        (_, 0)   ~~> (Just h,  _) = ((h, maxBound), Just $ head @(ByteSize a - 1) h)
         -- wait for the UART ack of the byte previously sent
         s@(h, _) ~~> (_,   False) = (s, Just $ head h)
         -- UART ack received
