@@ -99,7 +99,7 @@ hashStream alg input
     -- calculations are still running
     afterInput ∷ Signal dom Bool
     afterInput = register False
-      $ delay False input.atEndFrame .||.
+      $ register False input.atEndFrame .||.
         afterInput .&&. not <$> proceed
 
     -- apply the for loop "For i=1 to N:"
@@ -112,6 +112,6 @@ hashStream alg input
           (pure Nothing)
   in
     channel $ bundle $ (hashValue, )
-      $ mux (delay False input.atStartFrame) (pure Clear)
-      $ mux (proceed .&&. afterInput)        (pure Release)
-                                             (pure Keep)
+      $ mux (register False input.atStartFrame) (pure Clear)
+      $ mux (proceed .&&. afterInput)           (pure Release)
+                                                (pure Keep)
