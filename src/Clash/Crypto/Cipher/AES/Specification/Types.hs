@@ -17,10 +17,10 @@ import Clash.Sized.Vector (Vec)
 import Clash.Class.BitPack (BitPack(..))
 import Clash.XException (NFDataX)
 import Data.Eq (Eq)
-import Data.Enum (Enum, Bounded)
+import Data.Enum (Enum)
+import Data.Bounded (Bounded)
 import Data.Kind (Type)
 import Data.Ord (Ord)
-import Data.Typeable (Typeable)
 import GHC.Show (Show)
 import GHC.Generics (Generic)
 import GHC.TypeLits (Nat, type (*), type (+))
@@ -40,7 +40,6 @@ data AES
     , Show
     , Enum
     , Bounded
-    , Typeable
     )
 
 -- | A sequence of eight bits.

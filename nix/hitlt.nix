@@ -14,6 +14,7 @@ hsPkgs: config: rec {
     };
     nextpnrFlags = [
       "--85k"
+      "--placer" "static"
       "--package" "CSFBGA285"
       "--lpf" "${./../orangecrab.pcf}"
     ];

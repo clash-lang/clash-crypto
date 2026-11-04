@@ -45,10 +45,10 @@ jobs:
             "${{ secrets.ATTIC_PUSH_JWT_TOKEN }}"
       - name: "Build and cache the Nix devShell"
         run: |
-          nix build --no-link .#devShells.x86_64-linux.allFeatures
+          nix build --no-link .#devShells.x86_64-linux.default
           attic push \
             "${{ env.PROJECT }}" \
-            "$(nix path-info .#devShells.x86_64-linux.allFeatures)"
+            "$(nix path-info .#devShells.x86_64-linux.default)"
       - name: "Build and cache clash-crypto untested"
         run: |
           nix build --no-link .#packages.x86_64-linux.hitltHsPkgs.clash-crypto
@@ -191,6 +191,7 @@ jobs:
           - { name: "Inv. Mod. (BEA)", pattern: BEA, memory: 11g }
           - { name: "Inv. Mod. (FastGCD)", pattern: FastGCD, memory: 11g }
           - { name: "Inv. Mod. (FLT-CTMI)", pattern: FltCtmi, memory: 11g }
+          - { name: "Inv. Mod. (SICT-MI)", pattern: SictMi, memory: 11g }
           - { name: "CLU", pattern: CLU, memory: 11g }
           - { name: "Calculator", pattern: Calculator.Calculator, memory: 11g }
           - { name: "ECDSA (Sign)", pattern: ECDSA.Sign, memory: 30g }

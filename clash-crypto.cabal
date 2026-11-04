@@ -53,7 +53,7 @@ common common-options
     -fno-unbox-strict-fields
   default-language: GHC2021
   build-depends:
-    , base                                   >= 4.20   && < 4.21
+    , base                                   >= 4.20   && < 4.23
     , clash-prelude                          >= 1.10   && < 2
     , ghc-typelits-extra                     >= 0.5.3  && < 0.6
     , ghc-typelits-knownnat                  >= 0.8.3  && < 0.9
@@ -65,7 +65,7 @@ library
   build-depends:
     , clash-lib                              >= 1.10   && < 2
     , ghc-typelits-proof-assist              >= 0.1    && < 0.2
-    , template-haskell                       >= 2.22   && < 2.23
+    , template-haskell                       >= 2.22   && < 2.25
   exposed-modules:
     Clash.Crypto.Calculator
     Clash.Crypto.Calculator.CLU
@@ -264,7 +264,7 @@ common shake-options
   hs-source-dirs: app/shake
   build-depends:
     , clash-crypto
-    , base                                   >= 4.20   && < 4.21
+    , base                                   >= 4.20   && < 4.23
     , directory                              >= 1.3    && < 1.4
     , filepath                               >= 1.5    && < 1.6
     , shake                                  >= 0.19   && < 0.20

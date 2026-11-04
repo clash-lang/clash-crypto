@@ -347,11 +347,13 @@ instance BitPack (Fix (SymbolicNum l)) where
   type BitSize (Fix (SymbolicNum l)) = 0
   pack = error "unsupported"
   unpack = error "unsupported"
+  maybeUnpack = error "unsupported"
 
 instance BitPack (FixChoice (SymbolicNum l) r) where
   type BitSize (FixChoice (SymbolicNum l) r) = 0
   pack = error "unsupported"
   unpack = error "unsupported"
+  maybeUnpack = error "unsupported"
 
 instance (Show l, Num l, Eq l, NFData l) ⇒
  CalculatorNum (Fix (SymbolicNum l)) where
